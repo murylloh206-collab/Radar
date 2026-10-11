@@ -18,8 +18,8 @@ export async function GET(request: Request) {
   const isHttps = url.protocol === "https:" || Boolean(customRedirect);
   const redirectUri = customRedirect || (isHttps ? `${url.origin}/api/auth/mercadolivre/callback` : null);
 
-  // Usar auth.mercadolivre.com (o domínio oficial internacional aceito pelo CloudFront)
-  const authUrl = new URL("https://auth.mercadolivre.com/authorization");
+  // Usar auth.mercadolivre.com.br (domínio oficial do Mercado Livre Brasil)
+  const authUrl = new URL("https://auth.mercadolivre.com.br/authorization");
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", clientId);
   if (redirectUri) {

@@ -11,29 +11,51 @@ export async function POST(request: Request) {
     redirectUri?: string;
   };
 
-  const token = body.token?.trim();
-  const code = body.code?.trim();
-
-  // Caso 1: Usuário colou um Access Token diretamente (ex.: APP_USR-...)
-  if (token) {
-    await saveStoredMLTokens({
-      accessToken: token,
-      expiresAt: Date.now() + 6 * 3600 * 1000, // 6 horas padrão
-    });
-    return NextResponse.json({ ok: true, message: "Token salvo com sucesso!" });
+  const raw = (body.token || body.code || "").trim();
+  if (!raw) {
+    return NextResponse.json({ error: "Informe um token, código de autorização ou a URL de redirecionamento." }, { status: 400 });
   }
 
-  // Caso 2: Usuário colou um Authorization Code (TG-...)
+  let code: string | null = null;
+  let redirectUri: string = body.redirectUri || process.env.ML_REDIRECT_URI || "https://localhost";
+
+  // Se o usuário colou a URL inteira da barra de endereços (ex: https://localhost/?code=TG-xxx)
+  if (raw.includes("code=")) {
+    try {
+      const parsedUrl = new URL(raw);
+      code = parsedUrl.searchParams.get("code");
+      redirectUri = `${parsedUrl.origin}${parsedUrl.pathname}`.replace(/\/$/, "");
+    } catch {
+      const match = raw.match(/code=([^&]+)/);
+      if (match) code = match[1];
+    }
+  } else if (raw.startsWith("TG-")) {
+    // É o código de autorização direto
+    code = raw;
+  }
+
+  // Caso 1: Código de autorização (TG-...)
   if (code) {
     try {
-      const redirectUri = body.redirectUri || process.env.ML_REDIRECT_URI || "https://localhost";
       await exchangeCodeForToken(code, redirectUri);
-      return NextResponse.json({ ok: true, message: "Código validado e token salvo com sucesso!" });
+      return NextResponse.json({ ok: true, message: "Código validado e conta do Mercado Livre conectada com sucesso!" });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao validar código no Mercado Livre";
-      return NextResponse.json({ error: message }, { status: 400 });
+      // Se falhar com a redirectUri inferida, tenta com https://localhost padrão do DevCenter
+      try {
+        await exchangeCodeForToken(code, "https://localhost");
+        return NextResponse.json({ ok: true, message: "Código validado com sucesso!" });
+      } catch {
+        const message = err instanceof Error ? err.message : "Erro ao validar código no Mercado Livre";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
     }
   }
 
-  return NextResponse.json({ error: "Informe um token ou código de autorização." }, { status: 400 });
+  // Caso 2: Usuário colou um Access Token diretamente (ex: APP_USR-...)
+  await saveStoredMLTokens({
+    accessToken: raw,
+    expiresAt: Date.now() + 6 * 3600 * 1000,
+  });
+
+  return NextResponse.json({ ok: true, message: "Access Token salvo com sucesso!" });
 }

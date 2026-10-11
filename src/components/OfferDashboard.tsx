@@ -91,6 +91,16 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     }
   }
 
+  async function handleDisconnect() {
+    try {
+      await fetch("/api/auth/disconnect", { method: "POST" });
+      setIsConnected(false);
+      notify("ok", "Desconectado do Mercado Livre. Modo Demonstração reativado!");
+    } catch {
+      notify("erro", "Erro ao desconectar.");
+    }
+  }
+
   // ---------- Contadores ----------
   const counts = useMemo(() => {
     const c = { todos: offers.length, pendente: 0, aprovado: 0, rejeitado: 0 };
@@ -194,7 +204,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
 
       {/* ================= Status de Conexão com o Mercado Livre ================= */}
       {connected ? (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.08] px-4 py-3 text-sm text-emerald-100">
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.08] px-4 py-3 text-sm text-emerald-100">
           <div className="flex items-center gap-2.5">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
               <IconCheck width={14} height={14} />
@@ -203,9 +213,18 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
               <strong className="font-semibold text-emerald-200">Mercado Livre Conectado:</strong> As buscas serão feitas em tempo real diretamente na API oficial.
             </p>
           </div>
-          <span className="hidden sm:inline-block rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
-            Online Oficial
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              className="rounded-lg border border-emerald-400/30 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/10 transition"
+            >
+              Desconectar (Modo Demonstração)
+            </button>
+            <span className="hidden sm:inline-block rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
+              Online Oficial
+            </span>
+          </div>
         </div>
       ) : configured ? (
         <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.08] p-4 text-sm text-amber-100">
