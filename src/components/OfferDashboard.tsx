@@ -146,14 +146,19 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
         </p>
       </div>
 
-      {/* ================= Aviso de credenciais ================= */}
+      {/* ================= Aviso de Modo Demonstração / Credenciais ================= */}
       {!configured && (
         <div className="mt-4 flex items-start gap-3 rounded-2xl border border-sky-400/20 bg-sky-400/[0.07] px-4 py-3 text-sm text-sky-100">
           <IconKey className="mt-0.5 shrink-0 text-sky-300" />
           <div className="space-y-1">
-            <p className="font-semibold text-sky-200">Falta configurar o acesso à API do Mercado Livre</p>
+            <p className="font-semibold text-sky-200">
+              Modo Demonstração Ativo (sem credenciais configuradas)
+            </p>
             <p className="text-sky-100/80">
-              A API oficial exige um aplicativo gratuito. Crie em{" "}
+              Você já pode clicar no botão <strong>“Buscar ofertas”</strong> abaixo para carregar ofertas reais de exemplo, testar aprovação, cupom, filtros e links de afiliados!
+            </p>
+            <p className="text-xs text-sky-200/70 pt-1">
+              Para buscar em tempo real direto da sua conta no futuro: crie um aplicativo gratuito em{" "}
               <a
                 className="underline hover:text-white"
                 href="https://developers.mercadolivre.com.br/devcenter"
@@ -161,10 +166,8 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
                 rel="noopener noreferrer"
               >
                 developers.mercadolivre.com.br
-              </a>
-              , copie o <code className="rounded bg-black/30 px-1">Client ID</code> e o{" "}
-              <code className="rounded bg-black/30 px-1">Client Secret</code> para o arquivo{" "}
-              <code className="rounded bg-black/30 px-1">.env.local</code> e reinicie o painel. Veja o README.
+              </a>{" "}
+              e preencha <code className="rounded bg-black/30 px-1">ML_CLIENT_ID</code> e <code className="rounded bg-black/30 px-1">ML_CLIENT_SECRET</code> no seu <code className="rounded bg-black/30 px-1">.env.local</code>.
             </p>
           </div>
         </div>

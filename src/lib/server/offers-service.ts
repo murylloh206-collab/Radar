@@ -1,7 +1,6 @@
-import "server-only";
-
-import { config } from "./config";
+import { config, isMercadoLivreConfigured } from "./config";
 import { searchProducts, MercadoLivreError, type MLProduct } from "./mercadolivre";
+import { getMockProducts } from "./mock-products";
 import { readDatabase, updateDatabase } from "./storage";
 import { applyOfferUpdate, calcDiscountPercent } from "../offer-rules";
 import type { LastSearchInfo, Offer, OfferUpdate } from "../types";
@@ -89,7 +88,11 @@ export async function runSearch(termsInput?: string[]) {
 
   for (const term of terms) {
     try {
-      found.push({ term, products: await searchProducts(term, config.resultsPerTerm) });
+      if (!isMercadoLivreConfigured()) {
+        found.push({ term, products: getMockProducts(term) });
+      } else {
+        found.push({ term, products: await searchProducts(term, config.resultsPerTerm) });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro desconhecido";
       errors.push({ term, message });
