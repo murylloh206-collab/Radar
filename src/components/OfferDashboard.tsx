@@ -36,9 +36,13 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
+  const [showManualToken, setShowManualToken] = useState(false);
+  const [manualToken, setManualToken] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
+  const [isConnected, setIsConnected] = useState(initial.config.mercadoLivreConnected);
 
   const configured = initial.config.mercadoLivreConfigured;
-  const connected = initial.config.mercadoLivreConnected;
+  const connected = isConnected;
 
   function notify(kind: Toast["kind"], text: string) {
     const id = ++toastId.current;
@@ -51,12 +55,36 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     const url = new URL(window.location.href);
     if (url.searchParams.get("ml_success")) {
       notify("ok", "Conta do Mercado Livre conectada com sucesso!");
+      setIsConnected(true);
       window.history.replaceState({}, "", "/");
     } else if (url.searchParams.get("ml_error")) {
       notify("erro", `Erro de autorização: ${url.searchParams.get("ml_error")}`);
       window.history.replaceState({}, "", "/");
     }
   }, []);
+
+  async function handleSaveManualToken(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manualToken.trim()) return;
+    setSavingToken(true);
+    try {
+      const res = await fetch("/api/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: manualToken.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao salvar token");
+      notify("ok", "Token do Mercado Livre ativado com sucesso!");
+      setIsConnected(true);
+      setShowManualToken(false);
+      setManualToken("");
+    } catch (err) {
+      notify("erro", err instanceof Error ? err.message : "Erro ao salvar token");
+    } finally {
+      setSavingToken(false);
+    }
+  }
 
   // ---------- Contadores ----------
   const counts = useMemo(() => {
@@ -175,21 +203,51 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
           </span>
         </div>
       ) : configured ? (
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.08] px-4 py-3.5 text-sm text-amber-100">
-          <div className="space-y-0.5">
-            <p className="font-semibold text-amber-200">
-              Credenciais configuradas! Falta conectar sua conta do Mercado Livre.
-            </p>
-            <p className="text-xs text-amber-100/80">
-              Clique no botão ao lado para autorizar o aplicativo oficial com 1 clique.
-            </p>
+        <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.08] p-4 text-sm text-amber-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="font-semibold text-amber-200">
+                Credenciais configuradas! Falta autorizar sua conta do Mercado Livre.
+              </p>
+              <p className="text-xs text-amber-100/80">
+                Clique no botão ao lado para autorizar, ou use a opção de colar token manual.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowManualToken(!showManualToken)}
+                className="text-xs font-medium text-amber-300 underline-offset-2 hover:underline px-2 py-1"
+              >
+                {showManualToken ? "Ocultar" : "Colar token manual"}
+              </button>
+              <a
+                href="/api/auth/mercadolivre"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:brightness-110 active:scale-95 shrink-0"
+              >
+                <IconLink width={16} height={16} /> Conectar Mercado Livre
+              </a>
+            </div>
           </div>
-          <a
-            href="/api/auth/mercadolivre"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:brightness-110 active:scale-95 shrink-0"
-          >
-            <IconLink width={16} height={16} /> Conectar Mercado Livre
-          </a>
+
+          {showManualToken && (
+            <form onSubmit={handleSaveManualToken} className="mt-4 pt-3 border-t border-amber-400/20 flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={manualToken}
+                onChange={(e) => setManualToken(e.target.value)}
+                placeholder="Cole aqui seu Access Token do Mercado Livre (ex: APP_USR-...)"
+                className="field !bg-black/40 text-xs flex-1"
+              />
+              <button
+                type="submit"
+                disabled={savingToken || !manualToken.trim()}
+                className="rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-4 py-2 transition disabled:opacity-50"
+              >
+                {savingToken ? "Salvando..." : "Salvar Token"}
+              </button>
+            </form>
+          )}
         </div>
       ) : (
         <div className="mt-4 flex items-start gap-3 rounded-2xl border border-sky-400/20 bg-sky-400/[0.07] px-4 py-3 text-sm text-sky-100">
