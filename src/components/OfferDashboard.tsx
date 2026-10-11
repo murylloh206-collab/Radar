@@ -39,7 +39,13 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [showManualToken, setShowManualToken] = useState(false);
   const [manualToken, setManualToken] = useState("");
   const [savingToken, setSavingToken] = useState(false);
-  const [isConnected, setIsConnected] = useState(initial.config.mercadoLivreConnected);
+  const [isConnected, setIsConnected] = useState(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("ml_success")) return true;
+    }
+    return initial.config.mercadoLivreConnected;
+  });
 
   const configured = initial.config.mercadoLivreConfigured;
   const connected = isConnected;
@@ -55,7 +61,6 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     const url = new URL(window.location.href);
     if (url.searchParams.get("ml_success")) {
       notify("ok", "Conta do Mercado Livre conectada com sucesso!");
-      setIsConnected(true);
       window.history.replaceState({}, "", "/");
     } else if (url.searchParams.get("ml_error")) {
       notify("erro", `Erro de autorização: ${url.searchParams.get("ml_error")}`);
