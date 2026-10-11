@@ -35,6 +35,18 @@ export class MercadoLivreError extends Error {
   }
 }
 
+function maskSensitive(val: unknown): string {
+  if (!val) return "";
+  const str = typeof val === "string" ? val : JSON.stringify(val);
+  return str
+    .replace(/(Bearer\s+)[A-Za-z0-9_.-]+/gi, "$1[REDACTED]")
+    .replace(/(APP_USR-[A-Za-z0-9_.-]+)/gi, "[REDACTED_ACCESS_TOKEN]")
+    .replace(/(TG-[A-Za-z0-9_.-]+)/gi, "[REDACTED_TOKEN_CODE]")
+    .replace(/(client_secret[=:]["']?)[A-Za-z0-9_.-]+/gi, "$1[REDACTED_SECRET]")
+    .replace(/(client_id[=:]["']?)[A-Za-z0-9_.-]+/gi, "$1[REDACTED_CLIENT_ID]")
+    .replace(/(code[=:]["']?)[A-Za-z0-9_.-]+/gi, "$1[REDACTED_CODE]");
+}
+
 import { getStoredMLTokens, saveStoredMLTokens } from "./storage";
 
 async function refreshAccessToken(refreshToken: string): Promise<string> {
@@ -51,17 +63,22 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
     cache: "no-store",
   });
 
-  const data = (await res.json().catch(() => ({}))) as {
+  const raw = await res.text().catch(() => "");
+  const data = (() => {
+    try { return JSON.parse(raw); } catch { return {}; }
+  })() as {
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
     user_id?: number;
     message?: string;
+    error_description?: string;
   };
 
   if (!res.ok || !data.access_token) {
+    console.error(`[Mercado Livre OAuth] Falha ao renovar token (Status ${res.status}): ${maskSensitive(raw)}`);
     throw new MercadoLivreError(
-      `Falha ao renovar token do Mercado Livre (${data.message ?? res.status}). Por favor, reconecte sua conta.`,
+      `Falha ao renovar token do Mercado Livre (${data.error_description || data.message || res.status}). Por favor, reconecte sua conta.`,
       res.status,
     );
   }
@@ -74,11 +91,14 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
     userId: data.user_id,
   });
 
+  console.log(`[Mercado Livre OAuth] Token renovado com sucesso para usuário ID ${data.user_id || "identificado"}`);
   return data.access_token;
 }
 
 export async function exchangeCodeForToken(code: string, redirectUri: string) {
-  const { clientId, clientSecret } = config.mercadoLivre;
+  const { clientId, clientSecret, redirectUri: configuredUri } = config.mercadoLivre;
+  const effectiveUri = configuredUri || redirectUri;
+
   const res = await fetch(`${API_BASE}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
@@ -87,12 +107,15 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
       client_id: clientId,
       client_secret: clientSecret,
       code,
-      redirect_uri: redirectUri,
+      redirect_uri: effectiveUri,
     }),
     cache: "no-store",
   });
 
-  const data = (await res.json().catch(() => ({}))) as {
+  const raw = await res.text().catch(() => "");
+  const data = (() => {
+    try { return JSON.parse(raw); } catch { return {}; }
+  })() as {
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
@@ -102,6 +125,7 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
   };
 
   if (!res.ok || !data.access_token) {
+    console.error(`[Mercado Livre OAuth] Erro na troca de código (Status ${res.status}): ${maskSensitive(raw)}`);
     throw new Error(data.error_description || data.message || "Erro ao autenticar com o Mercado Livre.");
   }
 
@@ -113,19 +137,17 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
     userId: data.user_id,
   });
 
+  console.log(`[Mercado Livre OAuth] Código trocado com sucesso para usuário ID ${data.user_id}`);
   return data;
 }
 
 export async function hasActiveMLConnection(): Promise<boolean> {
-  if (config.mercadoLivre.accessToken) return true;
   const stored = await getStoredMLTokens();
-  return Boolean(stored && (stored.expiresAt > Date.now() || stored.refreshToken));
+  if (stored && (stored.expiresAt > Date.now() || stored.refreshToken)) return true;
+  return Boolean(config.mercadoLivre.accessToken);
 }
 
 async function getAccessToken(forceRefresh = false): Promise<string> {
-  const { accessToken } = config.mercadoLivre;
-  if (accessToken) return accessToken;
-
   const stored = await getStoredMLTokens();
   if (stored) {
     if (!forceRefresh && stored.expiresAt > Date.now()) {
@@ -134,10 +156,17 @@ async function getAccessToken(forceRefresh = false): Promise<string> {
     if (stored.refreshToken) {
       return refreshAccessToken(stored.refreshToken);
     }
+    if (stored.accessToken && !forceRefresh) {
+      return stored.accessToken;
+    }
   }
+
+  const { accessToken } = config.mercadoLivre;
+  if (accessToken && !forceRefresh) return accessToken;
 
   throw new MercadoLivreError(
     "Conta do Mercado Livre não conectada. Conecte sua conta para buscar ofertas em tempo real.",
+    401,
   );
 }
 
@@ -154,16 +183,44 @@ async function mlGet<T>(pathAndQuery: string): Promise<T> {
 
     if (res.ok) return (await res.json()) as T;
 
+    // Se receber 401 (token expirado), tenta renovar usando o refresh_token e repete UMA ÚNICA VEZ
     if (res.status === 401 && attempt === 0) {
-      token = await getAccessToken(true);
-      continue;
+      console.warn(`[Mercado Livre API] Token expirado (401) em ${pathAndQuery}. Tentando renovar com refresh_token...`);
+      try {
+        token = await getAccessToken(true);
+        continue;
+      } catch (refreshErr) {
+        const msg = refreshErr instanceof Error ? refreshErr.message : "Falha na renovação do token";
+        console.error(`[Mercado Livre API] Falha na renovação: ${maskSensitive(msg)}`);
+        throw new MercadoLivreError("Sessão expirada. Por favor, reconecte sua conta do Mercado Livre.", 401);
+      }
     }
 
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new MercadoLivreError(body.message || `Erro ${res.status} na API do Mercado Livre`, res.status);
+    const raw = await res.text().catch(() => "");
+    const body = (() => {
+      try { return JSON.parse(raw); } catch { return {}; }
+    })() as { message?: string; error?: string; code?: string; status?: number; blocked_by?: string };
+
+    const status = res.status;
+    const msg = body.message || body.error || `Erro HTTP ${status}`;
+
+    // Registra no terminal o status e a mensagem com credenciais estritamente mascaradas
+    console.error(`[Mercado Livre API] Status ${status} em ${pathAndQuery}: ${maskSensitive(raw || msg)}`);
+
+    if (status === 403) {
+      if (body.code === "PA_UNAUTHORIZED_RESULT_FROM_POLICIES" || body.blocked_by === "PolicyAgent") {
+        throw new MercadoLivreError(
+          "O Mercado Livre recusou a busca de anúncios (403 PolicyAgent). O aplicativo possui credenciais válidas, mas a política de segurança da API oficial bloqueia a busca global para esta aplicação no DevCenter.",
+          403,
+        );
+      }
+      throw new MercadoLivreError(`O Mercado Livre recusou a requisição (403): ${msg}`, 403);
+    }
+
+    throw new MercadoLivreError(msg, status);
   }
 
-  throw new MercadoLivreError("Falha ao consultar o Mercado Livre.");
+  throw new MercadoLivreError("Falha ao consultar o Mercado Livre após tentativas.");
 }
 
 // ---------------------------------------------------------------------------

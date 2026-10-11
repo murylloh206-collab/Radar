@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runSearch } from "@/lib/server/offers-service";
 import type { ApiError, SearchResponse } from "@/lib/types";
 
+import { MercadoLivreError } from "@/lib/server/mercadolivre";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -21,16 +23,21 @@ export async function POST(request: Request) {
 
   try {
     const result = await runSearch(terms);
-    // Se TODOS os termos falharam, devolve erro para a tela mostrar o motivo.
+    // Se TODOS os termos falharam, devolve erro específico para a tela mostrar o motivo
     if (result.lastSearch.found === 0 && result.errors.length > 0) {
-      return NextResponse.json<ApiError>({ error: result.errors[0].message }, { status: 502 });
+      const firstErr = result.errors[0];
+      const status = firstErr.message.includes("403") ? 403 : firstErr.message.includes("401") ? 401 : 400;
+      console.warn(`[POST /api/offers/search] Busca não retornou produtos (${status}): ${firstErr.message}`);
+      return NextResponse.json<ApiError>({ error: firstErr.message }, { status });
     }
     return NextResponse.json<SearchResponse>(result);
   } catch (err) {
-    console.error("[search]", err);
+    const status = err instanceof MercadoLivreError && err.status ? err.status : 500;
+    const message = err instanceof Error ? err.message : "Erro ao buscar ofertas.";
+    console.error(`[POST /api/offers/search] Erro capturado (${status}): ${message}`);
     return NextResponse.json<ApiError>(
-      { error: err instanceof Error ? err.message : "Erro ao buscar ofertas." },
-      { status: 500 },
+      { error: message },
+      { status },
     );
   }
 }
