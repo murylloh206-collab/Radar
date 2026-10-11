@@ -30,6 +30,7 @@ export const config = {
     clientId: process.env.ML_CLIENT_ID?.trim() || "",
     clientSecret: process.env.ML_CLIENT_SECRET?.trim() || "",
     accessToken: process.env.ML_ACCESS_TOKEN?.trim() || "",
+    redirectUri: process.env.ML_REDIRECT_URI?.trim() || "https://painel-de-ofertas.vercel.app/api/auth/callback",
   },
 };
 
