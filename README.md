@@ -102,7 +102,46 @@ src/
 npm run check   # tipos + lint + build
 ```
 
-## 9. Problemas comuns
+## 9. Como subir na Vercel
+
+### Importante sobre o armazenamento (Serverless)
+Na Vercel, a aplicação roda em funções Serverless que não possuem disco rígido fixo. O código já está adaptado para usar `/tmp` na Vercel, garantindo que buscas e edições funcionem sem erros.
+
+### Opção A: Pelo Terminal (Vercel CLI - Mais Rápido)
+Como a Vercel CLI já está instalada:
+1. No terminal da pasta do projeto, execute:
+   ```bash
+   vercel
+   ```
+2. Faça login com sua conta da Vercel caso solicitado.
+3. Confirme as opções padrão apertando Enter.
+4. Quando terminar, adicione suas credenciais do Mercado Livre:
+   ```bash
+   vercel env add ML_CLIENT_ID
+   vercel env add ML_CLIENT_SECRET
+   ```
+5. Faça o deploy de produção:
+   ```bash
+   vercel --prod
+   ```
+
+### Opção B: Pelo GitHub (Recomendado)
+1. Crie um repositório no [GitHub](https://github.com/new) (privado ou público).
+2. Conecte o repositório local e envie o código:
+   ```bash
+   git remote add origin https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git
+   git push -u origin main
+   ```
+3. Acesse [vercel.com](https://vercel.com) e clique em **Add New... > Project**.
+4. Importe o repositório que você acabou de criar.
+5. Na seção **Environment Variables**, adicione:
+   - `ML_CLIENT_ID`: seu Client ID do Mercado Livre
+   - `ML_CLIENT_SECRET`: seu Client Secret do Mercado Livre
+6. Clique em **Deploy**.
+
+---
+
+## 10. Problemas comuns
 
 - **"Credenciais do Mercado Livre não configuradas"** → preencha o `.env.local` e reinicie.
 - **"invalid client_id or client_secret"** → confira se copiou os valores certos do DevCenter.
