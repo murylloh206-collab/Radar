@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { patchOffer, searchOffers } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/format";
 import type { LastSearchInfo, Offer, OfferStatus, OfferUpdate, OffersResponse } from "@/lib/types";
 import { OfferCard } from "./OfferCard";
 import { STATUS_STYLES } from "./StatusBadge";
-import { IconAlert, IconBolt, IconKey, IconPlus, IconSearch, IconSpinner, IconX } from "./icons";
+import { IconAlert, IconBolt, IconCheck, IconKey, IconLink, IconPlus, IconSearch, IconSpinner, IconX } from "./icons";
 
 type Filter = "todos" | OfferStatus;
 type SortKey = "recentes" | "desconto" | "menor-preco";
@@ -38,12 +38,25 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const toastId = useRef(0);
 
   const configured = initial.config.mercadoLivreConfigured;
+  const connected = initial.config.mercadoLivreConnected;
 
   function notify(kind: Toast["kind"], text: string) {
     const id = ++toastId.current;
     setToasts((t) => [...t, { id, kind, text }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("ml_success")) {
+      notify("ok", "Conta do Mercado Livre conectada com sucesso!");
+      window.history.replaceState({}, "", "/");
+    } else if (url.searchParams.get("ml_error")) {
+      notify("erro", `Erro de autorização: ${url.searchParams.get("ml_error")}`);
+      window.history.replaceState({}, "", "/");
+    }
+  }, []);
 
   // ---------- Contadores ----------
   const counts = useMemo(() => {
@@ -146,8 +159,39 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
         </p>
       </div>
 
-      {/* ================= Aviso de Modo Demonstração / Credenciais ================= */}
-      {!configured && (
+      {/* ================= Status de Conexão com o Mercado Livre ================= */}
+      {connected ? (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.08] px-4 py-3 text-sm text-emerald-100">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+              <IconCheck width={14} height={14} />
+            </span>
+            <p>
+              <strong className="font-semibold text-emerald-200">Mercado Livre Conectado:</strong> As buscas serão feitas em tempo real diretamente na API oficial.
+            </p>
+          </div>
+          <span className="hidden sm:inline-block rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
+            Online Oficial
+          </span>
+        </div>
+      ) : configured ? (
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.08] px-4 py-3.5 text-sm text-amber-100">
+          <div className="space-y-0.5">
+            <p className="font-semibold text-amber-200">
+              Credenciais configuradas! Falta conectar sua conta do Mercado Livre.
+            </p>
+            <p className="text-xs text-amber-100/80">
+              Clique no botão ao lado para autorizar o aplicativo oficial com 1 clique.
+            </p>
+          </div>
+          <a
+            href="/api/auth/mercadolivre"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:brightness-110 active:scale-95 shrink-0"
+          >
+            <IconLink width={16} height={16} /> Conectar Mercado Livre
+          </a>
+        </div>
+      ) : (
         <div className="mt-4 flex items-start gap-3 rounded-2xl border border-sky-400/20 bg-sky-400/[0.07] px-4 py-3 text-sm text-sky-100">
           <IconKey className="mt-0.5 shrink-0 text-sky-300" />
           <div className="space-y-1">
@@ -156,18 +200,6 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
             </p>
             <p className="text-sky-100/80">
               Você já pode clicar no botão <strong>“Buscar ofertas”</strong> abaixo para carregar ofertas reais de exemplo, testar aprovação, cupom, filtros e links de afiliados!
-            </p>
-            <p className="text-xs text-sky-200/70 pt-1">
-              Para buscar em tempo real direto da sua conta no futuro: crie um aplicativo gratuito em{" "}
-              <a
-                className="underline hover:text-white"
-                href="https://developers.mercadolivre.com.br/devcenter"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                developers.mercadolivre.com.br
-              </a>{" "}
-              e preencha <code className="rounded bg-black/30 px-1">ML_CLIENT_ID</code> e <code className="rounded bg-black/30 px-1">ML_CLIENT_SECRET</code> no seu <code className="rounded bg-black/30 px-1">.env.local</code>.
             </p>
           </div>
         </div>

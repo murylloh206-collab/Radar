@@ -1,5 +1,5 @@
-import { config, isMercadoLivreConfigured } from "./config";
-import { searchProducts, MercadoLivreError, type MLProduct } from "./mercadolivre";
+import { config } from "./config";
+import { searchProducts, MercadoLivreError, hasActiveMLConnection, type MLProduct } from "./mercadolivre";
 import { getMockProducts } from "./mock-products";
 import { readDatabase, updateDatabase } from "./storage";
 import { applyOfferUpdate, calcDiscountPercent } from "../offer-rules";
@@ -86,9 +86,11 @@ export async function runSearch(termsInput?: string[]) {
   const errors: { term: string; message: string }[] = [];
   const found: { term: string; products: MLProduct[] }[] = [];
 
+  const isConnected = await hasActiveMLConnection();
+
   for (const term of terms) {
     try {
-      if (!isMercadoLivreConfigured()) {
+      if (!isConnected) {
         found.push({ term, products: getMockProducts(term) });
       } else {
         found.push({ term, products: await searchProducts(term, config.resultsPerTerm) });
@@ -96,7 +98,7 @@ export async function runSearch(termsInput?: string[]) {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro desconhecido";
       errors.push({ term, message });
-      // Sem credenciais: não adianta tentar os outros termos.
+      // Sem credenciais/conexão: não adianta tentar os outros termos.
       if (err instanceof MercadoLivreError && err.status === undefined) break;
     }
   }

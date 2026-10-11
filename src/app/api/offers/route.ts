@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { config, isMercadoLivreConfigured } from "@/lib/server/config";
+import { hasActiveMLConnection } from "@/lib/server/mercadolivre";
 import { listOffers } from "@/lib/server/offers-service";
 import type { OffersResponse } from "@/lib/types";
 
@@ -15,6 +16,7 @@ export async function GET() {
       defaultTerms: config.searchTerms,
       resultsPerTerm: config.resultsPerTerm,
       mercadoLivreConfigured: isMercadoLivreConfigured(),
+      mercadoLivreConnected: await hasActiveMLConnection(),
     },
   };
   return NextResponse.json(body);

@@ -16,11 +16,19 @@ import type { LastSearchInfo, Offer } from "../types";
  *  2. Fila de escrita: duas alterações ao mesmo tempo não se atropelam.
  */
 
+export interface MLAuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  userId?: number;
+}
+
 export interface DatabaseShape {
   version: 1;
   updatedAt: string;
   lastSearch: LastSearchInfo | null;
   offers: Offer[];
+  mlAuth?: MLAuthTokens | null;
 }
 
 const EMPTY_DB: DatabaseShape = {
@@ -28,6 +36,7 @@ const EMPTY_DB: DatabaseShape = {
   updatedAt: new Date(0).toISOString(),
   lastSearch: null,
   offers: [],
+  mlAuth: null,
 };
 
 function dataFilePath(): string {
@@ -98,5 +107,16 @@ export function updateDatabase<T>(mutator: (db: DatabaseShape) => T | Promise<T>
     const result = await mutator(db);
     await writeDatabase(db);
     return result;
+  });
+}
+
+export async function getStoredMLTokens(): Promise<MLAuthTokens | null> {
+  const db = await readDatabase();
+  return db.mlAuth ?? null;
+}
+
+export async function saveStoredMLTokens(tokens: MLAuthTokens | null): Promise<void> {
+  await updateDatabase((db) => {
+    db.mlAuth = tokens;
   });
 }

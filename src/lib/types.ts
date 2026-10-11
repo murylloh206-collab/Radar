@@ -67,6 +67,7 @@ export interface OffersResponse {
     defaultTerms: string[];
     resultsPerTerm: number;
     mercadoLivreConfigured: boolean;
+    mercadoLivreConnected: boolean;
   };
 }
 

@@ -35,58 +35,109 @@ export class MercadoLivreError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Token de acesso (guardado em memória enquanto o servidor estiver ligado)
-// ---------------------------------------------------------------------------
+import { getStoredMLTokens, saveStoredMLTokens } from "./storage";
 
-const tokenCache = globalThis as unknown as {
-  __mlToken?: { value: string; expiresAt: number };
-};
-
-async function fetchAppToken(): Promise<string> {
+async function refreshAccessToken(refreshToken: string): Promise<string> {
   const { clientId, clientSecret } = config.mercadoLivre;
   const res = await fetch(`${API_BASE}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: new URLSearchParams({
-      grant_type: "client_credentials",
+      grant_type: "refresh_token",
       client_id: clientId,
       client_secret: clientSecret,
+      refresh_token: refreshToken,
     }),
     cache: "no-store",
   });
 
   const data = (await res.json().catch(() => ({}))) as {
     access_token?: string;
+    refresh_token?: string;
     expires_in?: number;
+    user_id?: number;
     message?: string;
   };
 
   if (!res.ok || !data.access_token) {
     throw new MercadoLivreError(
-      `Não foi possível autenticar no Mercado Livre (${data.message ?? res.status}). Confira ML_CLIENT_ID e ML_CLIENT_SECRET no .env.local.`,
+      `Falha ao renovar token do Mercado Livre (${data.message ?? res.status}). Por favor, reconecte sua conta.`,
       res.status,
     );
   }
 
   const ttlMs = (data.expires_in ?? 21600) * 1000;
-  // Renova 5 minutos antes de expirar.
-  tokenCache.__mlToken = { value: data.access_token, expiresAt: Date.now() + ttlMs - 5 * 60_000 };
+  await saveStoredMLTokens({
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || refreshToken,
+    expiresAt: Date.now() + ttlMs - 5 * 60_000,
+    userId: data.user_id,
+  });
+
   return data.access_token;
 }
 
-async function getAccessToken(forceRefresh = false): Promise<string> {
-  const { accessToken, clientId, clientSecret } = config.mercadoLivre;
+export async function exchangeCodeForToken(code: string, redirectUri: string) {
+  const { clientId, clientSecret } = config.mercadoLivre;
+  const res = await fetch(`${API_BASE}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: redirectUri,
+    }),
+    cache: "no-store",
+  });
 
-  if (clientId && clientSecret) {
-    const cached = tokenCache.__mlToken;
-    if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
-    return fetchAppToken();
+  const data = (await res.json().catch(() => ({}))) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    user_id?: number;
+    message?: string;
+    error_description?: string;
+  };
+
+  if (!res.ok || !data.access_token) {
+    throw new Error(data.error_description || data.message || "Erro ao autenticar com o Mercado Livre.");
   }
+
+  const ttlMs = (data.expires_in ?? 21600) * 1000;
+  await saveStoredMLTokens({
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt: Date.now() + ttlMs - 5 * 60_000,
+    userId: data.user_id,
+  });
+
+  return data;
+}
+
+export async function hasActiveMLConnection(): Promise<boolean> {
+  if (config.mercadoLivre.accessToken) return true;
+  const stored = await getStoredMLTokens();
+  return Boolean(stored && (stored.expiresAt > Date.now() || stored.refreshToken));
+}
+
+async function getAccessToken(forceRefresh = false): Promise<string> {
+  const { accessToken } = config.mercadoLivre;
   if (accessToken) return accessToken;
 
+  const stored = await getStoredMLTokens();
+  if (stored) {
+    if (!forceRefresh && stored.expiresAt > Date.now()) {
+      return stored.accessToken;
+    }
+    if (stored.refreshToken) {
+      return refreshAccessToken(stored.refreshToken);
+    }
+  }
+
   throw new MercadoLivreError(
-    "Credenciais do Mercado Livre não configuradas. Preencha ML_CLIENT_ID e ML_CLIENT_SECRET no arquivo .env.local e reinicie o painel (veja o README).",
+    "Conta do Mercado Livre não conectada. Conecte sua conta para buscar ofertas em tempo real.",
   );
 }
 

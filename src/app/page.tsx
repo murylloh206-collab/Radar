@@ -1,5 +1,6 @@
 import { OfferDashboard } from "@/components/OfferDashboard";
 import { config, isMercadoLivreConfigured } from "@/lib/server/config";
+import { hasActiveMLConnection } from "@/lib/server/mercadolivre";
 import { listOffers } from "@/lib/server/offers-service";
 import type { OffersResponse } from "@/lib/types";
 
@@ -16,6 +17,7 @@ export default async function HomePage() {
       defaultTerms: config.searchTerms,
       resultsPerTerm: config.resultsPerTerm,
       mercadoLivreConfigured: isMercadoLivreConfigured(),
+      mercadoLivreConnected: await hasActiveMLConnection(),
     },
   };
 
