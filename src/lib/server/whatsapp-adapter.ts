@@ -162,17 +162,13 @@ async function sendViaHttpGateway(
     const payload = photoUrl
       ? {
           number: config.groupJid,
-          mediaMessage: {
-            mediatype: "image",
-            caption: text,
-            media: photoUrl,
-          },
+          media: photoUrl,
+          mediatype: "image",
+          caption: text,
         }
       : {
           number: config.groupJid,
-          textMessage: {
-            text,
-          },
+          text,
         };
 
     const res = await fetch(endpoint, {
