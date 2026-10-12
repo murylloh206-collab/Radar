@@ -27,6 +27,13 @@ export const STATUS_STYLES: Record<
     bar: "from-rose-500/70 to-rose-400/50",
     text: "text-rose-300/90",
   },
+  publicado: {
+    badge: "bg-sky-400/15 text-sky-300 ring-sky-400/30",
+    dot: "bg-sky-400",
+    ring: "ring-sky-400/25 hover:ring-sky-400/50",
+    bar: "from-sky-400 to-indigo-500",
+    text: "text-sky-300",
+  },
 };
 
 export function StatusBadge({ status }: { status: OfferStatus }) {

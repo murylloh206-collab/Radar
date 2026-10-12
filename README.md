@@ -1,8 +1,6 @@
-# Painel de Ofertas Afiliadas (MVP local)
+# Radar de Ofertas Afiliadas
 
-Painel para **pesquisar ofertas reais do Mercado Livre**, revisar preço/desconto, colar **seu link oficial de afiliado** e **aprovar ou rejeitar** manualmente.
-
-> ⚠️ Nesta versão **nada é publicado**: não há Telegram, WhatsApp nem envio automático.
+Painel completo para **descoberta inteligente de ofertas do Mercado Livre**, pontuação de oportunidade, enriquecimento com cupons e links de afiliado encurtados (`meli.la`), **fila compartilhada em banco PostgreSQL (Supabase)** e **Agendador de Publicações Automáticas** com proteção atômica de concorrência.
 
 ---
 

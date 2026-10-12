@@ -30,3 +30,12 @@ export async function patchOffer(id: string, update: OfferUpdate): Promise<Offer
   });
   return handle<Offer>(res);
 }
+
+export async function discoverOffers(categoryIds?: string[]): Promise<SearchResponse> {
+  const res = await fetch("/api/offers/discover", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ categoryIds }),
+  });
+  return handle<SearchResponse>(res);
+}

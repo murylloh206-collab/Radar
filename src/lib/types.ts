@@ -3,15 +3,29 @@
  * Este arquivo NÃO pode importar nada de Node.js (fs, path...).
  */
 
-export type OfferStatus = "pendente" | "aprovado" | "rejeitado";
+export type OfferStatus = "pendente" | "aprovado" | "rejeitado" | "publicado";
 
-export const OFFER_STATUSES: OfferStatus[] = ["pendente", "aprovado", "rejeitado"];
+export const OFFER_STATUSES: OfferStatus[] = ["pendente", "aprovado", "rejeitado", "publicado"];
+
+export type ShortLinkStatus = "pendente" | "gerando" | "pronto" | "falhou";
+export type WhatsAppQueueStatus = "rascunho" | "pronto" | "agendado" | "enviando" | "enviado" | "falhou";
+
+export interface PriceHistoryItem {
+  price: number;
+  recordedAt: string;
+}
+
+export interface EstimatedCommission {
+  percentage: number;
+  amount: number;
+  source: string;
+}
 
 /** Uma oferta salva no painel. */
 export interface Offer {
   /** Identificador interno (ex.: "mercadolivre:MLB123456"). */
   id: string;
-  /** De onde veio a oferta. Hoje só existe Mercado Livre. */
+  /** De onde veio a oferta. */
   source: "mercadolivre";
   /** ID do item/produto no Mercado Livre. */
   externalId: string;
@@ -19,22 +33,51 @@ export interface Offer {
   thumbnail: string | null;
   /** Preço atual em reais. */
   price: number;
-  /** Preço "de" (anterior), quando o Mercado Livre informa. */
+  /** Preço "de" (anterior), quando a fonte informa. */
   originalPrice: number | null;
   /** Desconto calculado a partir de price e originalPrice. */
   discountPercent: number | null;
   currency: string;
-  /** Link ORIGINAL do produto (não é link de afiliado). */
+  /** Link ORIGINAL do produto. */
   originalUrl: string;
   freeShipping: boolean;
-  /** Termo de busca que encontrou este produto. */
+  /** Termo de busca ou categoria que encontrou este produto. */
   searchTerm: string;
 
   status: OfferStatus;
-  /** Link de afiliado colado MANUALMENTE por você. Nunca é gerado pelo sistema. */
+  /** Link de afiliado comissionado da rede autorizada ou inserido manualmente. */
   affiliateUrl: string | null;
+  /** Link curto meli.la gerado pelo fluxo de fila. */
+  shortUrl?: string | null;
+  shortUrlStatus?: ShortLinkStatus;
+  shortUrlGeneratedAt?: string | null;
+  shortUrlAttempts?: number;
+  shortUrlError?: string | null;
+
   coupon: string | null;
   couponDescription: string | null;
+
+  // Novos campos de qualidade e enriquecimento transparente
+  rating?: number | null;
+  reviewsCount?: number | null;
+  sellerReputation?: string | null;
+  commission?: EstimatedCommission | null;
+  opportunityScore?: number;
+  opportunityReason?: string;
+  priceHistory?: PriceHistoryItem[];
+
+  // Fila de publicação WhatsApp
+  whatsappStatus?: WhatsAppQueueStatus;
+  whatsappMessage?: string;
+  whatsappQueuedAt?: string | null;
+  whatsappSentAt?: string | null;
+  whatsappError?: string | null;
+
+  // Agendamento inteligente no fuso America/Sao_Paulo
+  scheduledFor?: string | null;
+  scheduledWindowDate?: string | null;
+  sendAttempts?: number;
+  lockedAt?: string | null;
 
   createdAt: string;
   updatedAt: string;
@@ -47,8 +90,14 @@ export interface Offer {
 export interface OfferUpdate {
   status?: OfferStatus;
   affiliateUrl?: string | null;
+  shortUrl?: string | null;
   coupon?: string | null;
   couponDescription?: string | null;
+  whatsappStatus?: WhatsAppQueueStatus;
+  whatsappMessage?: string | null;
+  whatsappError?: string | null;
+  whatsappSentAt?: string | null;
+  scheduledFor?: string | null;
 }
 
 export interface LastSearchInfo {
@@ -59,15 +108,57 @@ export interface LastSearchInfo {
   updated: number;
 }
 
+export type SchedulerState = "ativo" | "pausado" | "interrompido_erro";
+
+export interface SchedulerSettings {
+  state: SchedulerState;
+  startHour: string; // padrão "07:00"
+  endHour: string; // padrão "00:00"
+  dailyTarget: number; // padrão 60 (faixa 50 a 70)
+  maxPerHour: number; // padrão 5
+  timezone: string; // padrão "America/Sao_Paulo"
+  channelDestination: string;
+  consecutiveFailures: number;
+  maxConsecutiveFailures: number; // padrão 3
+  lastDispatchedAt: string | null;
+  lastDispatchedOfferTitle?: string | null;
+  lastError?: string | null;
+}
+
+export interface SchedulerStats {
+  aprovadasFila: number;
+  agendadasHoje: number;
+  enviadasHoje: number;
+  pendentesProximaJanela: number;
+  comFalha: number;
+  proximoEnvio: string | null;
+  metaDiaria: number;
+  limiteHora: number;
+}
+
+export interface AutomationSettings {
+  autoSendEnabled: boolean;
+  channelDestination: string;
+  intervalMinutes: number; // fixo em 5 minutos
+  lastDispatchedAt: string | null;
+  nextScheduledAt: string | null;
+  lastDispatchedOfferTitle?: string | null;
+  lastError?: string | null;
+}
+
 /** Resposta de GET /api/offers */
 export interface OffersResponse {
   offers: Offer[];
   lastSearch: LastSearchInfo | null;
+  automation: AutomationSettings;
+  scheduler?: SchedulerSettings;
+  schedulerStats?: SchedulerStats;
   config: {
     defaultTerms: string[];
     resultsPerTerm: number;
     mercadoLivreConfigured: boolean;
     mercadoLivreConnected: boolean;
+    isSupabaseActive?: boolean;
   };
 }
 

@@ -31,6 +31,9 @@ export const config = {
     clientSecret: process.env.ML_CLIENT_SECRET?.trim() || "",
     accessToken: process.env.ML_ACCESS_TOKEN?.trim() || "",
     redirectUri: process.env.ML_REDIRECT_URI?.trim() || "https://painel-de-ofertas.vercel.app/api/auth/callback",
+    affiliateMattTool: process.env.ML_AFFILIATE_MATT_TOOL?.trim() || "77625408",
+    affiliateMattWord: process.env.ML_AFFILIATE_MATT_WORD?.trim() || "michelhenrique1",
+    sessionCookie: process.env.ML_SESSION_COOKIE?.trim() || "",
   },
 };
 

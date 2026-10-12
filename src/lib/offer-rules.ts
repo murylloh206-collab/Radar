@@ -17,6 +17,7 @@ export const STATUS_LABEL: Record<OfferStatus, string> = {
   pendente: "Pendente",
   aprovado: "Aprovado",
   rejeitado: "Rejeitado",
+  publicado: "Publicado",
 };
 
 export function isOfferStatus(value: unknown): value is OfferStatus {
@@ -67,12 +68,18 @@ export function validateAffiliateUrl(
     return { ok: false, error: "O link precisa começar com https:// (ou http://)." };
   }
 
-  // Colar o link comum do produto não transforma ele em link de afiliado.
-  if (normalizeForComparison(value) === normalizeForComparison(originalUrl)) {
+  const isAffiliateLink =
+    parsed.hostname.includes("meli.la") ||
+    parsed.searchParams.has("matt_tool") ||
+    parsed.searchParams.has("matt_word") ||
+    parsed.searchParams.has("tracking_id");
+
+  // Colar o link comum sem nenhuma tag de afiliado não transforma ele em link de afiliado.
+  if (!isAffiliateLink && normalizeForComparison(value) === normalizeForComparison(originalUrl)) {
     return {
       ok: false,
       error:
-        "Esse é o link original do produto, não um link de afiliado. Gere o link na sua plataforma de afiliados e cole aqui.",
+        "Esse é o link comum do produto, sem tags de afiliado. Use o link com parâmetros de afiliado (matt_tool/matt_word) ou encurtado (meli.la).",
     };
   }
 
@@ -116,22 +123,54 @@ export function applyOfferUpdate(
     next.couponDescription = result.value;
   }
 
+  if (update.shortUrl !== undefined) {
+    next.shortUrl = update.shortUrl?.trim() || null;
+  }
+
+  if (update.whatsappStatus !== undefined) {
+    next.whatsappStatus = update.whatsappStatus;
+  }
+
+  if (update.whatsappMessage !== undefined) {
+    next.whatsappMessage = update.whatsappMessage ?? undefined;
+  }
+
+  if (update.whatsappError !== undefined) {
+    next.whatsappError = update.whatsappError;
+  }
+
+  if (update.whatsappSentAt !== undefined) {
+    next.whatsappSentAt = update.whatsappSentAt;
+  }
+
+  if (update.scheduledFor !== undefined) {
+    next.scheduledFor = update.scheduledFor;
+  }
+
   if (update.status !== undefined) {
     if (!isOfferStatus(update.status)) return { ok: false, error: "Status inválido." };
-    if (update.status === "aprovado" && !next.affiliateUrl) {
+    if ((update.status === "aprovado" || update.status === "publicado") && !next.affiliateUrl && !next.shortUrl) {
       return {
         ok: false,
-        error: "Cole seu link oficial de afiliado antes de aprovar esta oferta.",
+        error: "Link oficial de afiliado é necessário antes de aprovar/publicar.",
       };
     }
     if (update.status !== offer.status) {
       next.status = update.status;
       next.statusChangedAt = now;
+      if (update.status === "aprovado" && (!next.whatsappStatus || next.whatsappStatus === "rascunho")) {
+        next.whatsappStatus = "agendado";
+        next.whatsappQueuedAt = now;
+      }
+      if (update.status === "publicado") {
+        next.whatsappStatus = "enviado";
+        next.whatsappSentAt = now;
+      }
     }
   }
 
-  // Se o link de afiliado for apagado, a oferta aprovada volta a ficar pendente.
-  if (next.status === "aprovado" && !next.affiliateUrl) {
+  // Se o link de afiliado for apagado, a oferta aprovada/publicada volta a ficar pendente.
+  if ((next.status === "aprovado" || next.status === "publicado") && !next.affiliateUrl && !next.shortUrl) {
     next.status = "pendente";
     next.statusChangedAt = now;
   }

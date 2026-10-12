@@ -1,13 +1,18 @@
+import { buildAffiliateUrl, detectCoupon } from "./affiliate";
+import { discoverCategoryOffers } from "./category-discovery";
 import { config } from "./config";
 import { searchProducts, MercadoLivreError, hasActiveMLConnection, type MLProduct } from "./mercadolivre";
-import { readDatabase, updateDatabase } from "./storage";
+import { evaluateOpportunity, updatePriceHistory } from "./opportunity-scoring";
+import { enqueueMeliShorten } from "./puppeteer-meli";
+import { getSchedulerSettings, readDatabase, updateDatabase } from "./storage";
+import { calculateNextScheduledSlot } from "./scheduler-engine";
 import { applyOfferUpdate, calcDiscountPercent } from "../offer-rules";
 import type { LastSearchInfo, Offer, OfferUpdate } from "../types";
 
 /**
  * SERVIÇO DE OFERTAS
  * ------------------
- * Liga as peças: busca no Mercado Livre -> aplica regras -> salva no JSON.
+ * Liga as peças: busca no Mercado Livre -> gera links de afiliado e cupons -> salva no JSON.
  * As rotas da API (src/app/api) só chamam estas funções.
  */
 
@@ -25,17 +30,51 @@ function sortOffers(offers: Offer[]): Offer[] {
 
 export async function listOffers() {
   const db = await readDatabase();
+  let modified = false;
+
+  // Auto-enriquece ofertas que ainda estejam sem link de afiliado ou cupom
+  for (const offer of db.offers) {
+    if (!offer.affiliateUrl) {
+      offer.affiliateUrl = buildAffiliateUrl(offer.originalUrl);
+      modified = true;
+    }
+    if (!offer.coupon) {
+      const detected = detectCoupon(offer);
+      if (detected.coupon) {
+        offer.coupon = detected.coupon;
+        offer.couponDescription = detected.description;
+        modified = true;
+      }
+    }
+  }
+
+  if (modified) {
+    await updateDatabase((data) => {
+      data.offers = db.offers;
+      return { offers: data.offers, lastSearch: data.lastSearch };
+    });
+  }
+
   return { offers: sortOffers(db.offers), lastSearch: db.lastSearch };
 }
 
-/** Cria uma oferta nova (pendente) ou atualiza preço/título de uma existente. */
+/** Cria uma oferta nova (pendente) com regras de qualidade, ou atualiza preço mantendo histórico. */
 function upsertFromProduct(offers: Offer[], product: MLProduct, term: string, now: string) {
   const id = offerId(product.externalId);
   const existing = offers.find((o) => o.id === id);
   const discountPercent = calcDiscountPercent(product.price, product.originalPrice);
+  const autoAffiliateUrl = buildAffiliateUrl(product.originalUrl);
+  const detected = detectCoupon({
+    title: product.title,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    searchTerm: term,
+  });
+
+  const updatedHistory = updatePriceHistory(existing?.priceHistory, product.price, now);
+  const opportunity = evaluateOpportunity(product, updatedHistory);
 
   if (existing) {
-    // Atualiza só dados do produto. Status, link de afiliado e cupom são SEUS: não mexemos.
     Object.assign(existing, {
       title: product.title,
       thumbnail: product.thumbnail ?? existing.thumbnail,
@@ -45,7 +84,16 @@ function upsertFromProduct(offers: Offer[], product: MLProduct, term: string, no
       currency: product.currency,
       originalUrl: product.originalUrl,
       freeShipping: product.freeShipping,
+      rating: product.rating ?? existing.rating ?? null,
+      reviewsCount: product.reviewsCount ?? existing.reviewsCount ?? null,
+      sellerReputation: product.sellerReputation ?? existing.sellerReputation ?? null,
+      opportunityScore: opportunity.score,
+      opportunityReason: opportunity.reason,
+      priceHistory: updatedHistory,
       lastSeenAt: now,
+      affiliateUrl: existing.affiliateUrl || autoAffiliateUrl,
+      coupon: existing.coupon || detected.coupon,
+      couponDescription: existing.couponDescription || detected.description,
     } satisfies Partial<Offer>);
     return "updated" as const;
   }
@@ -64,9 +112,19 @@ function upsertFromProduct(offers: Offer[], product: MLProduct, term: string, no
     freeShipping: product.freeShipping,
     searchTerm: term,
     status: "pendente",
-    affiliateUrl: null,
-    coupon: null,
-    couponDescription: null,
+    affiliateUrl: autoAffiliateUrl,
+    shortUrl: null,
+    shortUrlStatus: "pendente",
+    coupon: detected.coupon,
+    couponDescription: detected.description,
+    rating: product.rating ?? null,
+    reviewsCount: product.reviewsCount ?? null,
+    sellerReputation: product.sellerReputation ?? null,
+    commission: null, // Fica como null (exibirá "Aguardando dados da rede" sem invenção)
+    opportunityScore: opportunity.score,
+    opportunityReason: opportunity.reason,
+    priceHistory: updatedHistory,
+    whatsappStatus: "rascunho",
     createdAt: now,
     updatedAt: now,
     lastSeenAt: now,
@@ -122,6 +180,60 @@ export async function runSearch(termsInput?: string[]) {
     return { offers: sortOffers(db.offers), lastSearch };
   });
 
+  // Dispara a fila interna do Puppeteer para encurtar links pendentes de forma segura
+  enqueueMeliShorten();
+
+  return { ...result, errors };
+}
+
+/** Descoberta automática nas categorias prioritárias do Radar de Ofertas */
+export async function runAutoDiscovery(categoryIds?: string[]) {
+  const isConnected = await hasActiveMLConnection();
+  if (!isConnected) {
+    throw new MercadoLivreError(
+      "Conta do Mercado Livre não conectada. Conecte sua conta para buscar ofertas das categorias prioritárias.",
+    );
+  }
+
+  const discoveries = await discoverCategoryOffers(categoryIds, Math.min(config.resultsPerTerm, 10));
+  const errors: { term: string; message: string }[] = [];
+  const now = new Date().toISOString();
+
+  const result = await updateDatabase((db) => {
+    let added = 0;
+    let updated = 0;
+    let total = 0;
+    const termsFound: string[] = [];
+
+    for (const d of discoveries) {
+      termsFound.push(d.category.name);
+      if (d.error) {
+        errors.push({ term: d.category.name, message: d.error });
+      }
+      for (const product of d.products) {
+        total++;
+        if (upsertFromProduct(db.offers, product, d.category.name, now) === "added") {
+          added++;
+        } else {
+          updated++;
+        }
+      }
+    }
+
+    const lastSearch: LastSearchInfo = {
+      at: now,
+      terms: termsFound,
+      found: total,
+      added,
+      updated,
+    };
+    if (total > 0) db.lastSearch = lastSearch;
+    return { offers: sortOffers(db.offers), lastSearch };
+  });
+
+  // Dispara a fila interna do Puppeteer para encurtamento em segundo plano
+  enqueueMeliShorten();
+
   return { ...result, errors };
 }
 
@@ -129,12 +241,48 @@ export class OfferNotFoundError extends Error {}
 export class OfferValidationError extends Error {}
 
 export async function updateOffer(id: string, update: OfferUpdate): Promise<Offer> {
+  const schedulerSettings = await getSchedulerSettings();
+
   return updateDatabase((db) => {
     const index = db.offers.findIndex((o) => o.id === id);
     if (index === -1) throw new OfferNotFoundError("Oferta não encontrada.");
-    const result = applyOfferUpdate(db.offers[index], update);
+
+    const currentOffer = db.offers[index];
+
+    // Se estiver aprovando e a oferta já estiver aprovada ou publicada, não duplica na fila
+    if (update.status === "aprovado") {
+      if (currentOffer.status === "aprovado" && currentOffer.whatsappStatus === "agendado") {
+        // Já está agendada na fila; apenas atualiza eventuais cupons/links
+        const result = applyOfferUpdate(currentOffer, update);
+        if (!result.ok) throw new OfferValidationError(result.error);
+        db.offers[index] = result.offer;
+        return result.offer;
+      }
+
+      // Calcula o próximo slot dentro da janela operacional
+      const slot = calculateNextScheduledSlot(db.offers, schedulerSettings);
+      const now = new Date().toISOString();
+
+      const result = applyOfferUpdate(currentOffer, {
+        ...update,
+        scheduledFor: slot.scheduledFor,
+      });
+
+      if (!result.ok) throw new OfferValidationError(result.error);
+
+      result.offer.scheduledWindowDate = slot.windowDate;
+      result.offer.whatsappStatus = "agendado";
+      result.offer.statusChangedAt = now;
+      result.offer.updatedAt = now;
+
+      db.offers[index] = result.offer;
+      return result.offer;
+    }
+
+    const result = applyOfferUpdate(currentOffer, update);
     if (!result.ok) throw new OfferValidationError(result.error);
     db.offers[index] = result.offer;
     return result.offer;
   });
 }
+

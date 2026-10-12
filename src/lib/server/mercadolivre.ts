@@ -23,6 +23,10 @@ export interface MLProduct {
   currency: string;
   originalUrl: string;
   freeShipping: boolean;
+  rating?: number | null;
+  reviewsCount?: number | null;
+  sellerReputation?: string | null;
+  categoryId?: string | null;
 }
 
 export class MercadoLivreError extends Error {
@@ -236,10 +240,16 @@ interface SearchItemRaw {
   thumbnail?: string;
   permalink: string;
   shipping?: { free_shipping?: boolean };
+  category_id?: string;
+  reviews?: { rating_average?: number; total?: number };
+  seller?: { power_seller_status?: string; nickname?: string };
 }
 
-async function searchListings(term: string, limit: number): Promise<MLProduct[]> {
-  const q = new URLSearchParams({ q: term, limit: String(limit) });
+async function searchListings(term: string, limit: number, categoryId?: string): Promise<MLProduct[]> {
+  const params: Record<string, string> = { limit: String(limit) };
+  if (term) params.q = term;
+  if (categoryId) params.category = categoryId;
+  const q = new URLSearchParams(params);
   const data = await mlGet<{ results: SearchItemRaw[] }>(
     `/sites/${config.mercadoLivre.siteId}/search?${q}`,
   );
@@ -254,6 +264,10 @@ async function searchListings(term: string, limit: number): Promise<MLProduct[]>
       currency: r.currency_id || "BRL",
       originalUrl: r.permalink,
       freeShipping: Boolean(r.shipping?.free_shipping),
+      rating: r.reviews?.rating_average ?? null,
+      reviewsCount: r.reviews?.total ?? null,
+      sellerReputation: r.seller?.power_seller_status ?? null,
+      categoryId: r.category_id ?? null,
     }));
 }
 
@@ -317,10 +331,14 @@ async function searchCatalog(term: string, limit: number): Promise<MLProduct[]> 
 // Função pública
 // ---------------------------------------------------------------------------
 
-/** Busca produtos de um termo. Tenta a busca de anúncios e, se bloqueada, o catálogo. */
-export async function searchProducts(term: string, limit: number): Promise<MLProduct[]> {
+/** Busca produtos por termo ou categoria. Tenta a busca de anúncios e, se bloqueada, o catálogo. */
+export async function searchProducts(
+  term: string,
+  limit: number,
+  categoryId?: string,
+): Promise<MLProduct[]> {
   try {
-    return await searchListings(term, limit);
+    return await searchListings(term, limit, categoryId);
   } catch (err) {
     if (err instanceof MercadoLivreError && (err.status === 403 || err.status === 404)) {
       try {
@@ -363,4 +381,63 @@ async function mapWithConcurrency<T, R>(
   });
   await Promise.all(workers);
   return output;
+}
+
+export interface MLRevalidationResult {
+  valid: boolean;
+  status: "active" | "paused" | "closed" | "not_found";
+  price?: number;
+  originalPrice?: number | null;
+  freeShipping?: boolean;
+  availableQuantity?: number;
+  error?: string;
+}
+
+/**
+ * Revalida se o item do Mercado Livre continua ativo e com estoque antes do disparo automático.
+ */
+export async function revalidateMLItem(externalId: string): Promise<MLRevalidationResult> {
+  try {
+    const isConn = await hasActiveMLConnection();
+    if (!isConn) {
+      // Sem conexão com a API oficial, mantém os dados atuais sem bloquear
+      return { valid: true, status: "active" };
+    }
+
+    const item = await mlGet<{
+      status?: string;
+      price?: number;
+      original_price?: number | null;
+      available_quantity?: number;
+      shipping?: { free_shipping?: boolean };
+    }>(`/items/${externalId}`);
+
+    const status = (item.status as "active" | "paused" | "closed") || "active";
+    const availableQuantity = item.available_quantity ?? 1;
+
+    if (status !== "active" || availableQuantity <= 0) {
+      return {
+        valid: false,
+        status,
+        availableQuantity,
+        error: `Produto ${status === "paused" ? "pausado" : "sem estoque"} no Mercado Livre`,
+      };
+    }
+
+    return {
+      valid: true,
+      status: "active",
+      price: item.price,
+      originalPrice: item.original_price ?? null,
+      freeShipping: Boolean(item.shipping?.free_shipping),
+      availableQuantity,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("404")) {
+      return { valid: false, status: "not_found", error: "Anúncio não encontrado no Mercado Livre" };
+    }
+    // Em caso de 403 de política de busca ou rate limit temporário, mantém válido
+    return { valid: true, status: "active" };
+  }
 }
