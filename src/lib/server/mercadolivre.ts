@@ -147,8 +147,11 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
 
 export async function hasActiveMLConnection(): Promise<boolean> {
   const stored = await getStoredMLTokens();
-  if (stored && (stored.expiresAt > Date.now() || stored.refreshToken)) return true;
-  return Boolean(config.mercadoLivre.accessToken);
+  if (stored) {
+    if (stored.expiresAt > Date.now() || stored.refreshToken) return true;
+    return false;
+  }
+  return false;
 }
 
 async function getAccessToken(forceRefresh = false): Promise<string> {

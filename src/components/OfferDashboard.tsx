@@ -490,6 +490,13 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <a
+                href="/api/auth/mercadolivre"
+                className="rounded-lg bg-emerald-500/20 border border-emerald-400/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/30 transition inline-flex items-center gap-1"
+                title="Renovar autorização no Mercado Livre"
+              >
+                🔄 Reconectar
+              </a>
               <button
                 type="button"
                 onClick={() => setShowManualCookie(!showManualCookie)}
