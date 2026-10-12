@@ -102,25 +102,22 @@ async function handleProcessScheduled(request: Request) {
       let isOutOfStock = false;
       try {
         const mlItem = await revalidateMLItem(candidate.externalId);
-        if (mlItem) {
-          const availableQty = mlItem.availableQuantity ?? 0;
-          if (mlItem.status === "paused" || mlItem.status === "closed" || availableQty <= 0) {
-            // Produto esgotado ou pausado: descarta sem punir o circuit breaker e pula para a próxima oferta
-            await markOfferOutOfStock(
-              candidate.id,
-              `Produto esgotado ou pausado no Mercado Livre (status: ${mlItem.status}, estoque: ${availableQty})`
-            );
-            discardedCount++;
-            isOutOfStock = true;
-          } else {
-            if (typeof mlItem.price === "number") {
-              validatedPrice = mlItem.price;
-            }
-            if (mlItem.originalPrice !== undefined) {
-              validatedOriginalPrice = mlItem.originalPrice ?? null;
-            }
-            validatedDiscount = calcDiscountPercent(validatedPrice, validatedOriginalPrice);
+        if (mlItem && mlItem.valid === false) {
+          // Produto esgotado ou pausado comprovado: descarta e pula para a próxima oferta
+          await markOfferOutOfStock(
+            candidate.id,
+            mlItem.error || `Produto esgotado ou pausado no Mercado Livre (status: ${mlItem.status})`
+          );
+          discardedCount++;
+          isOutOfStock = true;
+        } else if (mlItem && mlItem.valid) {
+          if (typeof mlItem.price === "number") {
+            validatedPrice = mlItem.price;
           }
+          if (mlItem.originalPrice !== undefined) {
+            validatedOriginalPrice = mlItem.originalPrice ?? null;
+          }
+          validatedDiscount = calcDiscountPercent(validatedPrice, validatedOriginalPrice);
         }
       } catch (revalErr) {
         console.warn(`[cron] Não foi possível revalidar item ${candidate.externalId}, prosseguindo com dados atuais:`, revalErr);
