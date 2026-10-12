@@ -29,6 +29,15 @@ function verifyCronAuth(request: Request): boolean {
   const url = new URL(request.url);
   if (url.searchParams.get("secret") === cronSecret) return true;
 
+  // Permite disparos manuais originados da interface do painel (Same-Origin ou X-Requested-With)
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("host");
+  const requestedWith = request.headers.get("x-requested-with");
+  if (requestedWith === "XMLHttpRequest") return true;
+  if (secFetchSite === "same-origin") return true;
+  if (origin && host && origin.includes(host)) return true;
+
   return false;
 }
 

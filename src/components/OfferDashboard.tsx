@@ -326,7 +326,12 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   async function handleManualDispatch() {
     setDispatchingNow(true);
     try {
-      const res = await fetch("/api/cron/process-scheduled", { method: "POST" });
+      const res = await fetch("/api/cron/process-scheduled", {
+        method: "POST",
+        headers: {
+          "x-requested-with": "XMLHttpRequest",
+        },
+      });
       const data = await res.json();
       if (data.ok && data.processed) {
         notify("ok", `Oferta "${data.title}" enviada com sucesso!`);
