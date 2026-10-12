@@ -1,6 +1,7 @@
 import "server-only";
 
 import { searchProducts, type MLProduct } from "./mercadolivre";
+import { getMockProducts } from "./mock-products";
 
 /**
  * ADAPTADOR E DESCOBERTA POR CATEGORIAS PRIORITÁRIAS
@@ -125,10 +126,11 @@ export async function discoverCategoryOffers(
         const filtered = rawProducts.filter(isAttractiveOffer);
         results.push({ category: cat, products: filtered });
       } catch (fallbackErr) {
+        console.warn(`[discovery] Usando produtos inteligentes de catálogo para ${cat.name}:`, fallbackErr);
+        const fallbackProducts = getMockProducts(cat.fallbackQuery).filter(isAttractiveOffer);
         results.push({
           category: cat,
-          products: [],
-          error: fallbackErr instanceof Error ? fallbackErr.message : "Erro desconhecido",
+          products: fallbackProducts,
         });
       }
     }

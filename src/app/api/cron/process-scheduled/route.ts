@@ -56,9 +56,12 @@ async function handleProcessScheduled(request: Request) {
 
   try {
     const settings = await getSchedulerSettings();
+    const url = new URL(request.url);
+    const isManualTrigger = request.headers.get("x-requested-with") === "XMLHttpRequest"
+      || url.searchParams.get("manual") === "true";
 
-    // 1. Checa estado do agendador
-    if (settings.state !== "ativo") {
+    // 1. Checa estado do agendador (se for disparo manual, NÃO bloqueia se estiver pausado!)
+    if (!isManualTrigger && settings.state !== "ativo") {
       return NextResponse.json({
         ok: true,
         processed: false,
@@ -67,9 +70,9 @@ async function handleProcessScheduled(request: Request) {
       });
     }
 
-    // 2. Checa janela operacional (ex: 07:00 às 00:00 em America/Sao_Paulo)
+    // 2. Checa janela operacional (se for disparo manual, NÃO bloqueia pelo horário da janela!)
     const spTime = getSaoPauloTime();
-    if (!isWithinOperatingWindow(settings, spTime)) {
+    if (!isManualTrigger && !isWithinOperatingWindow(settings, spTime)) {
       return NextResponse.json({
         ok: true,
         processed: false,
@@ -79,6 +82,7 @@ async function handleProcessScheduled(request: Request) {
     }
 
     // 3. Reclama atomicamente a próxima oferta agendada com lock.
+    // Se for disparo manual, força a próxima da fila mesmo com horário futuro.
     // Se a oferta encontrada estiver esgotada no Mercado Livre, ela é descartada
     // e o sistema avança imediatamente para a próxima da fila (até 5 tentativas).
     let offer: Offer | null = null;
@@ -88,7 +92,7 @@ async function handleProcessScheduled(request: Request) {
     let discardedCount = 0;
 
     while (discardedCount < 5) {
-      const candidate = await claimNextScheduledOfferAtomic();
+      const candidate = await claimNextScheduledOfferAtomic(isManualTrigger);
       if (!candidate) break;
 
       validatedPrice = candidate.price;

@@ -360,10 +360,43 @@ export async function updateSchedulerSettings(
  * Usa a função PostgreSQL `claim_next_scheduled_offer()` com FOR UPDATE SKIP LOCKED
  * para garantir que dois crons ou dois usuários nunca peguem a mesma oferta.
  */
-export async function claimNextScheduledOfferAtomic(): Promise<Offer | null> {
+export async function claimNextScheduledOfferAtomic(forceImmediate = false): Promise<Offer | null> {
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient();
+
+      if (forceImmediate) {
+        // Envio manual forçado: seleciona a próxima oferta aprovada da fila independente do horário
+        const { data: candidates, error: findError } = await supabase
+          .from("offers")
+          .select("id")
+          .eq("status", "aprovado")
+          .in("whatsapp_status", ["agendado", "falhou"])
+          .order("scheduled_for", { ascending: true, nullsFirst: false })
+          .limit(1);
+
+        if (findError) throw findError;
+        if (!candidates || candidates.length === 0) return null;
+
+        const targetId = candidates[0].id;
+        const now = new Date().toISOString();
+        const { data: updated, error: updateError } = await supabase
+          .from("offers")
+          .update({
+            whatsapp_status: "enviando",
+            locked_at: now,
+            updated_at: now,
+          })
+          .eq("id", targetId)
+          .select();
+
+        if (updateError) throw updateError;
+        if (updated && updated.length > 0) {
+          return mapDbToOffer(updated[0] as Record<string, unknown>);
+        }
+        return null;
+      }
+
       const { data, error } = await supabase.rpc("claim_next_scheduled_offer", {
         lock_timeout_seconds: 120,
       });
@@ -387,6 +420,9 @@ export async function claimNextScheduledOfferAtomic(): Promise<Offer | null> {
     const candidate = db.offers
       .filter((o) => {
         if (o.status !== "aprovado") return false;
+        if (forceImmediate && (o.whatsappStatus === "agendado" || o.whatsappStatus === "falhou")) {
+          return true;
+        }
         if (o.whatsappStatus === "agendado" && (!o.scheduledFor || o.scheduledFor <= now)) {
           return true;
         }
