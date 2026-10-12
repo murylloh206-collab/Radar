@@ -415,15 +415,16 @@ export async function revalidateMLItem(externalId: string): Promise<MLRevalidati
       shipping?: { free_shipping?: boolean };
     }>(`/items/${externalId}`);
 
-    const status = (item.status as "active" | "paused" | "closed") || "active";
-    const availableQuantity = item.available_quantity ?? 1;
+    const rawStatus = String(item.status || "active").toLowerCase();
+    const isExplicitlyUnavailable = rawStatus === "paused" || rawStatus === "closed";
+    const isZeroStock = typeof item.available_quantity === "number" && item.available_quantity === 0;
 
-    if (status !== "active" || availableQuantity <= 0) {
+    if (isExplicitlyUnavailable || isZeroStock) {
       return {
         valid: false,
-        status,
-        availableQuantity,
-        error: `Produto ${status === "paused" ? "pausado" : "sem estoque"} no Mercado Livre`,
+        status: isExplicitlyUnavailable ? (rawStatus as "paused" | "closed") : "active",
+        availableQuantity: item.available_quantity ?? 0,
+        error: `Produto ${isExplicitlyUnavailable ? "pausado" : "sem estoque"} no Mercado Livre`,
       };
     }
 
@@ -433,7 +434,7 @@ export async function revalidateMLItem(externalId: string): Promise<MLRevalidati
       price: item.price,
       originalPrice: item.original_price ?? null,
       freeShipping: Boolean(item.shipping?.free_shipping),
-      availableQuantity,
+      availableQuantity: item.available_quantity ?? 1,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
