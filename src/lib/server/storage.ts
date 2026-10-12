@@ -479,6 +479,47 @@ export async function recordDispatchSuccess(
 }
 
 /**
+ * Marca uma oferta como esgotada ou pausada pelo vendedor no Mercado Livre.
+ * Remove a oferta da fila de agendamento sem acionar o circuit breaker do agendador.
+ */
+export async function markOfferOutOfStock(
+  offerId: string,
+  reason: string
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseClient();
+      await supabase
+        .from("offers")
+        .update({
+          status: "rejeitado",
+          whatsapp_status: "falhou",
+          whatsapp_error: reason,
+          locked_at: null,
+          updated_at: now,
+        })
+        .eq("id", offerId);
+      return;
+    } catch (err) {
+      if (isProduction()) throw err;
+    }
+  }
+
+  await updateDatabase((db) => {
+    const offer = db.offers.find((o) => o.id === offerId);
+    if (offer) {
+      offer.status = "rejeitado";
+      offer.whatsappStatus = "falhou";
+      offer.whatsappError = reason;
+      offer.lockedAt = null;
+      offer.updatedAt = now;
+    }
+  });
+}
+
+/**
  * Registra falha de despacho.
  * Aplica circuit breaker: pausa automaticamente após 3 falhas consecutivas.
  */

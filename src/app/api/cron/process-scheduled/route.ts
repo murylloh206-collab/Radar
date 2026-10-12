@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   claimNextScheduledOfferAtomic,
   getSchedulerSettings,
+  markOfferOutOfStock,
   recordDispatchFailure,
   recordDispatchSuccess,
 } from "@/lib/server/storage";
@@ -13,7 +14,7 @@ import { revalidateMLItem } from "@/lib/server/mercadolivre";
 import { generateMeliShortLinkDetailed } from "@/lib/server/meli-shortener";
 import { dispatchOfferToChannel } from "@/lib/server/whatsapp-adapter";
 import { calcDiscountPercent } from "@/lib/offer-rules";
-import type { ApiError } from "@/lib/types";
+import type { ApiError, Offer } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Permite até 60s na Vercel para revalidação e envio
@@ -68,51 +69,68 @@ async function handleProcessScheduled(request: Request) {
       });
     }
 
-    // 3. Reclama atomicamente a próxima oferta agendada com lock
-    const offer = await claimNextScheduledOfferAtomic();
+    // 3. Reclama atomicamente a próxima oferta agendada com lock.
+    // Se a oferta encontrada estiver esgotada no Mercado Livre, ela é descartada
+    // e o sistema avança imediatamente para a próxima da fila (até 5 tentativas).
+    let offer: Offer | null = null;
+    let validatedPrice = 0;
+    let validatedOriginalPrice: number | null = null;
+    let validatedDiscount: number | null = null;
+    let discardedCount = 0;
+
+    while (discardedCount < 5) {
+      const candidate = await claimNextScheduledOfferAtomic();
+      if (!candidate) break;
+
+      validatedPrice = candidate.price;
+      validatedOriginalPrice = candidate.originalPrice;
+      validatedDiscount = candidate.discountPercent;
+
+      let isOutOfStock = false;
+      try {
+        const mlItem = await revalidateMLItem(candidate.externalId);
+        if (mlItem) {
+          const availableQty = mlItem.availableQuantity ?? 0;
+          if (mlItem.status === "paused" || mlItem.status === "closed" || availableQty <= 0) {
+            // Produto esgotado ou pausado: descarta sem punir o circuit breaker e pula para a próxima oferta
+            await markOfferOutOfStock(
+              candidate.id,
+              `Produto esgotado ou pausado no Mercado Livre (status: ${mlItem.status}, estoque: ${availableQty})`
+            );
+            discardedCount++;
+            isOutOfStock = true;
+          } else {
+            if (typeof mlItem.price === "number") {
+              validatedPrice = mlItem.price;
+            }
+            if (mlItem.originalPrice !== undefined) {
+              validatedOriginalPrice = mlItem.originalPrice ?? null;
+            }
+            validatedDiscount = calcDiscountPercent(validatedPrice, validatedOriginalPrice);
+          }
+        }
+      } catch (revalErr) {
+        console.warn(`[cron] Não foi possível revalidar item ${candidate.externalId}, prosseguindo com dados atuais:`, revalErr);
+      }
+
+      if (isOutOfStock) {
+        continue;
+      }
+
+      // Encontrou oferta com estoque garantido
+      offer = candidate;
+      break;
+    }
 
     if (!offer) {
       return NextResponse.json({
         ok: true,
         processed: false,
-        reason: "Nenhuma oferta agendada vencida no momento.",
+        discardedCount,
+        reason: discardedCount > 0
+          ? `${discardedCount} oferta(s) esgotada(s) foram descartadas. Nenhuma outra oferta pronta na fila.`
+          : "Nenhuma oferta agendada vencida no momento.",
       });
-    }
-
-    // 4. Revalidação de preço, estoque e status no Mercado Livre
-    let validatedPrice = offer.price;
-    let validatedOriginalPrice = offer.originalPrice;
-    let validatedDiscount = offer.discountPercent;
-
-    try {
-      const mlItem = await revalidateMLItem(offer.externalId);
-      if (mlItem) {
-        const availableQty = mlItem.availableQuantity ?? 0;
-        if (mlItem.status === "paused" || mlItem.status === "closed" || availableQty <= 0) {
-          // Produto indisponível: registra falha de estoque e marca como rejeitado
-          await recordDispatchFailure(
-            offer.id,
-            `Produto esgotado ou pausado no Mercado Livre (status: ${mlItem.status}, estoque: ${availableQty})`
-          );
-          return NextResponse.json({
-            ok: false,
-            processed: true,
-            status: "esgotado",
-            offerId: offer.id,
-            reason: "Item pausado ou sem estoque no Mercado Livre.",
-          });
-        }
-
-        if (typeof mlItem.price === "number") {
-          validatedPrice = mlItem.price;
-        }
-        if (mlItem.originalPrice !== undefined) {
-          validatedOriginalPrice = mlItem.originalPrice ?? null;
-        }
-        validatedDiscount = calcDiscountPercent(validatedPrice, validatedOriginalPrice);
-      }
-    } catch (revalErr) {
-      console.warn(`[cron] Não foi possível revalidar item ${offer.externalId}, prosseguindo com dados atuais:`, revalErr);
     }
 
     // Atualiza a oferta em memória antes de formatar mensagem
