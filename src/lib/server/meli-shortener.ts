@@ -1,6 +1,7 @@
 import "server-only";
 
 import { config } from "./config";
+import { loadDecryptedSession } from "./session-vault";
 
 /**
  * GERADOR AUTOMÁTICO DE LINKS MELI.LA
@@ -33,9 +34,17 @@ export async function generateMeliShortLinkDetailed(
   productUrl: string,
   customTag?: string,
 ): Promise<{ shortUrl: string | null; error: string | null }> {
-  const cookie = config.mercadoLivre.sessionCookie;
+  let cookie = config.mercadoLivre.sessionCookie;
   if (!cookie) {
-    return { shortUrl: null, error: "Cookie de sessão do Mercado Livre não configurado." };
+    const session = await loadDecryptedSession("mercadolivre");
+    if (session?.rawCookie) {
+      cookie = session.rawCookie;
+      config.mercadoLivre.sessionCookie = session.rawCookie;
+    }
+  }
+
+  if (!cookie) {
+    return { shortUrl: null, error: "Sessão do Mercado Livre não configurada ou expirada." };
   }
 
   const tag = customTag || config.mercadoLivre.affiliateMattWord || "michelhenrique1";

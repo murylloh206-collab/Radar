@@ -12,6 +12,7 @@ import {
   IconImage,
   IconSpinner,
   IconTruck,
+  IconX,
 } from "./icons";
 import { STATUS_STYLES, StatusBadge } from "./StatusBadge";
 
@@ -19,6 +20,9 @@ interface OfferCardProps {
   offer: Offer;
   index: number;
   onUpdate: (id: string, update: OfferUpdate) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function ProductImage({ offer }: { offer: Offer }) {
@@ -48,12 +52,19 @@ function ProductImage({ offer }: { offer: Offer }) {
   );
 }
 
-export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
+export function OfferCard({
+  offer,
+  index,
+  onUpdate,
+  onDelete,
+  isSelected = false,
+  onToggleSelect,
+}: OfferCardProps) {
   const [affiliateUrl, setAffiliateUrl] = useState(offer.affiliateUrl ?? "");
   const [coupon, setCoupon] = useState(offer.coupon ?? "");
   const [couponDescription, setCouponDescription] = useState(offer.couponDescription ?? "");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [busy, setBusy] = useState<OfferStatus | "salvar" | null>(null);
+  const [busy, setBusy] = useState<OfferStatus | "salvar" | "excluir" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
 
@@ -116,15 +127,40 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
     }
   }
 
+  async function handleDeletePermanently() {
+    if (!onDelete) return;
+    const confirmed = window.confirm(
+      `Excluir definitivamente a oferta "${offer.title}"?\n\nEla não voltará a aparecer em futuras atualizações do Radar.`
+    );
+    if (!confirmed) return;
+
+    setBusy("excluir");
+    try {
+      await onDelete(offer.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao excluir oferta.");
+      setBusy(null);
+    }
+  }
+
   const fieldId = (name: string) => `${name}-${offer.externalId}`;
+  const score = offer.opportunityScore ?? 0;
+  const scoreColor =
+    score >= 80
+      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+      : score >= 65
+      ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
+      : score >= 50
+      ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+      : "bg-rose-500/20 text-rose-300 border-rose-500/40";
 
   return (
     <article
       id={`oferta-${offer.externalId}`}
       style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
       className={`group glass relative flex w-full animate-fade-up flex-col overflow-hidden rounded-2xl ring-1 transition-all duration-200 ${styles.ring} ${
-        offer.status === "rejeitado" ? "opacity-75" : ""
-      }`}
+        offer.status === "rejeitado" ? "opacity-90" : ""
+      } ${isSelected ? "ring-2 ring-emerald-400" : ""}`}
     >
       {/* Barra superior de status */}
       <div className={`h-1 w-full bg-gradient-to-r ${styles.bar}`} />
@@ -133,12 +169,29 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
       <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-white">
         <ProductImage offer={offer} />
 
-        <div className="absolute left-2.5 top-2.5 flex flex-col gap-1">
+        {/* Checkbox de seleção em Rejeitados */}
+        {offer.status === "rejeitado" && onToggleSelect && (
+          <div className="absolute left-2.5 top-2.5 z-10">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect(offer.id)}
+              aria-label={`Selecionar oferta ${offer.title}`}
+              className="h-5 w-5 rounded border-slate-700 bg-black/80 text-emerald-500 focus:ring-emerald-400 cursor-pointer"
+            />
+          </div>
+        )}
+
+        {/* Badges de Desconto e Score */}
+        <div className={`absolute ${offer.status === "rejeitado" && onToggleSelect ? "left-10" : "left-2.5"} top-2.5 flex flex-col gap-1`}>
           {offer.discountPercent && offer.discountPercent > 0 ? (
             <span className="rounded-lg bg-emerald-600 px-2 py-0.5 text-xs font-black text-white shadow-md">
               -{offer.discountPercent}%
             </span>
           ) : null}
+          <span className={`rounded-lg px-2 py-0.5 text-[11px] font-black border shadow-md ${scoreColor}`}>
+            Score {score}/100
+          </span>
         </div>
 
         <div className="absolute right-2.5 top-2.5">
@@ -154,7 +207,7 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
 
       {/* Conteúdo compacto */}
       <div className="flex flex-1 flex-col gap-2.5 p-3.5 sm:p-4">
-        {/* Motivo de recomendação e atualização */}
+        {/* Motivo de recomendação ou rejeição */}
         <div className="flex items-center justify-between text-[11px] text-slate-400">
           <span className="truncate font-medium text-amber-300/90">
             {offer.opportunityReason || `Oportunidade · ${offer.searchTerm}`}
@@ -163,6 +216,16 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
             {formatDateTime(offer.lastSeenAt)}
           </span>
         </div>
+
+        {/* Motivo de rejeição explícito */}
+        {offer.status === "rejeitado" && (
+          <div className="rounded-lg bg-rose-500/10 border border-rose-500/25 p-2 text-xs text-rose-300">
+            <strong className="block font-semibold">Motivo da Rejeição:</strong>
+            <p className="mt-0.5 text-[11px] text-rose-200">
+              {offer.rejectionDetail?.reason || offer.opportunityReason || "Critérios mínimos eliminatórios não atendidos."}
+            </p>
+          </div>
+        )}
 
         {/* Título */}
         <h3 className="line-clamp-2 text-sm sm:text-base font-semibold leading-snug text-slate-100">
@@ -183,7 +246,7 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
           )}
         </div>
 
-        {/* Avaliação e Comissão */}
+        {/* Avaliação e Origem */}
         <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] py-1 border-y border-white/5 text-slate-300">
           <div>
             {typeof offer.rating === "number" && offer.rating > 0 ? (
@@ -196,13 +259,9 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
             )}
           </div>
           <div>
-            {offer.commission ? (
-              <span className="font-semibold text-emerald-300">
-                Comissão: {offer.commission.percentage}% · {formatPrice(offer.commission.amount, "BRL")}
-              </span>
-            ) : (
-              <span className="text-slate-500">Comissão: Aguardando dados da rede</span>
-            )}
+            <span className="font-semibold text-slate-400">
+              Provedor: {offer.source === "mercadolivre" ? "Mercado Livre" : "Shopee"}
+            </span>
           </div>
         </div>
 
@@ -237,11 +296,39 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
             onClick={() => setDetailsOpen(!detailsOpen)}
             className="text-xs font-semibold text-slate-400 hover:text-slate-200 transition underline-offset-2"
           >
-            {detailsOpen ? "▲ Ocultar detalhes" : "▼ Ver detalhes (cupom e links)"}
+            {detailsOpen ? "▲ Ocultar auditoria e cupom" : "▼ Ver auditoria do score, cupom e links"}
           </button>
 
           {detailsOpen && (
-            <div className="mt-2 space-y-2.5 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs">
+            <div className="mt-2 space-y-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs">
+              {/* Detalhamento Auditável do Score */}
+              {offer.scoreAudit && (
+                <div className="space-y-1.5 border-b border-white/5 pb-2.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-200">
+                    <span>Componentes do Score ({offer.scoreAudit.totalScore}/100):</span>
+                    <span className="text-[10px] text-slate-400">v{offer.scoreAudit.version}</span>
+                  </div>
+                  <div className="space-y-1 text-[10px]">
+                    {offer.scoreAudit.components.map((comp) => (
+                      <div key={comp.name} className="flex items-center justify-between py-0.5 border-b border-white/[0.03]">
+                        <span className="text-slate-300">{comp.name}:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">{comp.detail}</span>
+                          <span className="font-mono font-semibold text-amber-300">
+                            {comp.points}/{comp.maxPoints} pts
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {offer.scoreAudit.failedFilters.length > 0 && (
+                    <div className="mt-1 text-[10px] text-rose-300 bg-rose-500/10 p-1.5 rounded">
+                      <strong>Filtros que reprovaram:</strong> {offer.scoreAudit.failedFilters.join("; ")}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label htmlFor={fieldId("afiliado")} className="block text-[11px] font-semibold text-slate-300 mb-1">
                   Link de afiliado
@@ -298,7 +385,7 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
                   rel="noopener noreferrer"
                   className="text-[11px] text-sky-400 hover:underline inline-flex items-center gap-1"
                 >
-                  Link original no Mercado Livre <IconExternal width={10} height={10} />
+                  Link original na loja <IconExternal width={10} height={10} />
                 </a>
                 {dirty && (
                   <button
@@ -307,7 +394,7 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
                     onClick={() => submit("salvar")}
                     className="rounded bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-white/20"
                   >
-                    Salvar
+                    Salvar alterações
                   </button>
                 )}
               </div>
@@ -323,7 +410,7 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
 
         {/* AÇÕES PRINCIPAIS MOBILE-FIRST */}
         <div className="mt-auto space-y-2 pt-2">
-          {/* BOTÃO DISCRETO 'TESTAR LINK' ACIMA DE 'APROVAR' */}
+          {/* BOTÃO 'TESTAR LINK' */}
           <a
             href={hasAffiliate ? activeLink : undefined}
             target="_blank"
@@ -354,6 +441,18 @@ export function OfferCard({ offer, index, onUpdate }: OfferCardProps) {
                 className="flex-1 rounded-xl border border-rose-400/25 py-2.5 text-xs font-bold text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
               >
                 Rejeitar
+              </button>
+            )}
+
+            {offer.status === "rejeitado" && onDelete && (
+              <button
+                type="button"
+                id={fieldId("excluir-definitivo")}
+                disabled={busy !== null}
+                onClick={handleDeletePermanently}
+                className="flex-1 rounded-xl border border-rose-500/50 bg-rose-500/15 py-2.5 text-xs font-bold text-rose-200 transition hover:bg-rose-500/25 disabled:opacity-50"
+              >
+                {busy === "excluir" ? "Excluindo…" : "Excluir Definitivo"}
               </button>
             )}
 

@@ -431,17 +431,13 @@ export async function revalidateMLItem(externalId: string): Promise<MLRevalidati
     return {
       valid: true,
       status: "active",
-      price: item.price,
+      price: typeof item.price === "number" ? item.price : undefined,
       originalPrice: item.original_price ?? null,
       freeShipping: Boolean(item.shipping?.free_shipping),
-      availableQuantity: item.available_quantity ?? 1,
+      availableQuantity: item.available_quantity ?? 10,
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("404")) {
-      return { valid: false, status: "not_found", error: "Anúncio não encontrado no Mercado Livre" };
-    }
-    // Em caso de 403 de política de busca ou rate limit temporário, mantém válido
-    return { valid: true, status: "active" };
+    // Em caso de 403, 401 ou bloqueio de política da API oficial, não bloqueia o produto
+    return { valid: true, status: "active", availableQuantity: 10 };
   }
 }

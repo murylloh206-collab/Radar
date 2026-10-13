@@ -8,9 +8,9 @@ import type { OffersResponse } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/offers — lista todas as ofertas salvas + configurações da busca + estado do agendador. */
+/** GET /api/offers — lista ofertas salvas, status da fila, configurações do algoritmo e agendador. */
 export async function GET() {
-  const { offers, lastSearch } = await listOffers();
+  const { offers, lastSearch, queueStats, algorithmSettings } = await listOffers();
   const automation = await getStoredAutomationSettings();
   const scheduler = await getSchedulerSettings();
   const schedulerStats = computeSchedulerStats(offers, scheduler);
@@ -21,6 +21,8 @@ export async function GET() {
     automation,
     scheduler,
     schedulerStats,
+    algorithmSettings,
+    queueStats,
     config: {
       defaultTerms: config.searchTerms,
       resultsPerTerm: config.resultsPerTerm,

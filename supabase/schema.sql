@@ -134,3 +134,14 @@ begin
   returning *;
 end;
 $$ language plpgsql security definer;
+
+-- ----------------------------------------------------------------------------
+-- 5. Atualização Incremental: Auditoria de Score, Rejeição e Fingerprint
+-- ----------------------------------------------------------------------------
+-- Campos adicionais para transparência e rastreabilidade total do algoritmo:
+alter table if exists public.offers add column if not exists score_audit jsonb;
+alter table if exists public.offers add column if not exists rejection_detail jsonb;
+alter table if exists public.offers add column if not exists product_fingerprint text;
+
+create index if not exists idx_offers_product_fingerprint on public.offers (product_fingerprint);
+

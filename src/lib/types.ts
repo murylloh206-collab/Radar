@@ -21,13 +21,71 @@ export interface EstimatedCommission {
   source: string;
 }
 
+export type OfferSource = "mercadolivre" | "shopee";
+
+export type FieldDataSource = "confirmado" | "indisponivel" | "estimado" | "nao_aplicavel";
+
+export interface ScoreComponentBreakdown {
+  name: string;
+  points: number;
+  maxPoints: number;
+  dataSource: FieldDataSource;
+  detail: string;
+}
+
+export interface ScoreAudit {
+  version: string;
+  totalScore: number;
+  effectivePrice: number;
+  passedMandatoryFilters: boolean;
+  failedFilters: string[];
+  components: ScoreComponentBreakdown[];
+  penalties: string[];
+  decision: "aprovado" | "pendente" | "rejeitado" | "revisao_manual";
+  decisionReason: string;
+  evaluatedAt: string;
+}
+
+export interface RejectionDetail {
+  reason: string;
+  failedFilters: string[];
+  rejectedAt: string;
+}
+
+export interface TombstoneRecord {
+  id: string;
+  fingerprint: string;
+  title: string;
+  rejectedAt: string;
+  reason: string;
+}
+
+export type AlgorithmRolloutMode = "observacao" | "revisao_manual" | "publicacao_automatica";
+
+export interface AlgorithmSettings {
+  rolloutMode: AlgorithmRolloutMode;
+  minAutoApproveScore: number;
+  minManualReviewScore: number;
+  minEffectivePrice: number;
+  weights: {
+    realDiscountAndPrice: number;
+    salesVolumeAndDemand: number;
+    reviewsAndRating: number;
+    couponValidity: number;
+    availabilityAndFreshness: number;
+    affiliateLinkQuality: number;
+    additionalSignals: number;
+  };
+  enabledProviders: OfferSource[];
+}
+
 /** Uma oferta salva no painel. */
 export interface Offer {
   /** Identificador interno (ex.: "mercadolivre:MLB123456"). */
   id: string;
   /** De onde veio a oferta. */
-  source: "mercadolivre";
-  /** ID do item/produto no Mercado Livre. */
+  source: OfferSource;
+  /** ID do item/produto na plataforma de origem. */
   externalId: string;
   title: string;
   thumbnail: string | null;
@@ -64,6 +122,10 @@ export interface Offer {
   commission?: EstimatedCommission | null;
   opportunityScore?: number;
   opportunityReason?: string;
+  scoreAudit?: ScoreAudit | null;
+  rejectionDetail?: RejectionDetail | null;
+  productFingerprint?: string;
+  salesVolume?: number | null;
   priceHistory?: PriceHistoryItem[];
 
   // Fila de publicação WhatsApp
@@ -146,6 +208,13 @@ export interface AutomationSettings {
   lastError?: string | null;
 }
 
+export interface QueueStats {
+  pendingCount: number;
+  maxPending: number;
+  availableSlots: number;
+  isQueueFull: boolean;
+}
+
 /** Resposta de GET /api/offers */
 export interface OffersResponse {
   offers: Offer[];
@@ -153,6 +222,8 @@ export interface OffersResponse {
   automation: AutomationSettings;
   scheduler?: SchedulerSettings;
   schedulerStats?: SchedulerStats;
+  algorithmSettings?: AlgorithmSettings;
+  queueStats?: QueueStats;
   config: {
     defaultTerms: string[];
     resultsPerTerm: number;

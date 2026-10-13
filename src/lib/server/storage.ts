@@ -10,11 +10,13 @@ import {
   mapOfferToDb,
   mapDbToSchedulerSettings,
 } from "./supabase";
+import { generateProductFingerprint } from "./offer-scoring-engine";
 import type {
   AutomationSettings,
   LastSearchInfo,
   Offer,
   SchedulerSettings,
+  TombstoneRecord,
 } from "../types";
 
 export interface MLAuthTokens {
@@ -57,6 +59,7 @@ export interface DatabaseShape {
   mlAuth?: MLAuthTokens | null;
   automation?: AutomationSettings;
   scheduler?: SchedulerSettings;
+  tombstones?: TombstoneRecord[];
 }
 
 const EMPTY_DB: DatabaseShape = {
@@ -67,6 +70,7 @@ const EMPTY_DB: DatabaseShape = {
   mlAuth: null,
   automation: DEFAULT_AUTOMATION,
   scheduler: DEFAULT_SCHEDULER_SETTINGS,
+  tombstones: [],
 };
 
 function isProduction(): boolean {
@@ -131,11 +135,13 @@ export async function readDatabase(): Promise<DatabaseShape> {
 
       let mlAuth: MLAuthTokens | null = null;
       let lastSearch: LastSearchInfo | null = null;
+      let tombstones: TombstoneRecord[] = [];
 
       if (metaData) {
         for (const row of metaData) {
           if (row.key === "ml_auth") mlAuth = row.value as MLAuthTokens;
           if (row.key === "last_search") lastSearch = row.value as LastSearchInfo;
+          if (row.key === "tombstones") tombstones = (row.value as TombstoneRecord[]) || [];
         }
       }
 
@@ -154,6 +160,7 @@ export async function readDatabase(): Promise<DatabaseShape> {
         offers,
         mlAuth,
         scheduler: schedulerSettings,
+        tombstones,
         automation: {
           autoSendEnabled: schedulerSettings.state === "ativo",
           channelDestination: schedulerSettings.channelDestination,
@@ -249,6 +256,14 @@ export function updateDatabase<T>(mutator: (db: DatabaseShape) => T | Promise<T>
           await supabase.from("app_metadata").upsert({
             key: "last_search",
             value: db.lastSearch,
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        if (db.tombstones) {
+          await supabase.from("app_metadata").upsert({
+            key: "tombstones",
+            value: db.tombstones,
             updated_at: new Date().toISOString(),
           });
         }
@@ -695,4 +710,80 @@ export async function saveStoredAutomationSettings(
   }
   return getStoredAutomationSettings();
 }
+
+// ---------------------------------------------------------------------------
+// GESTÃO DE TOMBSTONES E EXCLUSÃO DEFINITIVA DE REJEITADOS
+// ---------------------------------------------------------------------------
+
+export async function getTombstones(): Promise<TombstoneRecord[]> {
+  const db = await readDatabase();
+  return db.tombstones || [];
+}
+
+export async function deleteOffersPermanently(
+  offerIds: string[]
+): Promise<{ deletedCount: number; tombstonesAdded: number }> {
+  if (!offerIds || offerIds.length === 0) {
+    return { deletedCount: 0, tombstonesAdded: 0 };
+  }
+
+  return enqueue(async () => {
+    const db = await readDatabase();
+    const targetOffers = db.offers.filter(
+      (o) => offerIds.includes(o.id) && o.status === "rejeitado"
+    );
+
+    if (targetOffers.length === 0) {
+      return { deletedCount: 0, tombstonesAdded: 0 };
+    }
+
+    const now = new Date().toISOString();
+    const newTombstones: TombstoneRecord[] = targetOffers.map((o) => ({
+      id: o.id,
+      fingerprint: o.productFingerprint || generateProductFingerprint(o.source, o.externalId, o.title),
+      title: o.title,
+      rejectedAt: now,
+      reason: o.rejectionDetail?.reason || o.opportunityReason || "Exclusão definitiva manual",
+    }));
+
+    const existingTombstones = db.tombstones || [];
+    // Mantém no máximo os 2000 tombstones mais recentes
+    const mergedTombstones = [...existingTombstones, ...newTombstones].slice(-2000);
+    db.tombstones = mergedTombstones;
+
+    const targetIdsSet = new Set(targetOffers.map((o) => o.id));
+    db.offers = db.offers.filter((o) => !targetIdsSet.has(o.id));
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = getSupabaseClient();
+        // 1. Deleta do banco PostgreSQL
+        const { error: delError } = await supabase
+          .from("offers")
+          .delete()
+          .in("id", Array.from(targetIdsSet));
+
+        if (delError) {
+          throw new Error(`Erro ao deletar ofertas do Supabase: ${delError.message}`);
+        }
+
+        // 2. Persiste tombstones atualizados
+        await supabase.from("app_metadata").upsert({
+          key: "tombstones",
+          value: mergedTombstones,
+          updated_at: now,
+        });
+
+        return { deletedCount: targetOffers.length, tombstonesAdded: newTombstones.length };
+      } catch (err) {
+        if (isProduction()) throw err;
+        console.warn("[storage] Falha ao deletar no Supabase, atualizando JSON local:", err);
+      }
+    }
+
+    await writeJsonDatabase(db);
+    return { deletedCount: targetOffers.length, tombstonesAdded: newTombstones.length };
+  });
+}
+
 

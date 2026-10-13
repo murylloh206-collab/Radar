@@ -39,3 +39,12 @@ export async function discoverOffers(categoryIds?: string[]): Promise<SearchResp
   });
   return handle<SearchResponse>(res);
 }
+
+export async function deleteRejectedOffers(ids: string[]): Promise<{ ok: boolean; deletedCount: number; message: string }> {
+  const res = await fetch("/api/offers/rejected", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+  return handle<{ ok: boolean; deletedCount: number; message: string }>(res);
+}

@@ -1,8 +1,10 @@
 import "server-only";
 
+import path from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer";
 import { config } from "./config";
 import { generateMeliShortLinkDetailed } from "./meli-shortener";
+import { loadDecryptedSession } from "./session-vault";
 import { readDatabase, updateDatabase } from "./storage";
 
 /**
@@ -13,6 +15,7 @@ import { readDatabase, updateDatabase } from "./storage";
  * - Abre o navegador 1 única vez por lote e fecha após terminar ou 30s inativo.
  * - Máximo de 2 tentativas por oferta.
  * - NUNCA gera link comum como se fosse afiliado: se falhar, preserva o link oficial de rastreamento.
+ * - Utiliza perfil persistente (userDataDir) para preservação de cache e cookies de sessão.
  */
 
 function parseCookies(rawCookieStr: string) {
@@ -48,8 +51,13 @@ class MeliQueueManager {
     }
 
     if (!this.browser || !this.browser.connected) {
+      const profileDir = process.env.VERCEL
+        ? path.join("/tmp", ".puppeteer_meli_profile")
+        : path.resolve(process.cwd(), "data", ".puppeteer_meli_profile");
+
       this.browser = await puppeteer.launch({
         headless: true,
+        userDataDir: profileDir,
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
@@ -106,7 +114,14 @@ class MeliQueueManager {
   }
 
   private async processItem(offerId: string, productUrl: string) {
-    const cookieStr = config.mercadoLivre.sessionCookie;
+    let cookieStr = config.mercadoLivre.sessionCookie;
+    if (!cookieStr) {
+      const session = await loadDecryptedSession("mercadolivre");
+      if (session?.rawCookie) {
+        cookieStr = session.rawCookie;
+        config.mercadoLivre.sessionCookie = session.rawCookie;
+      }
+    }
 
     // Marca como gerando e incrementa tentativa
     await updateDatabase((db) => {

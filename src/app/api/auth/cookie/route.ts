@@ -1,45 +1,42 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { config } from "@/lib/server/config";
 import { enqueueMeliShorten } from "@/lib/server/puppeteer-meli";
+import { saveEncryptedSession } from "@/lib/server/session-vault";
 import { updateDatabase } from "@/lib/server/storage";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * POST /api/auth/cookie
+ * Recebe a sessão do Mercado Livre, criptografa em AES-256-GCM e persiste de forma segura.
+ * NUNCA salva em arquivos efêmeros de texto puro nem expõe cookies brutos em respostas.
+ */
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as { cookie?: string };
     const rawCookie = (body.cookie || "").trim();
 
     if (!rawCookie) {
-      return NextResponse.json({ error: "Cole o cookie de sessão do Mercado Livre." }, { status: 400 });
+      return NextResponse.json({ error: "Informe os dados de sessão do Mercado Livre." }, { status: 400 });
     }
 
-    // 1. Atualiza em tempo de execução
+    const now = new Date().toISOString();
+    // Estima expiração padrão em 14 dias se não fornecida
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    // 1. Salva de forma criptografada no Session Vault Server-Side (PostgreSQL app_metadata / cofre)
+    await saveEncryptedSession("mercadolivre", {
+      rawCookie,
+      savedAt: now,
+      expiresAt,
+      lastValidatedAt: now,
+      isValid: true,
+    });
+
+    // 2. Atualiza em tempo de execução somente na memória protegida do servidor
     config.mercadoLivre.sessionCookie = rawCookie;
 
-    // 2. Persiste em .env.local
-    try {
-      const envPath = path.resolve(process.cwd(), ".env.local");
-      const currentEnv = await fs.readFile(envPath, "utf-8").catch(() => "");
-      let updatedEnv = "";
-
-      if (currentEnv.includes("ML_SESSION_COOKIE=")) {
-        updatedEnv = currentEnv.replace(
-          /ML_SESSION_COOKIE=(?:"[^"]*"|'[^']*'|[^\r\n]*)/,
-          `ML_SESSION_COOKIE="${rawCookie.replace(/"/g, '\\"')}"`,
-        );
-      } else {
-        updatedEnv = `${currentEnv}\nML_SESSION_COOKIE="${rawCookie.replace(/"/g, '\\"')}"\n`;
-      }
-
-      await fs.writeFile(envPath, updatedEnv, "utf-8");
-    } catch (fsErr) {
-      console.warn("[api/auth/cookie] Não foi possível salvar em .env.local:", fsErr);
-    }
-
-    // 3. Reseta ofertas que falharam por sessão expirada para nova tentativa
+    // 3. Reseta ofertas pendentes de meli.la que estavam com falha anterior
     let resetCount = 0;
     await updateDatabase((db) => {
       for (const o of db.offers) {
@@ -57,10 +54,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: `Cookie de sessão ativado com sucesso! ${resetCount} oferta(s) reencaminhada(s) para gerar meli.la.`,
+      message: `Sessão criptografada e ativada com sucesso! ${resetCount} oferta(s) reencaminhada(s) para encurtamento meli.la.`,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erro ao salvar cookie de sessão.";
+    const message = err instanceof Error ? err.message : "Erro ao processar sessão.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
