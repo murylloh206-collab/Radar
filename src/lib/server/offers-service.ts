@@ -127,10 +127,25 @@ async function processCandidateProduct(
   addedPendingCount: { value: number },
   settings?: AlgorithmSettings,
   tombstones: TombstoneRecord[] = []
-): Promise<"added_pending" | "added_rejected" | "updated" | "skipped_capacity"> {
+): Promise<"added_pending" | "added_rejected" | "updated" | "skipped_capacity" | "skipped_tombstone"> {
   const activeSettings = settings || (await getAlgorithmSettings());
   const id = offerId(candidate.source, candidate.externalId);
   const existing = offers.find((o) => o.id === id);
+
+  // 0. VERIFICAÇÃO CRÍTICA DE TOMBSTONE:
+  // Se a oferta foi excluída definitivamente pelo usuário, descarta silenciosamente.
+  // NUNCA re-adiciona em ofertas e NUNCA move para rejeitados!
+  const candidateFp = generateProductFingerprint(candidate.source, candidate.externalId, candidate.title);
+  const isTombstone = tombstones.some((t) => t.id === id || t.fingerprint === candidateFp);
+
+  if (isTombstone) {
+    if (existing) {
+      const idx = offers.findIndex((o) => o.id === id);
+      if (idx !== -1) offers.splice(idx, 1);
+    }
+    return "skipped_tombstone";
+  }
+
   const updatedHistory = updatePriceHistory(existing?.priceHistory, candidate.price, now);
 
   // 1. Tenta validar/gerar link meli.la antes da inclusão se for Mercado Livre
@@ -308,10 +323,35 @@ export async function runAutoDiscovery(categoryIds?: string[]) {
     const settings = await getAlgorithmSettings();
     const tombstones = currentDb.tombstones || [];
 
-    // Busca candidatos via Mercado Livre
-    const candidates = await mercadoLivreProvider.discoverCategories(
-      Math.min(config.resultsPerTerm, 10)
+    // 1. Busca candidatos via categorias prioritárias do Mercado Livre
+    const categoryCandidates = await mercadoLivreProvider.discoverCategories(
+      Math.min(config.resultsPerTerm, 12)
     );
+
+    // 2. Também busca termos prioritários configurados para trazer ofertas novas e diversas
+    const termCandidates: NormalizedCandidateProduct[] = [];
+    const searchTerms = config.searchTerms && config.searchTerms.length > 0
+      ? config.searchTerms
+      : ["fone bluetooth", "air fryer", "notebook gamer", "smartphone", "alexa echo", "smartwatch"];
+
+    for (const term of searchTerms) {
+      try {
+        const found = await mercadoLivreProvider.searchProducts(term, 6);
+        termCandidates.push(...found);
+      } catch (err) {
+        console.warn(`[runAutoDiscovery] Falha ao buscar termo "${term}":`, err);
+      }
+    }
+
+    // Unifica e deduplica candidatos da mesma rodada por externalId
+    const seenCandidateIds = new Set<string>();
+    const candidates: NormalizedCandidateProduct[] = [];
+    for (const c of [...categoryCandidates, ...termCandidates]) {
+      if (!seenCandidateIds.has(c.externalId)) {
+        seenCandidateIds.add(c.externalId);
+        candidates.push(c);
+      }
+    }
 
     const now = new Date().toISOString();
     const errors: { term: string; message: string }[] = [];

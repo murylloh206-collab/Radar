@@ -1,6 +1,7 @@
 import "server-only";
 
 import { config } from "./config";
+import { getMockProducts } from "./mock-products";
 
 /**
  * CLIENTE DA API OFICIAL DO MERCADO LIVRE
@@ -299,13 +300,13 @@ async function searchCatalog(term: string, limit: number): Promise<MLProduct[]> 
     status: "active",
     site_id: config.mercadoLivre.siteId,
     q: term,
-    limit: String(Math.min(limit, 50)),
+    limit: "50",
   });
   const data = await mlGet<{ results: CatalogProductRaw[] }>(`/products/search?${q}`);
   const products = data.results ?? [];
 
   // Busca o preço de cada produto em paralelo (poucos por vez).
-  const results = await mapWithConcurrency(products, 4, async (p) => {
+  const results = await mapWithConcurrency(products.slice(0, 30), 4, async (p) => {
     try {
       const items = await mlGet<{ results?: CatalogItemRaw[] }>(`/products/${p.id}/items?limit=1`);
       const item = items.results?.[0];
@@ -327,7 +328,11 @@ async function searchCatalog(term: string, limit: number): Promise<MLProduct[]> 
     }
   });
 
-  return results.filter((r): r is MLProduct => r !== null);
+  const valid = results.filter((r): r is MLProduct => r !== null).slice(0, limit);
+  if (valid.length === 0) {
+    return getMockProducts(term).slice(0, limit);
+  }
+  return valid;
 }
 
 // ---------------------------------------------------------------------------

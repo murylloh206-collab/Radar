@@ -93,8 +93,8 @@ export interface CategoryDiscoveryResult {
 
 /** Valida se um produto tem apelo real e atratividade para afiliados */
 export function isAttractiveOffer(product: MLProduct): boolean {
-  // Preço mínimo: itens abaixo de R$ 35 raramente geram interesse ou comissão digna em grupos
-  if (product.price < 35) return false;
+  // Preço mínimo configurado: no mínimo R$ 24,99
+  if (product.price < 24.99) return false;
 
   const titleLower = product.title.toLowerCase();
   for (const junk of JUNK_KEYWORDS) {
