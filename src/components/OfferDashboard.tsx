@@ -603,7 +603,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
               </h2>
             </div>
             <p className="text-xs text-slate-300">
-              Varre categorias prioritárias, aplica filtros eliminatórios (Preço &gt; R$ 50,00, estoque e descontos reais) e calcula score 0–100.
+              Varre categorias prioritárias, aplica filtros eliminatórios (Preço ≥ R$ 24,99, estoque e descontos reais) e calcula score 0–100.
             </p>
             {/* Indicador de Capacidade da Fila */}
             <div className="pt-1 flex items-center gap-2 text-xs">
