@@ -36,12 +36,18 @@ export async function patchOffer(id: string, update: OfferUpdate): Promise<Offer
   return handle<Offer>(res);
 }
 
-export async function updateOffers(): Promise<{
+export interface UpdateOffersResponse {
   ok: boolean;
   offers: Offer[];
   lastSearch: SearchResponse["lastSearch"];
   added: number;
   updated: number;
+  found?: number;
+  skippedNoBuyBox?: number;
+  skippedBlocked?: number;
+  skippedReplica?: number;
+  skippedPrice?: number;
+  errors?: string[];
   stageCounts?: {
     etapa1_itens_retornados_api: number;
     etapa2_apos_preco_minimo_25: number;
@@ -50,12 +56,14 @@ export async function updateOffers(): Promise<{
     etapa5_gravados_atualizados_banco: number;
     etapa6_retornados_frontend: number;
   };
-}> {
+}
+
+export async function updateOffers(): Promise<UpdateOffersResponse> {
   const res = await fetch("/api/ofertas/atualizar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
-  return handle(res);
+  return handle<UpdateOffersResponse>(res);
 }
 
 export async function discoverOffers(categoryIds?: string[]): Promise<SearchResponse> {

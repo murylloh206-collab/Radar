@@ -350,17 +350,26 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       
       const added = result.added ?? result.lastSearch?.added ?? 0;
       const updated = result.updated ?? result.lastSearch?.updated ?? 0;
+      const found = result.found ?? result.stageCounts?.etapa1_itens_retornados_api ?? 0;
+      const noBuyBox = result.skippedNoBuyBox ?? 0;
+      const blocked = result.skippedBlocked ?? 0;
+      const replica = result.skippedReplica ?? 0;
+      const priceLow = result.skippedPrice ?? 0;
 
-      // Garante que o painel mostre a aba de Pendentes onde as novas ofertas estão
-      setFilter("pendente");
-
-      const totalLidas = result.stageCounts?.etapa1_itens_retornados_api;
-      const stageInfo = typeof totalLidas === "number" ? ` (${totalLidas} anúncios analisados na API MLB)` : "";
-
-      notify(
-        "ok",
-        `Atualização concluída: ${added} nova(s) oferta(s) inserida(s), ${updated} atualizada(s)!${stageInfo}`
-      );
+      // Abre a aba 'pendente' somente se novas ofertas pendentes foram inseridas
+      if (added > 0) {
+        setFilter("pendente");
+        notify(
+          "ok",
+          `Atualização concluída: ${added} nova(s) oferta(s) inserida(s) em Pendentes, ${updated} atualizada(s)! (${found} analisadas no Mercado Livre)`
+        );
+      } else {
+        // Se nenhuma nova foi criada, mantém a aba atual e exibe contagens de descarte
+        notify(
+          "info",
+          `0 novas ofertas adicionadas (${found} analisadas): ${noBuyBox} sem Buy Box, ${blocked} bloqueadas, ${priceLow} < R$25, ${replica} réplicas, ${updated} já existentes atualizadas.`
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao atualizar ofertas do Mercado Livre.";
       setSearchError(msg);
