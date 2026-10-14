@@ -268,29 +268,48 @@ export function updateDatabase<T>(mutator: (db: DatabaseShape) => T | Promise<T>
           }
         }
 
-        // 2. Persistir metadados (ML Auth e Last Search)
+        // 2. Persistir metadados em paralelo
+        const metaPromises: Promise<void>[] = [];
+        const nowIso = new Date().toISOString();
+
         if (db.mlAuth !== undefined) {
-          await supabase.from("app_metadata").upsert({
-            key: "ml_auth",
-            value: db.mlAuth,
-            updated_at: new Date().toISOString(),
-          });
+          metaPromises.push(
+            (async () => {
+              await supabase.from("app_metadata").upsert({
+                key: "ml_auth",
+                value: db.mlAuth,
+                updated_at: nowIso,
+              });
+            })()
+          );
         }
 
         if (db.lastSearch) {
-          await supabase.from("app_metadata").upsert({
-            key: "last_search",
-            value: db.lastSearch,
-            updated_at: new Date().toISOString(),
-          });
+          metaPromises.push(
+            (async () => {
+              await supabase.from("app_metadata").upsert({
+                key: "last_search",
+                value: db.lastSearch,
+                updated_at: nowIso,
+              });
+            })()
+          );
         }
 
         if (db.tombstones) {
-          await supabase.from("app_metadata").upsert({
-            key: "tombstones",
-            value: db.tombstones,
-            updated_at: new Date().toISOString(),
-          });
+          metaPromises.push(
+            (async () => {
+              await supabase.from("app_metadata").upsert({
+                key: "tombstones",
+                value: db.tombstones,
+                updated_at: nowIso,
+              });
+            })()
+          );
+        }
+
+        if (metaPromises.length > 0) {
+          await Promise.all(metaPromises);
         }
 
         return result;

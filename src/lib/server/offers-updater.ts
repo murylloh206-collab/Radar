@@ -167,7 +167,7 @@ function toHttps(url: string | undefined | null): string | null {
 }
 
 /**
- * Fetch com retry exponencial para erros 429 e falhas de rede transitórias
+ * Fetch com retry inteligente para erros 429 e falhas de rede transitórias (otimizado para serverless)
  */
 async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
   let attempt = 0;
@@ -175,7 +175,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 2): P
     try {
       const res = await fetch(url, options);
       if (res.status === 429 && attempt < retries) {
-        const delay = Math.pow(2, attempt) * 1000;
+        const delay = (attempt + 1) * 500;
         console.warn(`[offers-updater] Rate limit 429 em ${url}. Aguardando ${delay}ms para retry...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
         attempt++;
@@ -184,8 +184,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 2): P
       return res;
     } catch (err) {
       if (attempt < retries) {
-        const delay = Math.pow(2, attempt) * 800;
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, 350));
         attempt++;
         continue;
       }
@@ -211,7 +210,7 @@ export interface DiscoveredProductItem {
 }
 
 /**
- * Busca avaliações na API oficial do Mercado Livre para itens pré-selecionados
+ * Busca avaliações na API oficial do Mercado Livre para itens pré-selecionados (timeout ágil)
  */
 async function fetchItemReviews(
   itemId: string,
@@ -223,7 +222,7 @@ async function fetchItemReviews(
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(2000),
     });
 
     if (!res.ok) return { rating: null, reviewsCount: null };
@@ -249,7 +248,8 @@ export interface PipelineStageCounts {
 
 /**
  * Coleta produtos do catálogo oficial e resolve os itens e preços reais
- * aplicando as regras temporárias e contadores de cada etapa.
+ * com execução sequencial rápida (1 termo por categoria) e limite rígido de tempo (Deadline Budget)
+ * para evitar qualquer 504 Gateway Timeout na Vercel e rate-limiting (429) no Mercado Livre.
  */
 async function collectProductsFromML(
   token: string,
@@ -266,146 +266,148 @@ async function collectProductsFromML(
   let apiErrorsCount = 0;
   let lastApiErrorMessage = "";
 
-  // Processa as categorias na ordem de prioridade
+  // Orçamento máximo de 4 segundos para a coleta de dados da API (garante resposta total abaixo de 7 segundos)
+  const DEADLINE_AT = Date.now() + 4_000;
+
   for (const category of RADAR_CATEGORIES) {
-    let newItemsInCat = 0;
-    // Limitar a até 10 novas ofertas por categoria em cada atualização
-    const maxNewPerCat = 10;
+    if (Date.now() > DEADLINE_AT) {
+      console.log(`[offers-updater] Deadline atingido. Encerrando coleta e prosseguindo para gravação.`);
+      break;
+    }
 
-    for (const query of category.queries) {
-      if (newItemsInCat >= maxNewPerCat) break;
+    // Rotaciona a consulta da categoria a cada ciclo para diversidade e velocidade máxima
+    const queryIndex = Math.floor(Date.now() / 60_000) % category.queries.length;
+    const query = category.queries[queryIndex] || category.queries[0];
 
-      try {
-        const searchUrl = `https://api.mercadolibre.com/products/search?status=active&site_id=${config.mercadoLivre.siteId}&q=${encodeURIComponent(query)}&limit=15`;
-        const res = await fetchWithRetry(searchUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          signal: AbortSignal.timeout(8000),
-        });
+    try {
+      const searchUrl = `https://api.mercadolibre.com/products/search?status=active&site_id=${config.mercadoLivre.siteId}&q=${encodeURIComponent(query)}&limit=4`;
+      const res = await fetchWithRetry(searchUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(3000),
+      });
 
-        if (!res.ok) {
-          apiErrorsCount++;
-          const errBody = await res.text().catch(() => "");
-          lastApiErrorMessage = `HTTP ${res.status}: ${errBody.slice(0, 150)}`;
-          console.warn(`[offers-updater] Busca retornou erro para "${query}": ${lastApiErrorMessage}`);
-          if (res.status === 401 || res.status === 403) {
-            throw new MercadoLivreError(
-              `Erro de autenticação/autorização na API Mercado Livre (${res.status}): ${errBody || "Verifique as credenciais ou reconecte o OAuth."}`,
-              res.status
-            );
-          }
-          continue;
+      if (!res.ok) {
+        apiErrorsCount++;
+        const errBody = await res.text().catch(() => "");
+        lastApiErrorMessage = `HTTP ${res.status}: ${errBody.slice(0, 150)}`;
+        console.warn(`[offers-updater] Busca retornou erro para "${query}": ${lastApiErrorMessage}`);
+        if (res.status === 401 || res.status === 403) {
+          throw new MercadoLivreError(
+            `Erro de autenticação/autorização na API Mercado Livre (${res.status}): ${errBody || "Verifique as credenciais ou reconecte o OAuth."}`,
+            res.status
+          );
         }
-
-        const data = (await res.json().catch(() => ({}))) as {
-          results?: Array<{
-            id: string;
-            name: string;
-            permalink?: string;
-            pictures?: Array<{ url?: string; secure_url?: string }>;
-          }>;
-        };
-
-        const products = data.results || [];
-
-        for (const p of products) {
-          if (newItemsInCat >= maxNewPerCat) break;
-
-          // Filtro: Miudezas irrelevantes
-          if (isJunkItem(p.name)) continue;
-
-          // Busca detalhes completos do item vencedor apenas para quem passou no filtro básico
-          try {
-            const itRes = await fetchWithRetry(
-              `https://api.mercadolibre.com/products/${p.id}/items?limit=1`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: "application/json",
-                },
-                signal: AbortSignal.timeout(5000),
-              }
-            );
-
-            if (!itRes.ok) continue;
-            const itData = (await itRes.json().catch(() => ({}))) as {
-              results?: Array<{
-                item_id?: string;
-                price?: number;
-                original_price?: number | null;
-                currency_id?: string;
-                shipping?: { free_shipping?: boolean };
-              }>;
-            };
-
-            const item = itData.results?.[0];
-            if (!item || typeof item.price !== "number") continue;
-
-            // 1. Itens retornados pela API Mercado Livre com anúncio ativo e preço
-            counters.etapa1++;
-
-            // 2. Itens após preço mínimo de R$25
-            if (item.price < 25.0) {
-              continue;
-            }
-            counters.etapa2++;
-
-            // 3. Itens após bloqueio de réplicas
-            if (isReplicaOrKnockoff(p.name)) {
-              console.log(`[offers-updater] Anúncio réplica/inspirado bloqueado: "${p.name}"`);
-              continue;
-            }
-            counters.etapa3++;
-
-            // 4. Itens após filtros de avaliação
-            // Regra temporária: Aceitar anúncios sem avaliação quando a API não fornecer avaliações.
-            // Não exigir histórico de preço, não exigir desconto calculado.
-            counters.etapa4++;
-
-            const externalId = item.item_id || p.id;
-            if (seenIds.has(externalId)) continue;
-            seenIds.add(externalId);
-
-            // Busca avaliações se disponíveis
-            const reviews = await fetchItemReviews(externalId, token);
-
-            const picture = p.pictures?.[0];
-            const cleanId = (item.item_id || p.id || "").replace(/^MLB-?/, "");
-            const originalUrl = item.item_id
-              ? `https://produto.mercadolivre.com.br/MLB-${cleanId}`
-              : (p.permalink || `https://produto.mercadolivre.com.br/MLB-${cleanId}`);
-            const discountPercent = calcDiscountPercent(item.price, item.original_price ?? null);
-
-            discovered.push({
-              externalId,
-              title: p.name,
-              thumbnail: toHttps(picture?.secure_url || picture?.url),
-              price: item.price,
-              originalPrice: item.original_price ?? null,
-              discountPercent,
-              currency: item.currency_id || "BRL",
-              originalUrl,
-              freeShipping: Boolean(item.shipping?.free_shipping),
-              categoryName: category.name,
-              rating: reviews.rating,
-              reviewsCount: reviews.reviewsCount,
-            });
-
-            if (!existingExternalIds.has(externalId)) {
-              newItemsInCat++;
-            }
-          } catch (itErr) {
-            // Continua para o próximo item
-          }
-        }
-      } catch (catErr) {
-        if (catErr instanceof MercadoLivreError) {
-          throw catErr;
-        }
-        console.warn(`[offers-updater] Falha ao consultar termo "${query}":`, catErr);
+        continue;
       }
+
+      const data = (await res.json().catch(() => ({}))) as {
+        results?: Array<{
+          id: string;
+          name: string;
+          permalink?: string;
+          pictures?: Array<{ url?: string; secure_url?: string }>;
+        }>;
+      };
+
+      const products = data.results || [];
+      let newInCat = 0;
+
+      for (const p of products) {
+        if (newInCat >= 2 || Date.now() > DEADLINE_AT) break;
+
+        // Filtro: Miudezas irrelevantes
+        if (isJunkItem(p.name)) continue;
+
+        // Busca detalhes completos do item vencedor com timeout de 2s
+        try {
+          const itRes = await fetchWithRetry(
+            `https://api.mercadolibre.com/products/${p.id}/items?limit=1`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+              },
+              signal: AbortSignal.timeout(2000),
+            }
+          );
+
+          if (!itRes.ok) continue;
+          const itData = (await itRes.json().catch(() => ({}))) as {
+            results?: Array<{
+              item_id?: string;
+              price?: number;
+              original_price?: number | null;
+              currency_id?: string;
+              shipping?: { free_shipping?: boolean };
+            }>;
+          };
+
+          const item = itData.results?.[0];
+          if (!item || typeof item.price !== "number") continue;
+
+          // 1. Itens retornados pela API Mercado Livre com anúncio ativo e preço
+          counters.etapa1++;
+
+          // 2. Itens após preço mínimo de R$25
+          if (item.price < 25.0) {
+            continue;
+          }
+          counters.etapa2++;
+
+          // 3. Itens após bloqueio de réplicas
+          if (isReplicaOrKnockoff(p.name)) {
+            console.log(`[offers-updater] Anúncio réplica/inspirado bloqueado: "${p.name}"`);
+            continue;
+          }
+          counters.etapa3++;
+
+          // 4. Itens após filtros de avaliação
+          counters.etapa4++;
+
+          const externalId = item.item_id || p.id;
+          if (seenIds.has(externalId)) continue;
+          seenIds.add(externalId);
+
+          // Busca avaliações se disponíveis com timeout curto
+          const reviews = await fetchItemReviews(externalId, token);
+
+          const picture = p.pictures?.[0];
+          const cleanId = (item.item_id || p.id || "").replace(/^MLB-?/, "");
+          const originalUrl = item.item_id
+            ? `https://produto.mercadolivre.com.br/MLB-${cleanId}`
+            : (p.permalink || `https://produto.mercadolivre.com.br/MLB-${cleanId}`);
+          const discountPercent = calcDiscountPercent(item.price, item.original_price ?? null);
+
+          discovered.push({
+            externalId,
+            title: p.name,
+            thumbnail: toHttps(picture?.secure_url || picture?.url),
+            price: item.price,
+            originalPrice: item.original_price ?? null,
+            discountPercent,
+            currency: item.currency_id || "BRL",
+            originalUrl,
+            freeShipping: Boolean(item.shipping?.free_shipping),
+            categoryName: category.name,
+            rating: reviews.rating,
+            reviewsCount: reviews.reviewsCount,
+          });
+
+          if (!existingExternalIds.has(externalId)) {
+            newInCat++;
+          }
+        } catch {
+          // Continua para o próximo item
+        }
+      }
+    } catch (catErr) {
+      if (catErr instanceof MercadoLivreError) {
+        throw catErr;
+      }
+      console.warn(`[offers-updater] Falha ao consultar termo "${query}":`, catErr);
     }
   }
 
@@ -502,13 +504,16 @@ export async function runRadarUpdate(): Promise<{
   isUpdatingInProgress = true;
 
   try {
-    const token = await getAccessToken();
+    // Carrega em paralelo token, banco, tombstones, preferências e feedbacks para velocidade máxima
+    const [token, initialDb, tombstones, preferences, feedbacks] = await Promise.all([
+      getAccessToken(),
+      readDatabase(),
+      getTombstones(),
+      getLearnedPreferences(),
+      getAllFeedbacks(),
+    ]);
 
-    // Lê o estado atual do banco para rastrear itens existentes e tombstones
-    const initialDb = await readDatabase();
     const existingExternalIds = new Set(initialDb.offers.map((o) => o.externalId));
-
-    const tombstones = await getTombstones();
     const manualTombstones = new Set(
       tombstones
         .filter((t) => !t.reason?.toLowerCase().includes("score"))
@@ -524,10 +529,6 @@ export async function runRadarUpdate(): Promise<{
     };
 
     const candidates = await collectProductsFromML(token, existingExternalIds, rawCounters);
-
-    // Carrega preferências aprendidas e feedbacks históricos
-    const preferences = await getLearnedPreferences();
-    const feedbacks = await getAllFeedbacks();
 
     const now = new Date().toISOString();
     let addedCount = 0;

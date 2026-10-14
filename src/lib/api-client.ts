@@ -7,6 +7,11 @@ import type { ApiError, Offer, OfferUpdate, SearchResponse } from "./types";
 async function handle<T>(res: Response): Promise<T> {
   const data = (await res.json().catch(() => ({}))) as T | ApiError;
   if (!res.ok) {
+    if (res.status === 504) {
+      throw new Error(
+        "A requisição excedeu o tempo limite do servidor (504 Gateway Timeout). As ofertas continuam preservadas no banco. Tente novamente em instantes."
+      );
+    }
     const message = (data as ApiError).error || `Erro ${res.status}`;
     throw new Error(message);
   }

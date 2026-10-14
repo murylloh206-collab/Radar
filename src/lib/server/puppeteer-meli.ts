@@ -89,8 +89,11 @@ class MeliQueueManager {
     if (this.isProcessing) return;
     this.isProcessing = true;
 
+    let processedCount = 0;
+    const MAX_QUEUE_PER_RUN = 5;
+
     try {
-      while (true) {
+      while (processedCount < MAX_QUEUE_PER_RUN) {
         const db = await readDatabase();
         // Localiza a primeira oferta pendente de encurtamento com até 2 tentativas
         const target = db.offers.find(
@@ -106,6 +109,7 @@ class MeliQueueManager {
         }
 
         await this.processItem(target.id, target.originalUrl, target.externalId);
+        processedCount++;
       }
     } finally {
       this.isProcessing = false;
@@ -153,6 +157,18 @@ class MeliQueueManager {
           if (cleanId && db.offers[idx].originalUrl.includes("/p/MLB")) {
             db.offers[idx].originalUrl = `https://produto.mercadolivre.com.br/MLB-${cleanId}`;
           }
+        }
+      });
+      return;
+    }
+
+    // Se estiver em ambiente serverless (Vercel), nunca lance o Puppeteer local pois causará timeout 504
+    if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+      await updateDatabase((db) => {
+        const idx = db.offers.findIndex((o) => o.id === offerId);
+        if (idx !== -1) {
+          db.offers[idx].shortUrlStatus = "falhou";
+          db.offers[idx].shortUrlError = direct.error || "Item não elegível para link meli.la curto";
         }
       });
       return;
