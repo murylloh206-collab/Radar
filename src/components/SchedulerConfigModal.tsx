@@ -26,7 +26,14 @@ export function SchedulerConfigModal({
   const [dailyTarget, setDailyTarget] = useState<number>(settings.dailyTarget || 51);
   const [postsPerHour, setPostsPerHour] = useState<number>(settings.postsPerHour || 3);
   const [intervalMinutes, setIntervalMinutes] = useState<number>(settings.intervalMinutes || 20);
-  const [minScore, setMinScore] = useState<number>(settings.minScore ?? 75);
+  const [minPendingScore, setMinPendingScore] = useState<number>(settings.minPendingScore ?? 75);
+  const [minAutoPublishScore, setMinAutoPublishScore] = useState<number>(
+    settings.minAutoPublishScore ?? settings.minScore ?? 75
+  );
+  const [minManualPublishScore, setMinManualPublishScore] = useState<number>(settings.minManualPublishScore ?? 75);
+  const [requireVerifiableDiscount, setRequireVerifiableDiscount] = useState<boolean>(
+    settings.requireVerifiableDiscount ?? true
+  );
   const [channelDestination, setChannelDestination] = useState<string>(
     settings.channelDestination || "Radar de Ofertas"
   );
@@ -113,7 +120,11 @@ export function SchedulerConfigModal({
         dailyTarget: Number(dailyTarget),
         postsPerHour: Number(postsPerHour),
         intervalMinutes: Number(intervalMinutes),
-        minScore: Number(minScore),
+        minScore: Number(minAutoPublishScore),
+        minPendingScore: Number(minPendingScore),
+        minAutoPublishScore: Number(minAutoPublishScore),
+        minManualPublishScore: Number(minManualPublishScore),
+        requireVerifiableDiscount: Boolean(requireVerifiableDiscount),
         channelDestination: channelDestination.trim() || "Radar de Ofertas",
       });
       onClose();
@@ -378,30 +389,103 @@ export function SchedulerConfigModal({
             </div>
           </section>
 
-          {/* 4. Score Mínimo de Publicação Automática */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="sched-min-score" className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                Score Mínimo para Publicação Automática
-              </label>
-              <span className="rounded-lg bg-emerald-500/20 px-2 py-0.5 text-xs font-black text-emerald-300 border border-emerald-500/30">
-                {minScore}/100
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Produtos com pontuação abaixo de <strong>{minScore}</strong> não serão publicados automaticamente, mesmo que aprovados. Padrão estrito de qualidade: 75/100.
-            </p>
-            <div className="flex items-center gap-3 pt-1">
+          {/* 4. Regras de Qualidade e Limites de Score */}
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              Limites de Qualidade e Score (0–100)
+            </h3>
+
+            {/* 4.1. Entrada na Fila (Pendentes) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="sched-min-pending" className="text-xs font-semibold text-slate-200">
+                  Mínimo para Entrada na Fila (Pendentes):
+                </label>
+                <span className="rounded-lg bg-emerald-500/20 px-2 py-0.5 text-xs font-black text-emerald-300 border border-emerald-500/30">
+                  {minPendingScore}/100
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Score mínimo para entrar na aba Pendentes. Ofertas abaixo deste score vão diretamente para Rejeitados.
+              </p>
               <input
-                id="sched-min-score"
+                id="sched-min-pending"
                 type="range"
                 min={50}
                 max={95}
                 step={1}
-                value={minScore}
-                onChange={(e) => setMinScore(Number(e.target.value))}
+                value={minPendingScore}
+                onChange={(e) => setMinPendingScore(Number(e.target.value))}
                 className="w-full accent-emerald-400 cursor-pointer"
               />
+            </div>
+
+            {/* 4.2. Publicação Automática */}
+            <div className="space-y-1.5 pt-2 border-t border-white/5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="sched-min-auto" className="text-xs font-semibold text-slate-200">
+                  Mínimo para Publicação Automática (Scheduler):
+                </label>
+                <span className="rounded-lg bg-sky-500/20 px-2 py-0.5 text-xs font-black text-sky-300 border border-sky-500/30">
+                  {minAutoPublishScore}/100
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Score mínimo para despacho automático para o WhatsApp. Produtos abaixo nunca são enviados sozinhos.
+              </p>
+              <input
+                id="sched-min-auto"
+                type="range"
+                min={50}
+                max={95}
+                step={1}
+                value={minAutoPublishScore}
+                onChange={(e) => setMinAutoPublishScore(Number(e.target.value))}
+                className="w-full accent-sky-400 cursor-pointer"
+              />
+            </div>
+
+            {/* 4.3. Publicação Manual */}
+            <div className="space-y-1.5 pt-2 border-t border-white/5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="sched-min-manual" className="text-xs font-semibold text-slate-200">
+                  Mínimo para Aprovação e Publicação Manual:
+                </label>
+                <span className="rounded-lg bg-amber-500/20 px-2 py-0.5 text-xs font-black text-amber-300 border border-amber-500/30">
+                  {minManualPublishScore}/100
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Score mínimo para permitir publicação manual. Bloqueia terminantemente tentativas manuais abaixo do limite.
+              </p>
+              <input
+                id="sched-min-manual"
+                type="range"
+                min={50}
+                max={95}
+                step={1}
+                value={minManualPublishScore}
+                onChange={(e) => setMinManualPublishScore(Number(e.target.value))}
+                className="w-full accent-amber-400 cursor-pointer"
+              />
+            </div>
+
+            {/* 4.4. Trava de Desconto Verificável */}
+            <div className="pt-2 border-t border-white/5">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={requireVerifiableDiscount}
+                  onChange={(e) => setRequireVerifiableDiscount(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-emerald-500/50 bg-black/40 text-emerald-500 accent-emerald-500 cursor-pointer"
+                />
+                <div>
+                  <span className="block text-xs font-bold text-white">Exigir Desconto Verificável</span>
+                  <span className="block text-[11px] text-slate-400 mt-0.5">
+                    Rejeita produtos com &quot;preço anterior indisponível&quot; se não houver histórico de queda ou cupom confirmado.
+                  </span>
+                </div>
+              </label>
             </div>
           </section>
 

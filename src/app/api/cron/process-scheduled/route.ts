@@ -114,18 +114,55 @@ async function handleProcessScheduled(request: Request) {
         continue;
       }
 
-      // 2. Bloqueio de score mínimo configurado (padrão 75/100)
-      const minRequiredScore = settings.minScore ?? 75;
+      // 2. Bloqueio de score mínimo configurado para publicação automática (padrão 75/100)
+      const minRequiredScore = settings.minAutoPublishScore ?? settings.minScore ?? 75;
       const currentScore = candidate.opportunityScore ?? 0;
       if (currentScore < minRequiredScore) {
-        const scoreReason = `Score ${currentScore}/100 abaixo do mínimo configurado de ${minRequiredScore}/100. Retornado para revisão manual.`;
+        const scoreReason = `Score ${currentScore}/100 abaixo do mínimo permitido para envio (${minRequiredScore}/100).`;
+        const now = new Date().toISOString();
         await updateDatabase((db) => {
           const target = db.offers.find((o) => o.id === candidate.id);
           if (target) {
-            target.status = "pendente"; // Volta para revisão manual
+            target.status = "rejeitado"; // Move auditavelmente para rejeitados, NUNCA para pendente
             target.whatsappStatus = "falhou";
             target.whatsappError = scoreReason;
-            target.statusChangedAt = new Date().toISOString();
+            target.rejectionDetail = {
+              reason: scoreReason,
+              failedFilters: ["min_auto_publish_score"],
+              rejectedAt: now,
+              previousStatus: "aprovado",
+            };
+            target.statusChangedAt = now;
+          }
+        });
+        discardedCount++;
+        continue;
+      }
+
+      // 2.1. Bloqueio por desconto não verificável
+      const hasOriginalPrice = typeof candidate.originalPrice === "number" && candidate.originalPrice > candidate.price;
+      const hasCoupon = Boolean(candidate.coupon && candidate.coupon.trim().length > 0);
+      const hasHistoryDrop =
+        candidate.priceHistory &&
+        candidate.priceHistory.length >= 2 &&
+        candidate.priceHistory[0].price > candidate.price;
+
+      if (!hasOriginalPrice && !hasCoupon && !hasHistoryDrop) {
+        const discountReason = "Desconto não verificável: preço de referência indisponível.";
+        const now = new Date().toISOString();
+        await updateDatabase((db) => {
+          const target = db.offers.find((o) => o.id === candidate.id);
+          if (target) {
+            target.status = "rejeitado";
+            target.whatsappStatus = "falhou";
+            target.whatsappError = discountReason;
+            target.rejectionDetail = {
+              reason: discountReason,
+              failedFilters: ["verifiable_discount"],
+              rejectedAt: now,
+              previousStatus: "aprovado",
+            };
+            target.statusChangedAt = now;
           }
         });
         discardedCount++;

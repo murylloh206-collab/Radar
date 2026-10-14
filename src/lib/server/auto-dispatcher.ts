@@ -104,7 +104,7 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
     let remainingCount = 0;
 
     // 1. Identifica a melhor oferta aprovada de forma atômica
-    const minScore = schedSettings.minScore ?? 75;
+    const minScore = schedSettings.minAutoPublishScore ?? schedSettings.minScore ?? 75;
     await updateDatabase((db) => {
       const candidates = db.offers.filter(
         (o) =>
@@ -226,6 +226,57 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
     if (detected.coupon) {
       offer.coupon = detected.coupon;
       offer.couponDescription = detected.description;
+    }
+
+    // 4.1. Segunda validação independente de qualidade antes do WhatsApp
+    const hasOriginalPrice = typeof offer.originalPrice === "number" && offer.originalPrice > offer.price;
+    const hasCoupon = Boolean(offer.coupon && offer.coupon.trim().length > 0);
+    const hasHistoryDrop =
+      offer.priceHistory &&
+      offer.priceHistory.length >= 2 &&
+      offer.priceHistory[0].price > offer.price;
+
+    const categoryReval = isBlockedProductOrCategory(offer.title, null, offer.searchTerm);
+    const scoreReval = offer.opportunityScore ?? 0;
+
+    if (categoryReval.blocked || scoreReval < minScore || (!hasOriginalPrice && !hasCoupon && !hasHistoryDrop)) {
+      const errorReason = categoryReval.blocked
+        ? categoryReval.reason || "Produto bloqueado por categoria"
+        : scoreReval < minScore
+        ? `Score ${scoreReval}/100 abaixo do mínimo permitido para envio (${minScore}/100)`
+        : "Desconto não verificável: preço de referência indisponível";
+
+      const nowIso = new Date().toISOString();
+      const nextTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+      await updateDatabase((db) => {
+        const target = db.offers.find((o) => o.id === offer.id);
+        if (target) {
+          target.status = "rejeitado"; // Move para rejeitado
+          target.whatsappStatus = "falhou";
+          target.whatsappError = errorReason;
+          target.rejectionDetail = {
+            reason: errorReason,
+            failedFilters: ["second_independent_validation"],
+            rejectedAt: nowIso,
+            previousStatus: "aprovado",
+          };
+          target.statusChangedAt = nowIso;
+        }
+        if (db.automation) {
+          db.automation.lastError = errorReason;
+          db.automation.nextScheduledAt = nextTime;
+        }
+      });
+
+      return {
+        dispatched: false,
+        status: "failed",
+        message: errorReason,
+        error: errorReason,
+        remainingApprovedCount: Math.max(0, remainingCount - 1),
+        nextScheduledAt: nextTime,
+      };
     }
 
     // 5. Monta a mensagem e envia pelo canal configurado

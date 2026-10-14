@@ -137,6 +137,10 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       totalEstimadoDia: 51,
       proximosHorarios: [],
       minScore: 75,
+      minPendingScore: 75,
+      minAutoPublishScore: 75,
+      minManualPublishScore: 75,
+      requireVerifiableDiscount: true,
       windowStart: "07:00",
       windowEnd: "00:00",
     }
@@ -145,6 +149,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [dailyTargetInput, setDailyTargetInput] = useState(initial.scheduler?.dailyTarget || 51);
   const [updatingScheduler, setUpdatingScheduler] = useState(false);
   const [dispatchingNow, setDispatchingNow] = useState(false);
+  const [isSanitizing, setIsSanitizing] = useState(false);
 
   function notify(kind: Toast["kind"], text: string) {
     const id = ++toastId.current;
@@ -183,32 +188,46 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     }
   }, []);
 
-  // ---------- Contadores estritos ----------
+  const minPending = scheduler.minPendingScore ?? 75;
+  const minManual = scheduler.minManualPublishScore ?? 75;
+
+  // Detecta ofertas inconsistentes que possam existir no banco com score abaixo do mínimo
+  const inconsistentOffers = useMemo(() => {
+    return offers.filter(
+      (o) =>
+        (o.status === "pendente" && (o.opportunityScore ?? 0) < minPending) ||
+        (o.status === "aprovado" && (o.opportunityScore ?? 0) < minManual)
+    );
+  }, [offers, minPending, minManual]);
+
+  // ---------- Contadores estritos (ofertas abaixo do limite não inflam Pendentes/Aprovados) ----------
   const counts = useMemo(() => {
     const c: Record<OfferStatus, number> = { pendente: 0, aprovado: 0, publicado: 0, rejeitado: 0 };
     for (const o of offers) {
+      if (o.status === "pendente" && (o.opportunityScore ?? 0) < minPending) continue;
+      if (o.status === "aprovado" && (o.opportunityScore ?? 0) < minManual) continue;
       if (c[o.status] !== undefined) {
         c[o.status]++;
       }
     }
     return c;
-  }, [offers]);
+  }, [offers, minPending, minManual]);
 
   const approvedWaitingCount = useMemo(() => {
     return offers.filter(
       (o) =>
         o.status === "aprovado" &&
+        (o.opportunityScore ?? 0) >= minManual &&
         o.whatsappStatus !== "enviado" &&
         o.whatsappStatus !== "falhou"
     ).length;
-  }, [offers]);
+  }, [offers, minManual]);
 
   const hasLowScoreSelected = useMemo(() => {
-    const minScore = scheduler.minScore ?? 75;
     return offers.some(
-      (o) => selectedApproved.has(o.id) && (o.opportunityScore ?? 0) < minScore
+      (o) => selectedApproved.has(o.id) && (o.opportunityScore ?? 0) < minManual
     );
-  }, [offers, selectedApproved, scheduler.minScore]);
+  }, [offers, selectedApproved, minManual]);
 
   const schedulerSummaryText = useMemo(() => {
     const mode = scheduler.mode || "interval_minutes";
@@ -290,6 +309,10 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       // Filtro estrito de categoria
       if (o.status !== filter) return false;
 
+      // Não permite que cards abaixo do limite de qualidade apareçam em Pendentes ou Aprovados
+      if (o.status === "pendente" && (o.opportunityScore ?? 0) < minPending) return false;
+      if (o.status === "aprovado" && (o.opportunityScore ?? 0) < minManual) return false;
+
       // Filtros rápidos
       if (quickFilter === "frete-gratis" && !o.freeShipping) return false;
       if (quickFilter === "comissao" && (!o.commission || o.commission.amount <= 0)) return false;
@@ -313,7 +336,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       list.sort((a, b) => a.price - b.price);
     }
     return list;
-  }, [offers, filter, quickFilter, query, sort]);
+  }, [offers, filter, quickFilter, query, sort, minPending, minManual]);
 
   // ---------- Descoberta Automática (Radar) com trava de 500 pendentes ----------
   async function handleDiscoverRadar() {
@@ -467,13 +490,13 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     }
   }
 
-  async function handleExecuteManualPublish(offerIds: string[], forceLowScore: boolean) {
+  async function handleExecuteManualPublish(offerIds: string[]) {
     setIsPublishingManual(true);
     try {
       const res = await fetch("/api/offers/publish-now", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offerIds, forceLowScore }),
+        body: JSON.stringify({ offerIds }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao publicar ofertas");
@@ -497,6 +520,29 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       throw err;
     } finally {
       setIsPublishingManual(false);
+    }
+  }
+
+  // ---------- Rotina de Saneamento de Dados Idempotente ----------
+  async function handleRunSanitize() {
+    setIsSanitizing(true);
+    try {
+      const res = await fetch("/api/offers/sanitize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          minPendingScore: scheduler.minPendingScore ?? 75,
+          minManualPublishScore: scheduler.minManualPublishScore ?? 75,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao executar saneamento");
+      notify("ok", `Saneamento concluído: ${data.movedToRejected} oferta(s) movida(s) para Rejeitados.`);
+      await reloadOffersAndScheduler();
+    } catch (err) {
+      notify("erro", err instanceof Error ? err.message : "Erro no saneamento de dados");
+    } finally {
+      setIsSanitizing(false);
     }
   }
 
@@ -765,25 +811,79 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
                 {counts.pendente} / 500 pendentes {isQueueFull ? "(Limite atingido)" : ""}
               </span>
             </div>
+
+            {/* Indicador dos 3 Limites de Qualidade */}
+            <div className="pt-2 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-emerald-300 font-medium">
+                Fila (Pendentes): <strong>Score ≥ {scheduler.minPendingScore ?? 75}</strong>
+              </span>
+              <span className="rounded-lg bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-sky-300 font-medium">
+                Auto-Publicação: <strong>Score ≥ {scheduler.minAutoPublishScore ?? scheduler.minScore ?? 75}</strong>
+              </span>
+              <span className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-amber-300 font-medium">
+                Publicação Manual: <strong>Score ≥ {scheduler.minManualPublishScore ?? 75}</strong>
+              </span>
+              <span className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-purple-300 font-medium">
+                Desconto Verificável: <strong>{scheduler.requireVerifiableDiscount !== false ? "Obrigatório" : "Opcional"}</strong>
+              </span>
+            </div>
           </div>
 
-          <button
-            type="button"
-            id="descoberta-radar"
-            onClick={handleDiscoverRadar}
-            disabled={discovering || searching || isQueueFull}
-            className={`group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl px-6 py-3.5 text-sm sm:text-base font-black text-white shadow-xl shadow-emerald-950/50 transition shrink-0 ${
-              isQueueFull
-                ? "bg-slate-700 cursor-not-allowed opacity-60"
-                : "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:brightness-110 active:scale-95 disabled:cursor-wait disabled:opacity-80"
-            }`}
-            title={isQueueFull ? "Você já tem 500 ofertas pendentes. Aprove, publique ou rejeite antes de atualizar." : ""}
-          >
-            <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-            {discovering ? <IconSpinner width={18} height={18} /> : <IconBolt width={18} height={18} />}
-            {discovering ? "Varrendo Categorias…" : isQueueFull ? "Fila Cheia (500 Pendentes)" : "Atualizar Radar de Ofertas"}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleRunSanitize}
+              disabled={isSanitizing}
+              title="Reavaliar itens pendentes e mover ofertas abaixo do score para Rejeitados"
+              className="inline-flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition disabled:opacity-50"
+            >
+              {isSanitizing ? <IconSpinner width={14} height={14} /> : "🧹"}
+              {isSanitizing ? "Saneando…" : "Sanear Fila"}
+            </button>
+
+            <button
+              type="button"
+              id="descoberta-radar"
+              onClick={handleDiscoverRadar}
+              disabled={discovering || searching || isQueueFull}
+              className={`group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl px-6 py-3.5 text-sm sm:text-base font-black text-white shadow-xl shadow-emerald-950/50 transition shrink-0 ${
+                isQueueFull
+                  ? "bg-slate-700 cursor-not-allowed opacity-60"
+                  : "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:brightness-110 active:scale-95 disabled:cursor-wait disabled:opacity-80"
+              }`}
+              title={isQueueFull ? "Você já tem 500 ofertas pendentes. Aprove, publique ou rejeite antes de atualizar." : ""}
+            >
+              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+              {discovering ? <IconSpinner width={18} height={18} /> : <IconBolt width={18} height={18} />}
+              {discovering ? "Varrendo Categorias…" : isQueueFull ? "Fila Cheia (500 Pendentes)" : "Atualizar Radar de Ofertas"}
+            </button>
+          </div>
         </div>
+
+        {/* Diagnóstico Administrativo Transparente */}
+        {inconsistentOffers.length > 0 && (
+          <div className="mt-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in">
+            <div className="flex items-start gap-2.5">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <strong className="text-sm font-bold text-amber-200">
+                  Diagnóstico Administrativo: {inconsistentOffers.length} produto(s) com score abaixo do limite detectados
+                </strong>
+                <p className="text-xs text-amber-300/90 mt-0.5">
+                  Estes produtos foram isolados da lista de Pendentes e Aprovados por não atenderem ao score mínimo ({minPending}/100) ou por desconto não verificável.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRunSanitize}
+              disabled={isSanitizing}
+              className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 transition shrink-0 disabled:opacity-50"
+            >
+              {isSanitizing ? "Saneando…" : "Executar Saneamento"}
+            </button>
+          </div>
+        )}
 
         {searchError && (
           <p role="alert" className="mt-3 rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-200 ring-1 ring-rose-400/20">
@@ -1134,7 +1234,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
           isOpen={showManualPublishModal}
           selectedOffers={offers.filter((o) => selectedApproved.has(o.id))}
           channelDestination={scheduler.channelDestination}
-          minScore={scheduler.minScore ?? 75}
+          minScore={scheduler.minManualPublishScore ?? 75}
           onClose={() => setShowManualPublishModal(false)}
           onConfirm={handleExecuteManualPublish}
           isPublishing={isPublishingManual}

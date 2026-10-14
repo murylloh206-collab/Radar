@@ -519,6 +519,10 @@ export function computeSchedulerStats(
     proximosHorarios,
     motivoSemElegivel,
     minScore,
+    minPendingScore: settings.minPendingScore ?? minScore,
+    minAutoPublishScore: settings.minAutoPublishScore ?? minScore,
+    minManualPublishScore: settings.minManualPublishScore ?? minScore,
+    requireVerifiableDiscount: settings.requireVerifiableDiscount ?? true,
     windowStart: settings.startHour,
     windowEnd: settings.endHour,
   };

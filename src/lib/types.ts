@@ -50,6 +50,7 @@ export interface RejectionDetail {
   reason: string;
   failedFilters: string[];
   rejectedAt: string;
+  previousStatus?: OfferStatus;
 }
 
 export interface TombstoneRecord {
@@ -64,8 +65,17 @@ export type AlgorithmRolloutMode = "observacao" | "revisao_manual" | "publicacao
 
 export interface AlgorithmSettings {
   rolloutMode: AlgorithmRolloutMode;
-  minAutoApproveScore: number;
-  minManualReviewScore: number;
+  /** Score mínimo para entrar na fila de Pendentes (default: 75) */
+  minPendingScore: number;
+  /** Score mínimo para publicação automática via agendador (default: 75) */
+  minAutoPublishScore: number;
+  /** Score mínimo para permitir publicação manual (default: 75) */
+  minManualPublishScore: number;
+  /** Exigir evidência verificável de desconto (preço anterior / cupom / histórico) */
+  requireVerifiableDiscount: boolean;
+  /** Legado / retrocompatibilidade */
+  minAutoApproveScore?: number;
+  minManualReviewScore?: number;
   minEffectivePrice: number;
   weights: {
     realDiscountAndPrice: number;
@@ -193,7 +203,11 @@ export interface SchedulerSettings {
   distribution: ScheduleDistribution; // "fixed" | "randomized"
   postsPerHour: number; // ex: 2 ou 3
   intervalMinutes: number; // ex: 20
-  minScore: number; // padrão 75 (0–100)
+  minScore: number; // padrão 75 (retrocompatibilidade)
+  minPendingScore?: number; // padrão 75
+  minAutoPublishScore?: number; // padrão 75
+  minManualPublishScore?: number; // padrão 75
+  requireVerifiableDiscount?: boolean; // padrão true
 }
 
 export interface CategoryPolicySettings {
@@ -221,6 +235,10 @@ export interface SchedulerStats {
   proximosHorarios: string[]; // ex: ["07:00", "07:20", "07:40", ...]
   motivoSemElegivel?: string | null;
   minScore: number;
+  minPendingScore: number;
+  minAutoPublishScore: number;
+  minManualPublishScore: number;
+  requireVerifiableDiscount: boolean;
   windowStart: string;
   windowEnd: string;
 }

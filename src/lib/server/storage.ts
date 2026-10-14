@@ -45,6 +45,10 @@ export const DEFAULT_SCHEDULER_SETTINGS: SchedulerSettings = {
   intervalMinutes: 20,
   postsPerHour: 3,
   minScore: 75,
+  minPendingScore: 75,
+  minAutoPublishScore: 75,
+  minManualPublishScore: 75,
+  requireVerifiableDiscount: true,
 };
 
 export const DEFAULT_AUTOMATION: AutomationSettings = {
@@ -329,6 +333,10 @@ export async function getSchedulerSettings(): Promise<SchedulerSettings> {
           intervalMinutes: extended.intervalMinutes ?? base.intervalMinutes ?? 20,
           postsPerHour: extended.postsPerHour ?? base.postsPerHour ?? 3,
           minScore: extended.minScore ?? base.minScore ?? 75,
+          minPendingScore: extended.minPendingScore ?? 75,
+          minAutoPublishScore: extended.minAutoPublishScore ?? extended.minScore ?? base.minScore ?? 75,
+          minManualPublishScore: extended.minManualPublishScore ?? 75,
+          requireVerifiableDiscount: extended.requireVerifiableDiscount ?? true,
         };
       }
     } catch (err) {
@@ -501,6 +509,8 @@ export async function claimNextScheduledOfferAtomic(forceImmediate = false): Pro
     const candidate = db.offers
       .filter((o) => {
         if (o.status !== "aprovado") return false;
+        const minAuto = db.scheduler?.minAutoPublishScore ?? db.scheduler?.minScore ?? 75;
+        if ((o.opportunityScore ?? 0) < minAuto) return false;
         if (forceImmediate && (o.whatsappStatus === "agendado" || o.whatsappStatus === "falhou")) {
           return true;
         }

@@ -6,6 +6,7 @@ import {
   recordDispatchSuccess,
   markOfferOutOfStock,
 } from "@/lib/server/storage";
+import { getAlgorithmSettings } from "@/lib/server/scoring-rules";
 import { revalidateMLItem } from "@/lib/server/mercadolivre";
 import { generateMeliShortLinkDetailed } from "@/lib/server/meli-shortener";
 import { dispatchOfferToChannel } from "@/lib/server/whatsapp-adapter";
@@ -42,7 +43,6 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => null)) as {
       offerIds?: string[];
-      forceLowScore?: boolean;
     } | null;
 
     if (!body || !Array.isArray(body.offerIds) || body.offerIds.length === 0) {
@@ -52,10 +52,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const { offerIds, forceLowScore = false } = body;
+    const { offerIds } = body;
     const settings = await getSchedulerSettings();
+    const algoSettings = await getAlgorithmSettings();
     const db = await readDatabase();
-    const minScore = settings.minScore ?? 75;
+    const minManualScore = algoSettings.minManualPublishScore ?? settings.minManualPublishScore ?? settings.minScore ?? 75;
 
     const results: PublishNowItemResult[] = [];
     let totalSuccess = 0;
@@ -114,17 +115,38 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // 4. Bloqueio por pontuação de score mínimo (75 padrão)
+      // 4. Bloqueio por pontuação de score mínimo para publicação manual (sem bypass)
       const score = offer.opportunityScore ?? 0;
-      if (score < minScore && !forceLowScore) {
+      if (score < minManualScore) {
         results.push({
           id: offer.id,
           title: offer.title,
           success: false,
-          error: `Bloqueado por qualidade: Score ${score}/100 abaixo do mínimo permitido (${minScore}/100). Confirmação reforçada necessária.`,
+          error: `Bloqueado por qualidade: Score ${score}/100 abaixo do mínimo permitido para publicação manual (${minManualScore}/100).`,
         });
         totalFailed++;
         continue;
+      }
+
+      // 4.1. Verificação de Desconto Verificável
+      if (algoSettings.requireVerifiableDiscount) {
+        const hasOriginalPrice = typeof offer.originalPrice === "number" && offer.originalPrice > offer.price;
+        const hasCoupon = Boolean(offer.coupon && offer.coupon.trim().length > 0);
+        const hasHistoryDrop =
+          offer.priceHistory &&
+          offer.priceHistory.length >= 2 &&
+          offer.priceHistory[0].price > offer.price;
+
+        if (!hasOriginalPrice && !hasCoupon && !hasHistoryDrop) {
+          results.push({
+            id: offer.id,
+            title: offer.title,
+            success: false,
+            error: "Bloqueado por qualidade: Desconto não verificável (preço de referência indisponível).",
+          });
+          totalFailed++;
+          continue;
+        }
       }
 
       // 5. Revalidação de Estoque e Preço no Mercado Livre

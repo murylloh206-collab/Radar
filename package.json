@@ -11,7 +11,7 @@
     "start": "node scripts/run.mjs start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "npx tsx -r ./tests/setup.cjs --test tests/pipeline.test.ts tests/scheduler_evolution.test.ts",
+    "test": "npx tsx -r ./tests/setup.cjs --test tests/pipeline.test.ts tests/scheduler_evolution.test.ts tests/quality_queue_enforcement.test.ts",
     "check": "npm run typecheck && npm run lint && npm run build"
   },
   "dependencies": {

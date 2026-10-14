@@ -5,8 +5,12 @@ import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 
 export const DEFAULT_ALGORITHM_SETTINGS: AlgorithmSettings = {
   rolloutMode: "revisao_manual",
-  minAutoApproveScore: 75, // Padrão estrito de qualidade 75/100
-  minManualReviewScore: 60,
+  minPendingScore: 75, // Padrão estrito de entrada em Pendentes: 75/100
+  minAutoPublishScore: 75, // Padrão estrito de auto-publicação: 75/100
+  minManualPublishScore: 75, // Padrão estrito de publicação manual: 75/100
+  requireVerifiableDiscount: true, // Exige evidência comprovada de desconto
+  minAutoApproveScore: 75, // Retrocompatibilidade
+  minManualReviewScore: 60, // Retrocompatibilidade
   minEffectivePrice: 24.99, // No mínimo R$ 24,99
   weights: {
     realDiscountAndPrice: 25,
@@ -75,9 +79,15 @@ export async function getAlgorithmSettings(): Promise<AlgorithmSettings> {
         .maybeSingle();
 
       if (!error && data?.value) {
+        const val = data.value as Record<string, unknown>;
+        const fallbackMin = (val.minAutoApproveScore as number) ?? (val.minScore as number) ?? 75;
         return {
           ...DEFAULT_ALGORITHM_SETTINGS,
-          ...(data.value as Partial<AlgorithmSettings>),
+          ...(val as Partial<AlgorithmSettings>),
+          minPendingScore: (val.minPendingScore as number) ?? fallbackMin,
+          minAutoPublishScore: (val.minAutoPublishScore as number) ?? fallbackMin,
+          minManualPublishScore: (val.minManualPublishScore as number) ?? fallbackMin,
+          requireVerifiableDiscount: (val.requireVerifiableDiscount as boolean) ?? true,
         };
       }
     } catch (err) {
@@ -95,6 +105,11 @@ export async function saveAlgorithmSettings(
   const updated: AlgorithmSettings = {
     ...current,
     ...patch,
+    minPendingScore: patch.minPendingScore ?? current.minPendingScore,
+    minAutoPublishScore: patch.minAutoPublishScore ?? current.minAutoPublishScore,
+    minManualPublishScore: patch.minManualPublishScore ?? current.minManualPublishScore,
+    requireVerifiableDiscount: patch.requireVerifiableDiscount ?? current.requireVerifiableDiscount,
+    minAutoApproveScore: patch.minAutoPublishScore ?? patch.minAutoApproveScore ?? current.minAutoApproveScore,
     weights: {
       ...current.weights,
       ...(patch.weights || {}),

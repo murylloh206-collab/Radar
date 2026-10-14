@@ -231,6 +231,22 @@ export function evaluateCandidateOffer(input: EvaluationInput): EvaluationResult
     failedFilters.push(categoryCheck.reason || "Categoria bloqueada: livros, receitas, cursos e infoprodutos são proibidos.");
   }
 
+  // Filtro 9: Exigência de evidência verificável de desconto
+  const requireDiscount = settings.requireVerifiableDiscount !== false;
+  if (requireDiscount) {
+    const hasOriginalPrice = candidate.originalPrice !== null && candidate.originalPrice > candidate.price;
+    const hasEffectiveCoupon = Boolean(
+      candidate.coupon && (candidate.couponDescription || effectivePrice < candidate.price)
+    );
+    const hasHistoricalDrop = Boolean(
+      history && history.length >= 2 && Math.max(...history.map((h) => h.price)) > candidate.price
+    );
+
+    if (!hasOriginalPrice && !hasEffectiveCoupon && !hasHistoricalDrop) {
+      failedFilters.push("Desconto não verificável: preço de referência indisponível.");
+    }
+  }
+
   // =========================================================================
   // 2. COMPONENTES DO SCORE 0–100 (TRANSPARENTE E AUDITÁVEL)
   // =========================================================================
@@ -454,27 +470,29 @@ export function evaluateCandidateOffer(input: EvaluationInput): EvaluationResult
   }
 
   const finalScore = Math.max(0, Math.min(100, Math.round(totalScore)));
+
   const passedMandatoryFilters = failedFilters.length === 0;
 
   // =========================================================================
-  // 3. DECISÃO FINAL BASEADA NO MODO DE ROLLOUT E SCORE MÍNIMO (PADRÃO 75)
+  // 3. DECISÃO FINAL BASEADA NO SCORE MÍNIMO E MODO DE ROLLOUT
   // =========================================================================
   let decision: ScoreAudit["decision"] = "pendente";
   let decisionReason = "";
-  const minAutoScore = settings.minAutoApproveScore ?? 75;
+  const minPendingScore = settings.minPendingScore ?? 75;
+  const minAutoPublish = settings.minAutoPublishScore ?? settings.minAutoApproveScore ?? 75;
 
   if (!passedMandatoryFilters) {
     decision = "rejeitado";
-    decisionReason = `Rejeitado pelos filtros eliminatórios: ${failedFilters.join("; ")}`;
-  } else if (settings.rolloutMode === "publicacao_automatica" && finalScore >= minAutoScore) {
+    decisionReason = `Rejeitado por critério eliminatório: ${failedFilters.join("; ")}`;
+  } else if (finalScore < minPendingScore) {
+    decision = "rejeitado";
+    decisionReason = `Score ${finalScore}/100 abaixo do mínimo permitido (${minPendingScore}/100) para entrar em Pendentes.`;
+  } else if (settings.rolloutMode === "publicacao_automatica" && finalScore >= minAutoPublish) {
     decision = "aprovado";
-    decisionReason = `Aprovado automaticamente: Score ${finalScore} >= limiar configurado de ${minAutoScore}.`;
-  } else if (finalScore >= (settings.minManualReviewScore ?? 60)) {
-    decision = "pendente";
-    decisionReason = `Score ${finalScore}/100 abaixo do limiar automático de ${minAutoScore}. Aguarda validação manual.`;
+    decisionReason = `Aprovado automaticamente: Score ${finalScore} >= limiar de publicação de ${minAutoPublish}.`;
   } else {
-    decision = "revisao_manual";
-    decisionReason = `Score ${finalScore}/100 insuficiente (mínimo configurado de ${minAutoScore}). Encaminhado para revisão manual.`;
+    decision = "pendente";
+    decisionReason = `Score ${finalScore}/100 elegível para revisão e aprovação (mínimo ${minPendingScore}).`;
   }
 
   const audit: ScoreAudit = {

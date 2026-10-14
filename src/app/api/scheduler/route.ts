@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSchedulerSettings, updateSchedulerSettings, readDatabase } from "@/lib/server/storage";
 import { computeSchedulerStats } from "@/lib/server/scheduler-engine";
+import { saveAlgorithmSettings } from "@/lib/server/scoring-rules";
+import { sanitizeExistingOffers } from "@/lib/server/offers-service";
 import type { ApiError, SchedulerMode, ScheduleDistribution, SchedulerSettings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -125,6 +127,44 @@ export async function PATCH(request: Request) {
       patch.minScore = minScore;
     }
 
+    if (body.minPendingScore !== undefined) {
+      const minPending = Number(body.minPendingScore);
+      if (isNaN(minPending) || minPending < 0 || minPending > 100) {
+        return NextResponse.json<ApiError>(
+          { error: "Score mínimo da fila (Pendentes) deve estar entre 0 e 100." },
+          { status: 400 }
+        );
+      }
+      patch.minPendingScore = minPending;
+    }
+
+    if (body.minAutoPublishScore !== undefined) {
+      const minAuto = Number(body.minAutoPublishScore);
+      if (isNaN(minAuto) || minAuto < 0 || minAuto > 100) {
+        return NextResponse.json<ApiError>(
+          { error: "Score mínimo de publicação automática deve estar entre 0 e 100." },
+          { status: 400 }
+        );
+      }
+      patch.minAutoPublishScore = minAuto;
+      patch.minScore = minAuto; // retrocompatibilidade
+    }
+
+    if (body.minManualPublishScore !== undefined) {
+      const minManual = Number(body.minManualPublishScore);
+      if (isNaN(minManual) || minManual < 0 || minManual > 100) {
+        return NextResponse.json<ApiError>(
+          { error: "Score mínimo de publicação manual deve estar entre 0 e 100." },
+          { status: 400 }
+        );
+      }
+      patch.minManualPublishScore = minManual;
+    }
+
+    if (body.requireVerifiableDiscount !== undefined) {
+      patch.requireVerifiableDiscount = Boolean(body.requireVerifiableDiscount);
+    }
+
     if (body.maxPerHour !== undefined) {
       const maxH = Number(body.maxPerHour);
       if (isNaN(maxH) || maxH < 1 || maxH > 30) {
@@ -162,12 +202,39 @@ export async function PATCH(request: Request) {
     }
 
     const updated = await updateSchedulerSettings(patch);
+
+    // Sincroniza também com algorithmSettings
+    await saveAlgorithmSettings({
+      minPendingScore: updated.minPendingScore ?? 75,
+      minAutoPublishScore: updated.minAutoPublishScore ?? updated.minScore ?? 75,
+      minManualPublishScore: updated.minManualPublishScore ?? 75,
+      requireVerifiableDiscount: updated.requireVerifiableDiscount ?? true,
+    });
+
+    // Se houve alteração nos limites de score ou desconto, reavalia itens pendentes e aprovados
+    const scoreRulesChanged =
+      patch.minPendingScore !== undefined ||
+      patch.minAutoPublishScore !== undefined ||
+      patch.minManualPublishScore !== undefined ||
+      patch.minScore !== undefined ||
+      patch.requireVerifiableDiscount !== undefined;
+
+    let sanitizeReport = null;
+    if (scoreRulesChanged) {
+      sanitizeReport = await sanitizeExistingOffers({
+        minPendingScore: updated.minPendingScore ?? 75,
+        minManualPublishScore: updated.minManualPublishScore ?? 75,
+        requireVerifiableDiscount: updated.requireVerifiableDiscount ?? true,
+      });
+    }
+
     const db = await readDatabase();
     const stats = computeSchedulerStats(db.offers, updated);
 
     return NextResponse.json({
       settings: updated,
       stats,
+      sanitizeReport,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido ao atualizar agendador";

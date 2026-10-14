@@ -7,6 +7,7 @@ import { updatePriceHistory } from "./opportunity-scoring";
 import {
   evaluateCandidateOffer,
   generateProductFingerprint,
+  isBlockedProductOrCategory,
 } from "./offer-scoring-engine";
 import { enqueueMeliShorten } from "./puppeteer-meli";
 import { mercadoLivreProvider } from "./providers/mercadolivre-provider";
@@ -200,14 +201,35 @@ async function processCandidateProduct(
     existing.couponDescription = existing.couponDescription || candidate.couponDescription || null;
     existing.productFingerprint = fingerprint;
 
-    // Se o item não atende mais aos filtros (ex: preço caiu para <= 50 ou esgotou), move para rejeitado
-    if (!evaluation.passed && existing.status === "pendente") {
+    // Se o item não atende mais aos filtros ou score caiu abaixo do limite, move para rejeitado
+    const minPending = activeSettings.minPendingScore ?? 75;
+    const minManual = activeSettings.minManualPublishScore ?? 75;
+
+    if (existing.status === "pendente" && (!evaluation.passed || evaluation.score < minPending)) {
+      const prevStatus = existing.status;
       existing.status = "rejeitado";
       existing.rejectionDetail = {
         reason: evaluation.audit.decisionReason,
         failedFilters: evaluation.audit.failedFilters,
         rejectedAt: now,
+        previousStatus: prevStatus,
       };
+      existing.statusChangedAt = now;
+    } else if (existing.status === "aprovado" && (!evaluation.passed || evaluation.score < minManual)) {
+      const prevStatus = existing.status;
+      existing.status = "rejeitado";
+      existing.rejectionDetail = {
+        reason: evaluation.audit.decisionReason,
+        failedFilters: evaluation.audit.failedFilters,
+        rejectedAt: now,
+        previousStatus: prevStatus,
+      };
+      if (existing.whatsappStatus === "agendado" || existing.whatsappStatus === "enviando") {
+        existing.whatsappStatus = "rascunho";
+        existing.scheduledFor = null;
+        existing.scheduledWindowDate = null;
+      }
+      existing.statusChangedAt = now;
     }
 
     return "updated";
@@ -302,6 +324,274 @@ async function processCandidateProduct(
   return "added_pending";
 }
 
+/**
+ * Processa um lote de candidatos na ordem correta exigida pela regra de qualidade:
+ * 1. Avalia categoria, filtros e score de cada candidato.
+ * 2. Atualiza existentes (rebaixando para rejeitado se não passarem mais).
+ * 3. Novos candidatos inelegíveis vão diretamente para Rejeitados com auditoria.
+ * 4. Novos candidatos elegíveis são ordenados por score decrescente + desempates transparentes.
+ * 5. Preenche as vagas restantes de Pendentes (teto 500) SOMENTE com os melhores elegíveis.
+ */
+async function processCandidateBatch(
+  offers: Offer[],
+  candidates: NormalizedCandidateProduct[],
+  now: string,
+  settings: AlgorithmSettings,
+  tombstones: TombstoneRecord[] = []
+): Promise<{ addedPending: number; addedRejected: number; updated: number }> {
+  const minPending = settings.minPendingScore ?? 75;
+  const minManual = settings.minManualPublishScore ?? 75;
+  const currentPending = offers.filter((o) => o.status === "pendente").length;
+  const remainingSlots = Math.max(0, MAX_PENDING_OFFERS - currentPending);
+
+  let updated = 0;
+  let addedRejected = 0;
+  let addedPending = 0;
+
+  interface EligibleItem {
+    candidate: NormalizedCandidateProduct;
+    evaluation: ReturnType<typeof evaluateCandidateOffer>;
+    shortUrl: string | null;
+    updatedHistory: { price: number; recordedAt: string }[];
+    discountPercent: number | null;
+  }
+
+  const eligibleNewList: EligibleItem[] = [];
+
+  for (const candidate of candidates) {
+    const id = offerId(candidate.source, candidate.externalId);
+    const existing = offers.find((o) => o.id === id);
+
+    // 0. VERIFICAÇÃO CRÍTICA DE TOMBSTONE
+    const candidateFp = generateProductFingerprint(candidate.source, candidate.externalId, candidate.title);
+    const isTombstone = tombstones.some((t) => t.id === id || t.fingerprint === candidateFp);
+
+    if (isTombstone) {
+      if (existing) {
+        const idx = offers.findIndex((o) => o.id === id);
+        if (idx !== -1) offers.splice(idx, 1);
+      }
+      continue;
+    }
+
+    const updatedHistory = updatePriceHistory(existing?.priceHistory, candidate.price, now);
+
+    // Link curto meli.la
+    let shortUrl = existing?.shortUrl || candidate.shortUrl || null;
+    if (!shortUrl && candidate.source === "mercadolivre") {
+      try {
+        const shortRes = await mercadoLivreProvider.generateShortLink(candidate.originalUrl);
+        if (shortRes.shortUrl) {
+          shortUrl = shortRes.shortUrl;
+        }
+      } catch {
+        // continua
+      }
+    }
+    candidate.shortUrl = shortUrl;
+    candidate.affiliateUrl = candidate.affiliateUrl || mercadoLivreProvider.buildAffiliateUrl(candidate.originalUrl);
+
+    // Avaliação detalhada pelo motor de qualidade
+    const evaluation = evaluateCandidateOffer({
+      candidate,
+      history: updatedHistory,
+      existingOffers: offers,
+      tombstones,
+      settings,
+    });
+
+    const discountPercent = calcDiscountPercent(candidate.price, candidate.originalPrice);
+
+    if (existing) {
+      existing.title = candidate.title;
+      existing.thumbnail = candidate.thumbnail ?? existing.thumbnail;
+      existing.price = candidate.price;
+      existing.originalPrice = candidate.originalPrice;
+      existing.discountPercent = discountPercent;
+      existing.originalUrl = candidate.originalUrl;
+      existing.freeShipping = candidate.freeShipping;
+      existing.rating = candidate.rating ?? existing.rating ?? null;
+      existing.reviewsCount = candidate.reviewsCount ?? existing.reviewsCount ?? null;
+      existing.sellerReputation = candidate.sellerReputation ?? existing.sellerReputation ?? null;
+      existing.opportunityScore = evaluation.score;
+      existing.opportunityReason = evaluation.audit.decisionReason;
+      existing.scoreAudit = evaluation.audit;
+      existing.priceHistory = updatedHistory;
+      existing.lastSeenAt = now;
+      existing.shortUrl = shortUrl || existing.shortUrl;
+      existing.shortUrlStatus = (shortUrl ? "pronto" : existing.shortUrlStatus) as Offer["shortUrlStatus"];
+      existing.coupon = existing.coupon || candidate.coupon || null;
+      existing.couponDescription = existing.couponDescription || candidate.couponDescription || null;
+      existing.productFingerprint = evaluation.fingerprint;
+
+      // Se não atende mais aos filtros ou score caiu abaixo do limite, move para rejeitado
+      if (existing.status === "pendente" && (!evaluation.passed || evaluation.score < minPending)) {
+        const prevStatus = existing.status;
+        existing.status = "rejeitado";
+        existing.rejectionDetail = {
+          reason: evaluation.audit.decisionReason,
+          failedFilters: evaluation.audit.failedFilters,
+          rejectedAt: now,
+          previousStatus: prevStatus,
+        };
+        existing.statusChangedAt = now;
+      } else if (existing.status === "aprovado" && (!evaluation.passed || evaluation.score < minManual)) {
+        const prevStatus = existing.status;
+        existing.status = "rejeitado";
+        existing.rejectionDetail = {
+          reason: evaluation.audit.decisionReason,
+          failedFilters: evaluation.audit.failedFilters,
+          rejectedAt: now,
+          previousStatus: prevStatus,
+        };
+        if (existing.whatsappStatus === "agendado" || existing.whatsappStatus === "enviando") {
+          existing.whatsappStatus = "rascunho";
+          existing.scheduledFor = null;
+          existing.scheduledWindowDate = null;
+        }
+        existing.statusChangedAt = now;
+      }
+
+      updated++;
+      continue;
+    }
+
+    // Candidato NOVO:
+    if (!evaluation.passed || evaluation.score < minPending) {
+      // Inelegível: vai DIRETAMENTE para Rejeitados
+      offers.push({
+        id,
+        source: candidate.source,
+        externalId: candidate.externalId,
+        title: candidate.title,
+        thumbnail: candidate.thumbnail,
+        price: candidate.price,
+        originalPrice: candidate.originalPrice,
+        discountPercent,
+        currency: candidate.currency,
+        originalUrl: candidate.originalUrl,
+        freeShipping: candidate.freeShipping,
+        searchTerm: candidate.searchTerm || "Radar",
+        status: "rejeitado",
+        rejectionDetail: {
+          reason: evaluation.audit.decisionReason,
+          failedFilters: evaluation.audit.failedFilters,
+          rejectedAt: now,
+        },
+        affiliateUrl: candidate.affiliateUrl,
+        shortUrl,
+        shortUrlStatus: (shortUrl ? "pronto" : "pendente") as Offer["shortUrlStatus"],
+        coupon: candidate.coupon || null,
+        couponDescription: candidate.couponDescription || null,
+        rating: candidate.rating ?? null,
+        reviewsCount: candidate.reviewsCount ?? null,
+        sellerReputation: candidate.sellerReputation ?? null,
+        commission: null,
+        opportunityScore: evaluation.score,
+        opportunityReason: evaluation.audit.decisionReason,
+        scoreAudit: evaluation.audit,
+        productFingerprint: evaluation.fingerprint,
+        priceHistory: updatedHistory,
+        whatsappStatus: "rascunho",
+        createdAt: now,
+        updatedAt: now,
+        lastSeenAt: now,
+        statusChangedAt: now,
+      });
+      addedRejected++;
+    } else {
+      // Elegível: passa para a etapa de ranqueamento e preenchimento de vagas
+      eligibleNewList.push({
+        candidate,
+        evaluation,
+        shortUrl,
+        updatedHistory,
+        discountPercent,
+      });
+    }
+  }
+
+  // Ordenação rígida por score decrescente e critérios transparentes de desempate
+  eligibleNewList.sort((a, b) => {
+    // 1. Score de oportunidade decrescente
+    if (b.evaluation.score !== a.evaluation.score) {
+      return b.evaluation.score - a.evaluation.score;
+    }
+    // 2. Desconto percentual decrescente
+    const discA = a.discountPercent ?? 0;
+    const discB = b.discountPercent ?? 0;
+    if (discB !== discA) return discB - discA;
+
+    // 3. Avaliação dos compradores decrescente
+    const ratingA = a.candidate.rating ?? 0;
+    const ratingB = b.candidate.rating ?? 0;
+    if (ratingB !== ratingA) return ratingB - ratingA;
+
+    // 4. Volume de avaliações decrescente
+    const revA = a.candidate.reviewsCount ?? 0;
+    const revB = b.candidate.reviewsCount ?? 0;
+    if (revB !== revA) return revB - revA;
+
+    // 5. Frete grátis
+    const shipA = a.candidate.freeShipping ? 1 : 0;
+    const shipB = b.candidate.freeShipping ? 1 : 0;
+    if (shipB !== shipA) return shipB - shipA;
+
+    // 6. Preço decrescente
+    return b.candidate.price - a.candidate.price;
+  });
+
+  // Preenche as vagas restantes de Pendentes somente com os melhores elegíveis (até o limite de 500)
+  const toInsertAsPending = eligibleNewList.slice(0, remainingSlots);
+
+  for (const item of toInsertAsPending) {
+    const { candidate, evaluation, shortUrl, updatedHistory, discountPercent } = item;
+    const id = offerId(candidate.source, candidate.externalId);
+
+    offers.push({
+      id,
+      source: candidate.source,
+      externalId: candidate.externalId,
+      title: candidate.title,
+      thumbnail: candidate.thumbnail,
+      price: candidate.price,
+      originalPrice: candidate.originalPrice,
+      discountPercent,
+      currency: candidate.currency,
+      originalUrl: candidate.originalUrl,
+      freeShipping: candidate.freeShipping,
+      searchTerm: candidate.searchTerm || "Radar",
+      status: "pendente",
+      affiliateUrl: candidate.affiliateUrl || null,
+      shortUrl,
+      shortUrlStatus: (shortUrl ? "pronto" : "pendente") as Offer["shortUrlStatus"],
+      coupon: candidate.coupon || null,
+      couponDescription: candidate.couponDescription || null,
+      rating: candidate.rating ?? null,
+      reviewsCount: candidate.reviewsCount ?? null,
+      sellerReputation: candidate.sellerReputation ?? null,
+      commission: null,
+      opportunityScore: evaluation.score,
+      opportunityReason: evaluation.audit.decisionReason,
+      scoreAudit: evaluation.audit,
+      productFingerprint: evaluation.fingerprint,
+      priceHistory: updatedHistory,
+      whatsappStatus: "rascunho",
+      createdAt: now,
+      updatedAt: now,
+      lastSeenAt: now,
+      statusChangedAt: null,
+    });
+    addedPending++;
+  }
+
+  return {
+    addedPending,
+    addedRejected,
+    updated,
+  };
+}
+
 /** Descoberta automática nas categorias prioritárias com trava de 500 e score */
 export async function runAutoDiscovery(categoryIds?: string[]) {
   if (isUpdatingRadar) {
@@ -319,7 +609,6 @@ export async function runAutoDiscovery(categoryIds?: string[]) {
       throw new QueueCapacityLimitError();
     }
 
-    const availableSlots = Math.max(0, MAX_PENDING_OFFERS - currentPending);
     const settings = await getAlgorithmSettings();
     const tombstones = currentDb.tombstones || [];
 
@@ -346,7 +635,10 @@ export async function runAutoDiscovery(categoryIds?: string[]) {
     // Unifica e deduplica candidatos da mesma rodada por externalId
     const seenCandidateIds = new Set<string>();
     const candidates: NormalizedCandidateProduct[] = [];
+    const termsFound = new Set<string>();
+
     for (const c of [...categoryCandidates, ...termCandidates]) {
+      if (c.categoryName) termsFound.add(c.categoryName);
       if (!seenCandidateIds.has(c.externalId)) {
         seenCandidateIds.add(c.externalId);
         candidates.push(c);
@@ -355,53 +647,33 @@ export async function runAutoDiscovery(categoryIds?: string[]) {
 
     const now = new Date().toISOString();
     const errors: { term: string; message: string }[] = [];
-    const addedPendingCount = { value: 0 };
-    let addedRejected = 0;
-    let updated = 0;
-    let total = 0;
-    const termsFound = new Set<string>();
 
     const result = await updateDatabase(async (db) => {
-      for (const candidate of candidates) {
-        total++;
-        if (candidate.categoryName) termsFound.add(candidate.categoryName);
-
-        const outcome = await processCandidateProduct(
-          db.offers,
-          candidate,
-          now,
-          availableSlots,
-          addedPendingCount,
-          settings,
-          tombstones
-        );
-
-        if (outcome === "added_pending") {
-          // contabilizado em addedPendingCount.value
-        } else if (outcome === "added_rejected") {
-          addedRejected++;
-        } else if (outcome === "updated") {
-          updated++;
-        }
-      }
+      const batchResult = await processCandidateBatch(
+        db.offers,
+        candidates,
+        now,
+        settings,
+        tombstones
+      );
 
       const lastSearch: LastSearchInfo = {
         at: now,
         terms: Array.from(termsFound),
-        found: total,
-        added: addedPendingCount.value,
-        updated,
+        found: candidates.length,
+        added: batchResult.addedPending,
+        updated: batchResult.updated,
       };
 
-      if (total > 0) db.lastSearch = lastSearch;
+      if (candidates.length > 0) db.lastSearch = lastSearch;
 
       const queueStats = computeQueueStats(db.offers);
       return {
         offers: sortOffers(db.offers),
         lastSearch,
         queueStats,
-        addedPending: addedPendingCount.value,
-        addedRejected,
+        addedPending: batchResult.addedPending,
+        addedRejected: batchResult.addedRejected,
       };
     });
 
@@ -433,7 +705,6 @@ export async function runSearch(termsInput?: string[]) {
       throw new QueueCapacityLimitError();
     }
 
-    const availableSlots = Math.max(0, MAX_PENDING_OFFERS - currentPending);
     const settings = await getAlgorithmSettings();
     const tombstones = currentDb.tombstones || [];
 
@@ -455,39 +726,22 @@ export async function runSearch(termsInput?: string[]) {
     }
 
     const now = new Date().toISOString();
-    const addedPendingCount = { value: 0 };
-    let addedRejected = 0;
-    let updated = 0;
-    let total = 0;
 
     const result = await updateDatabase(async (db) => {
-      for (const candidate of allCandidates) {
-        total++;
-        const outcome = await processCandidateProduct(
-          db.offers,
-          candidate,
-          now,
-          availableSlots,
-          addedPendingCount,
-          settings,
-          tombstones
-        );
-
-        if (outcome === "added_pending") {
-          // contabilizado
-        } else if (outcome === "added_rejected") {
-          addedRejected++;
-        } else if (outcome === "updated") {
-          updated++;
-        }
-      }
+      const batchResult = await processCandidateBatch(
+        db.offers,
+        allCandidates,
+        now,
+        settings,
+        tombstones
+      );
 
       const lastSearch: LastSearchInfo = {
         at: now,
         terms,
-        found: total,
-        added: addedPendingCount.value,
-        updated,
+        found: allCandidates.length,
+        added: batchResult.addedPending,
+        updated: batchResult.updated,
       };
 
       if (allCandidates.length > 0) db.lastSearch = lastSearch;
@@ -497,8 +751,8 @@ export async function runSearch(termsInput?: string[]) {
         offers: sortOffers(db.offers),
         lastSearch,
         queueStats,
-        addedPending: addedPendingCount.value,
-        addedRejected,
+        addedPending: batchResult.addedPending,
+        addedRejected: batchResult.addedRejected,
       };
     });
 
@@ -515,6 +769,7 @@ export async function runSearch(termsInput?: string[]) {
 
 export async function updateOffer(id: string, update: OfferUpdate): Promise<Offer> {
   const schedulerSettings = await getSchedulerSettings();
+  const algorithmSettings = await getAlgorithmSettings();
 
   return updateDatabase((db) => {
     const index = db.offers.findIndex((o) => o.id === id);
@@ -522,8 +777,37 @@ export async function updateOffer(id: string, update: OfferUpdate): Promise<Offe
 
     const currentOffer = db.offers[index];
 
-    // Se estiver aprovando e a oferta já estiver aprovada ou agendada, não duplica na fila
+    // Se estiver aprovando, valida qualidade estrita
     if (update.status === "aprovado") {
+      const minManualScore = algorithmSettings.minManualPublishScore ?? schedulerSettings.minManualPublishScore ?? 75;
+      const score = currentOffer.opportunityScore ?? 0;
+
+      if (score < minManualScore) {
+        throw new OfferValidationError(
+          `Qualidade insuficiente: Score ${score}/100 abaixo do mínimo permitido (${minManualScore}/100). Publicação manual bloqueada.`
+        );
+      }
+
+      const categoryCheck = isBlockedProductOrCategory(currentOffer.title, null, currentOffer.searchTerm);
+      if (categoryCheck.blocked) {
+        throw new OfferValidationError(
+          categoryCheck.reason || "Produto em categoria bloqueada não pode ser aprovado."
+        );
+      }
+
+      if (algorithmSettings.requireVerifiableDiscount) {
+        const hasOriginalPrice = typeof currentOffer.originalPrice === "number" && currentOffer.originalPrice > currentOffer.price;
+        const hasCoupon = Boolean(currentOffer.coupon && currentOffer.coupon.trim().length > 0);
+        const hasHistoryDrop =
+          currentOffer.priceHistory &&
+          currentOffer.priceHistory.length >= 2 &&
+          currentOffer.priceHistory[0].price > currentOffer.price;
+
+        if (!hasOriginalPrice && !hasCoupon && !hasHistoryDrop) {
+          throw new OfferValidationError("Desconto não verificável: preço de referência indisponível.");
+        }
+      }
+
       if (currentOffer.status === "aprovado" && currentOffer.whatsappStatus === "agendado") {
         const result = applyOfferUpdate(currentOffer, update);
         if (!result.ok) throw new OfferValidationError(result.error);
@@ -554,5 +838,146 @@ export async function updateOffer(id: string, update: OfferUpdate): Promise<Offe
     if (!result.ok) throw new OfferValidationError(result.error);
     db.offers[index] = result.offer;
     return result.offer;
+  });
+}
+
+export interface SanitizeResult {
+  totalScanned: number;
+  movedToRejected: number;
+  keptPending: number;
+  keptApproved: number;
+  skippedPublished: number;
+  details: {
+    id: string;
+    title: string;
+    previousStatus: "pendente" | "aprovado";
+    score: number;
+    reason: string;
+  }[];
+}
+
+/**
+ * Rotina segura e idempotente de saneamento de ofertas existentes.
+ * - Reavalia ofertas em 'pendente' e 'aprovado' que ainda não foram publicadas.
+ * - Move para 'rejeitado' itens abaixo do score mínimo ou sem desconto verificável.
+ * - Preserva auditoria (motivo, score, data, previousStatus) e histórico.
+ * - Não altera ofertas já publicadas nem remove tombstones.
+ */
+export async function sanitizeExistingOffers(options?: {
+  minPendingScore?: number;
+  minManualPublishScore?: number;
+  requireVerifiableDiscount?: boolean;
+}): Promise<SanitizeResult> {
+  const settings = await getAlgorithmSettings();
+  const schedSettings = await getSchedulerSettings();
+
+  const minPending = options?.minPendingScore ?? settings.minPendingScore ?? 75;
+  const minManual = options?.minManualPublishScore ?? settings.minManualPublishScore ?? 75;
+  const requireDiscount = options?.requireVerifiableDiscount ?? settings.requireVerifiableDiscount ?? true;
+
+  const now = new Date().toISOString();
+
+  return updateDatabase((db) => {
+    let totalScanned = 0;
+    let movedToRejected = 0;
+    let keptPending = 0;
+    let keptApproved = 0;
+    let skippedPublished = 0;
+    const details: SanitizeResult["details"] = [];
+
+    for (const offer of db.offers) {
+      if (offer.status === "publicado") {
+        skippedPublished++;
+        continue;
+      }
+
+      if (offer.status === "rejeitado") {
+        continue;
+      }
+
+      totalScanned++;
+      const currentScore = offer.opportunityScore ?? 0;
+      const categoryCheck = isBlockedProductOrCategory(offer.title, null, offer.searchTerm);
+
+      let shouldReject = false;
+      let rejectReason = "";
+      const failedFilters: string[] = [];
+
+      if (categoryCheck.blocked) {
+        shouldReject = true;
+        rejectReason = categoryCheck.reason || "Categoria bloqueada: livros, receitas e produtos digitais proibidos.";
+        failedFilters.push("category_blocked");
+      }
+
+      // Desconto verificável
+      if (!shouldReject && requireDiscount) {
+        const hasOriginalPrice = typeof offer.originalPrice === "number" && offer.originalPrice > offer.price;
+        const hasCoupon = Boolean(offer.coupon && offer.coupon.trim().length > 0);
+        const hasHistoryDrop =
+          offer.priceHistory &&
+          offer.priceHistory.length >= 2 &&
+          offer.priceHistory[0].price > offer.price;
+
+        if (!hasOriginalPrice && !hasCoupon && !hasHistoryDrop) {
+          shouldReject = true;
+          rejectReason = "Desconto não verificável: preço de referência indisponível.";
+          failedFilters.push("verifiable_discount");
+        }
+      }
+
+      // Score mínimo por status
+      if (!shouldReject) {
+        if (offer.status === "pendente" && currentScore < minPending) {
+          shouldReject = true;
+          rejectReason = `Score ${currentScore}/100 abaixo do mínimo da fila (${minPending}/100).`;
+          failedFilters.push("min_pending_score");
+        } else if (offer.status === "aprovado" && currentScore < minManual) {
+          shouldReject = true;
+          rejectReason = `Score ${currentScore}/100 abaixo do mínimo permitido (${minManual}/100).`;
+          failedFilters.push("min_manual_score");
+        }
+      }
+
+      if (shouldReject) {
+        const prevStatus = offer.status as "pendente" | "aprovado";
+        offer.status = "rejeitado";
+        offer.rejectionDetail = {
+          reason: rejectReason,
+          failedFilters,
+          rejectedAt: now,
+          previousStatus: prevStatus,
+        };
+
+        if (offer.whatsappStatus === "agendado" || offer.whatsappStatus === "enviando") {
+          offer.whatsappStatus = "rascunho";
+          offer.scheduledFor = null;
+          offer.scheduledWindowDate = null;
+        }
+
+        offer.statusChangedAt = now;
+        offer.updatedAt = now;
+
+        movedToRejected++;
+        details.push({
+          id: offer.id,
+          title: offer.title,
+          previousStatus: prevStatus,
+          score: currentScore,
+          reason: rejectReason,
+        });
+      } else {
+        if (offer.status === "pendente") keptPending++;
+        if (offer.status === "aprovado") keptApproved++;
+      }
+    }
+
+    return {
+      totalScanned,
+      movedToRejected,
+      keptPending,
+      keptApproved,
+      skippedPublished,
+      details,
+    };
   });
 }

@@ -12,7 +12,7 @@ interface ManualPublishModalProps {
   selectedOffers: Offer[];
   channelDestination: string;
   minScore: number;
-  onConfirm: (offerIds: string[], forceLowScore: boolean) => Promise<{
+  onConfirm: (offerIds: string[]) => Promise<{
     results: PublishNowItemResult[];
     totalSuccess: number;
     totalFailed: number;
@@ -30,7 +30,6 @@ export function ManualPublishModal({
   onConfirm,
   isPublishing,
 }: ManualPublishModalProps) {
-  const [forceLowScore, setForceLowScore] = useState(false);
   const [resultsReport, setResultsReport] = useState<PublishNowItemResult[] | null>(null);
 
   const lowScoreOffers = useMemo(() => {
@@ -44,7 +43,7 @@ export function ManualPublishModal({
   async function handleExecute() {
     try {
       const ids = selectedOffers.map((o) => o.id);
-      const res = await onConfirm(ids, forceLowScore);
+      const res = await onConfirm(ids);
       setResultsReport(res.results);
     } catch {
       // tratado no componente pai
@@ -127,31 +126,19 @@ export function ManualPublishModal({
                 Você selecionou <strong>{selectedOffers.length} oferta(s)</strong> para publicação imediata no WhatsApp. As ofertas serão revalidadas no Mercado Livre e enviadas sequencialmente.
               </div>
 
-              {/* Alerta de Score Baixo com Confirmação Reforçada */}
+              {/* Alerta estrito de bloqueio de score baixo (sem bypass) */}
               {hasLowScore && (
-                <div className="rounded-2xl bg-rose-500/15 border border-rose-500/30 p-3.5 space-y-2.5">
+                <div className="rounded-2xl bg-rose-500/15 border border-rose-500/30 p-3.5 space-y-1.5">
                   <div className="flex items-start gap-2 text-rose-300">
                     <IconAlert width={18} height={18} className="shrink-0 mt-0.5" />
                     <div className="text-xs">
-                      <strong className="block font-bold">Atenção: Qualidade Abaixo do Mínimo</strong>
+                      <strong className="block font-bold">Publicação Bloqueada por Qualidade</strong>
                       <p className="mt-0.5 text-[11px] text-rose-200">
-                        {lowScoreOffers.length} produto(s) possuem pontuação de score abaixo do mínimo configurado ({minScore}/100).
-                        O envio automático destes itens é bloqueado por padrão para proteger o engajamento do grupo.
+                        {lowScoreOffers.length} produto(s) selecionado(s) possuem pontuação abaixo do mínimo permitido ({minScore}/100).
+                        Publicações com score baixo são bloqueadas por padrão sem exceção para garantir a integridade do grupo.
                       </p>
                     </div>
                   </div>
-
-                  <label className="flex items-center gap-2 pt-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={forceLowScore}
-                      onChange={(e) => setForceLowScore(e.target.checked)}
-                      className="h-4 w-4 rounded border-rose-500/50 bg-black/40 text-rose-500 accent-rose-500 cursor-pointer"
-                    />
-                    <span className="text-xs font-semibold text-rose-200">
-                      Estou ciente e desejo forçar o envio manual mesmo com score baixo.
-                    </span>
-                  </label>
                 </div>
               )}
 
@@ -220,7 +207,7 @@ export function ManualPublishModal({
               <button
                 type="button"
                 onClick={handleExecute}
-                disabled={isPublishing || (hasLowScore && !forceLowScore)}
+                disabled={isPublishing || hasLowScore}
                 className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-sky-950/50 hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isPublishing ? (
