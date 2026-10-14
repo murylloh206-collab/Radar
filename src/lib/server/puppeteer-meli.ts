@@ -105,7 +105,7 @@ class MeliQueueManager {
           break; // Nenhum item pendente
         }
 
-        await this.processItem(target.id, target.originalUrl);
+        await this.processItem(target.id, target.originalUrl, target.externalId);
       }
     } finally {
       this.isProcessing = false;
@@ -113,7 +113,7 @@ class MeliQueueManager {
     }
   }
 
-  private async processItem(offerId: string, productUrl: string) {
+  private async processItem(offerId: string, productUrl: string, externalId?: string) {
     let cookieStr = config.mercadoLivre.sessionCookie;
     if (!cookieStr) {
       const session = await loadDecryptedSession("mercadolivre");
@@ -133,7 +133,14 @@ class MeliQueueManager {
     });
 
     // 1. Tenta a geração rápida autenticada primeiro (sem abrir o navegador)
-    const direct = await generateMeliShortLinkDetailed(productUrl);
+    const cleanId = (externalId || "").replace(/^MLB-?/, "");
+    const fallbacks = cleanId
+      ? [
+          `https://produto.mercadolivre.com.br/MLB-${cleanId}`,
+          `https://produto.mercadolivre.com.br/MLB${cleanId}`,
+        ]
+      : [];
+    const direct = await generateMeliShortLinkDetailed(productUrl, undefined, fallbacks);
     if (direct.shortUrl) {
       const now = new Date().toISOString();
       await updateDatabase((db) => {
@@ -143,6 +150,9 @@ class MeliQueueManager {
           db.offers[idx].shortUrlStatus = "pronto";
           db.offers[idx].shortUrlGeneratedAt = now;
           db.offers[idx].shortUrlError = null;
+          if (cleanId && db.offers[idx].originalUrl.includes("/p/MLB")) {
+            db.offers[idx].originalUrl = `https://produto.mercadolivre.com.br/MLB-${cleanId}`;
+          }
         }
       });
       return;

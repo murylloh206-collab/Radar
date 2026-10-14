@@ -11,6 +11,7 @@ import {
   rankOffersWithExploration,
 } from "./recommendation-engine";
 import { getLearnedPreferences, getAllFeedbacks } from "./feedback-service";
+import { enqueueMeliShorten } from "./puppeteer-meli";
 import type { LastSearchInfo, Offer, PriceHistoryItem } from "../types";
 
 /**
@@ -371,7 +372,10 @@ async function collectProductsFromML(
             const reviews = await fetchItemReviews(externalId, token);
 
             const picture = p.pictures?.[0];
-            const originalUrl = p.permalink || `https://www.mercadolivre.com.br/p/${p.id}`;
+            const cleanId = (item.item_id || p.id || "").replace(/^MLB-?/, "");
+            const originalUrl = item.item_id
+              ? `https://produto.mercadolivre.com.br/MLB-${cleanId}`
+              : (p.permalink || `https://produto.mercadolivre.com.br/MLB-${cleanId}`);
             const discountPercent = calcDiscountPercent(item.price, item.original_price ?? null);
 
             discovered.push({
@@ -671,6 +675,13 @@ export async function runRadarUpdate(): Promise<{
     console.log(`5. Itens gravados/atualizados no banco: ${stageCounts.etapa5_gravados_atualizados_banco} (${addedCount} novas ofertas gravadas, ${updatedCount} atualizadas)`);
     console.log(`6. Itens retornados ao frontend: ${stageCounts.etapa6_retornados_frontend}`);
     console.log(`========================================================================\n`);
+
+    // Dispara encurtamento automático meli.la para quaisquer novas ofertas pendentes
+    try {
+      enqueueMeliShorten();
+    } catch (shortErr) {
+      console.warn("[offers-updater] Falha ao disparar enfileirador de encurtamento:", shortErr);
+    }
 
     return {
       ok: true,

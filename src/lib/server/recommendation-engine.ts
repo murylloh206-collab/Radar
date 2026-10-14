@@ -254,6 +254,26 @@ export function extractStructuredFeatures(
   };
 }
 
+export const PROTECTED_PLATFORM_SELLERS = new Set([
+  "mercado livre",
+  "mercadolivre",
+  "meli",
+  "shopee",
+  "amazon",
+  "magalu",
+  "magazine luiza",
+  "loja oficial",
+  "vendedor oficial",
+  "generica",
+  "generica",
+]);
+
+export function isProtectedSeller(sellerName?: string | null): boolean {
+  if (!sellerName) return true;
+  const norm = normalizeText(sellerName);
+  return PROTECTED_PLATFORM_SELLERS.has(norm) || norm.length < 2;
+}
+
 /**
  * Verifica se a oferta deve ser eliminada imediatamente por bloqueios manuais
  */
@@ -274,10 +294,20 @@ export function isOfferBlocked(
     }
   }
 
-  // 2. Bloqueio por Vendedor
+  // 2. Bloqueio por Vendedor (plataformas genéricas como Mercado Livre são protegidas)
   for (const s of preferences.blockedSellers) {
+    if (isProtectedSeller(s)) continue;
     const cleanS = normalizeText(s);
-    if (cleanS && (offerSeller === cleanS || cleanTitle.includes(cleanS))) {
+    if (!cleanS || cleanS.length < 3) continue;
+
+    if (!isProtectedSeller(offerSeller) && offerSeller === cleanS) {
+      return { blocked: true, reason: `Vendedor bloqueado: ${s}` };
+    }
+
+    if (
+      cleanS.length >= 4 &&
+      new RegExp(`\\b${cleanS.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\b`, "i").test(cleanTitle)
+    ) {
       return { blocked: true, reason: `Vendedor bloqueado: ${s}` };
     }
   }

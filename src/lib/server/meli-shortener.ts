@@ -26,28 +26,11 @@ function extractCsrfToken(html: string): string | null {
   return null;
 }
 
-/**
- * Tenta gerar um link oficial meli.la para a URL de um produto.
- * Retorna o link https://meli.la/... ou null caso não seja possível.
- */
-export async function generateMeliShortLinkDetailed(
+async function attemptShortenUrl(
   productUrl: string,
-  customTag?: string,
+  cookie: string,
+  tag: string
 ): Promise<{ shortUrl: string | null; error: string | null }> {
-  let cookie = config.mercadoLivre.sessionCookie;
-  if (!cookie) {
-    const session = await loadDecryptedSession("mercadolivre");
-    if (session?.rawCookie) {
-      cookie = session.rawCookie;
-      config.mercadoLivre.sessionCookie = session.rawCookie;
-    }
-  }
-
-  if (!cookie) {
-    return { shortUrl: null, error: "Sessão do Mercado Livre não configurada ou expirada." };
-  }
-
-  const tag = customTag || config.mercadoLivre.affiliateMattWord || "michelhenrique1";
   const cleanUrl = productUrl.endsWith("/") ? productUrl.slice(0, -1) : productUrl;
 
   try {
@@ -77,67 +60,96 @@ export async function generateMeliShortLinkDetailed(
       }
     }
 
-    const endpoints = [
-      "https://www.mercadolivre.com.br/affiliate-program/api/v2/stripe/user/links",
-    ];
+    const endpoint = "https://www.mercadolivre.com.br/affiliate-program/api/v2/stripe/user/links";
 
-    let lastError: string | null = null;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+        Cookie: cookie,
+        Referer: cleanUrl,
+        Origin: "https://produto.mercadolivre.com.br",
+        "User-Agent": USER_AGENT,
+      },
+      body: JSON.stringify({
+        url: cleanUrl,
+        tag,
+      }),
+      cache: "no-store",
+    });
 
-    for (const ep of endpoints) {
+    const resText = await res.text().catch(() => "");
+    if (res.ok) {
       try {
-        const res = await fetch(ep, {
-          method: "POST",
-          headers: {
-            Accept: "application/json, text/plain, */*",
-            "Content-Type": "application/json",
-            "x-csrf-token": csrfToken,
-            Cookie: cookie,
-            Referer: cleanUrl,
-            Origin: "https://produto.mercadolivre.com.br",
-            "User-Agent": USER_AGENT,
-          },
-          body: JSON.stringify({
-            url: cleanUrl,
-            tag,
-          }),
-          cache: "no-store",
-        });
-
-        const resText = await res.text().catch(() => "");
-        if (res.ok) {
-          try {
-            const data = JSON.parse(resText) as { short_url?: string };
-            if (data.short_url && data.short_url.includes("meli.la")) {
-              console.log(`[meli.la] Link encurtado com sucesso: ${data.short_url}`);
-              return { shortUrl: data.short_url, error: null };
-            }
-          } catch {
-            // ignore
-          }
-        } else {
-          if (res.status === 401) {
-            lastError = "Sessão do Mercado Livre expirou (401). Atualize o Cookie de Sessão no painel para reativar o encurtamento meli.la.";
-          } else {
-            lastError = `Mercado Livre retornou status ${res.status}`;
-          }
-          console.warn(`[meli.la] Endpoint ${ep} retornou status ${res.status}: ${resText.slice(0, 200)}`);
+        const data = JSON.parse(resText) as { short_url?: string };
+        if (data.short_url && data.short_url.includes("meli.la")) {
+          console.log(`[meli.la] Link encurtado com sucesso: ${data.short_url}`);
+          return { shortUrl: data.short_url, error: null };
         }
-      } catch (epErr) {
-        lastError = epErr instanceof Error ? epErr.message : "Falha na requisição";
+      } catch {
+        // ignore
       }
     }
 
-    return { shortUrl: null, error: lastError || "Não foi possível obter o link meli.la." };
+    let errorMsg: string;
+    if (res.status === 401) {
+      errorMsg = "Sessão do Mercado Livre expirou (401). Atualize o Cookie de Sessão no painel para reativar o encurtamento meli.la.";
+    } else {
+      errorMsg = `Mercado Livre retornou status ${res.status}`;
+    }
+    console.warn(`[meli.la] Tentativa para "${cleanUrl}" retornou status ${res.status}: ${resText.slice(0, 150)}`);
+    return { shortUrl: null, error: errorMsg };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Erro desconhecido";
+    const msg = err instanceof Error ? err.message : "Falha na requisição";
     return { shortUrl: null, error: msg };
   }
+}
+
+/**
+ * Tenta gerar um link oficial meli.la para a URL de um produto.
+ * Suporta URLs alternativas de fallback se a URL inicial falhar (ex: página de catálogo /p/ vs link direto).
+ * Retorna o link https://meli.la/... ou null caso não seja possível.
+ */
+export async function generateMeliShortLinkDetailed(
+  productUrl: string,
+  customTag?: string,
+  fallbackUrls?: string[],
+): Promise<{ shortUrl: string | null; error: string | null }> {
+  let cookie = config.mercadoLivre.sessionCookie;
+  if (!cookie) {
+    const session = await loadDecryptedSession("mercadolivre");
+    if (session?.rawCookie) {
+      cookie = session.rawCookie;
+      config.mercadoLivre.sessionCookie = session.rawCookie;
+    }
+  }
+
+  if (!cookie) {
+    return { shortUrl: null, error: "Sessão do Mercado Livre não configurada ou expirada." };
+  }
+
+  const tag = customTag || config.mercadoLivre.affiliateMattWord || "michelhenrique1";
+  const urlsToTry = Array.from(new Set([productUrl, ...(fallbackUrls || [])])).filter(Boolean);
+
+  let lastError: string | null = null;
+  for (const url of urlsToTry) {
+    const result = await attemptShortenUrl(url, cookie, tag);
+    if (result.shortUrl) {
+      return result;
+    }
+    lastError = result.error;
+  }
+
+  return { shortUrl: null, error: lastError || "Não foi possível obter o link meli.la." };
 }
 
 export async function generateMeliShortLink(
   productUrl: string,
   customTag?: string,
+  fallbackUrls?: string[],
 ): Promise<string | null> {
-  const result = await generateMeliShortLinkDetailed(productUrl, customTag);
+  const result = await generateMeliShortLinkDetailed(productUrl, customTag, fallbackUrls);
   return result.shortUrl;
 }

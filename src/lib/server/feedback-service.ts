@@ -4,6 +4,7 @@ import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 import { readDatabase, updateDatabase, DEFAULT_LEARNED_PREFERENCES } from "./storage";
 import {
   extractBrand,
+  isProtectedSeller,
   trainLinearClassifier,
 } from "./recommendation-engine";
 import type {
@@ -20,6 +21,11 @@ import type {
  * Garante persistência resiliente no Supabase PostgreSQL com espelhamento transparente
  * em app_metadata e arquivo local, protegendo contra qualquer inconsistência de cache.
  */
+
+export function sanitizeBlockedSellers(sellers: unknown): string[] {
+  if (!Array.isArray(sellers)) return [];
+  return sellers.filter((s): s is string => typeof s === "string" && !isProtectedSeller(s));
+}
 
 export interface RecordFeedbackInput {
   offerId: string;
@@ -48,7 +54,7 @@ export async function getLearnedPreferences(): Promise<LearnedPreferences> {
       if (!error && data) {
         return {
           blockedBrands: Array.isArray(data.blocked_brands) ? data.blocked_brands : [],
-          blockedSellers: Array.isArray(data.blocked_sellers) ? data.blocked_sellers : [],
+          blockedSellers: sanitizeBlockedSellers(data.blocked_sellers),
           blockedKeywords: Array.isArray(data.blocked_keywords) ? data.blocked_keywords : [],
           blockedCategories: Array.isArray(data.blocked_categories) ? data.blocked_categories : [],
           featureWeights: typeof data.feature_weights === "object" ? data.feature_weights : {},
@@ -66,16 +72,23 @@ export async function getLearnedPreferences(): Promise<LearnedPreferences> {
         .maybeSingle();
 
       if (metaData?.value) {
-        return metaData.value as LearnedPreferences;
+        const val = metaData.value as LearnedPreferences;
+        return {
+          ...val,
+          blockedSellers: sanitizeBlockedSellers(val.blockedSellers),
+        };
       }
     } catch (err) {
       console.warn("[feedback-service] Falha ao consultar preferências no Supabase:", err);
     }
   }
 
-  // Fallback para storage local
   const db = await readDatabase();
-  return db.learnedPreferences || DEFAULT_LEARNED_PREFERENCES;
+  const prefs = db.learnedPreferences || DEFAULT_LEARNED_PREFERENCES;
+  return {
+    ...prefs,
+    blockedSellers: sanitizeBlockedSellers(prefs.blockedSellers),
+  };
 }
 
 /**
@@ -177,7 +190,7 @@ export async function recordOfferFeedback(input: RecordFeedbackInput): Promise<{
   // Carrega as preferências atuais
   const currentPreferences = await getLearnedPreferences();
   const blockedBrandsSet = new Set(currentPreferences.blockedBrands || []);
-  const blockedSellersSet = new Set(currentPreferences.blockedSellers || []);
+  const blockedSellersSet = new Set(sanitizeBlockedSellers(currentPreferences.blockedSellers || []));
   const blockedKeywordsSet = new Set(currentPreferences.blockedKeywords || []);
   const blockedCategoriesSet = new Set(currentPreferences.blockedCategories || []);
 
@@ -189,8 +202,10 @@ export async function recordOfferFeedback(input: RecordFeedbackInput): Promise<{
   }
 
   if (input.action === "bloquear_vendedor") {
-    if (seller) {
+    if (seller && !isProtectedSeller(seller)) {
       blockedSellersSet.add(seller);
+    } else {
+      console.warn(`[feedback-service] Vendedor protegido ou plataforma genérica ignorada no bloqueio: "${seller}"`);
     }
   }
 
@@ -224,7 +239,7 @@ export async function recordOfferFeedback(input: RecordFeedbackInput): Promise<{
 
   const updatedPreferences: LearnedPreferences = {
     blockedBrands: Array.from(blockedBrandsSet),
-    blockedSellers: Array.from(blockedSellersSet),
+    blockedSellers: sanitizeBlockedSellers(Array.from(blockedSellersSet)),
     blockedKeywords: Array.from(blockedKeywordsSet),
     blockedCategories: Array.from(blockedCategoriesSet),
     featureWeights,
