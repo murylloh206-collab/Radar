@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/update-offers",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }
