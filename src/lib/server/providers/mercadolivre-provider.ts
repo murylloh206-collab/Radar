@@ -75,6 +75,7 @@ export class MercadoLivreProvider implements MarketplaceProvider {
       searchTerm: term,
       capturedAt: new Date().toISOString(),
       categoryName,
+      categoryId: product.categoryId ?? null,
     };
   }
 

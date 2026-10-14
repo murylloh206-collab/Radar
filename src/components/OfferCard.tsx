@@ -169,8 +169,8 @@ export function OfferCard({
       <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-white">
         <ProductImage offer={offer} />
 
-        {/* Checkbox de seleção em Rejeitados */}
-        {offer.status === "rejeitado" && onToggleSelect && (
+        {/* Checkbox de seleção em Aprovados ou Rejeitados */}
+        {(offer.status === "rejeitado" || offer.status === "aprovado") && onToggleSelect && (
           <div className="absolute left-2.5 top-2.5 z-10">
             <input
               type="checkbox"
@@ -183,7 +183,7 @@ export function OfferCard({
         )}
 
         {/* Badges de Desconto e Score */}
-        <div className={`absolute ${offer.status === "rejeitado" && onToggleSelect ? "left-10" : "left-2.5"} top-2.5 flex flex-col gap-1`}>
+        <div className={`absolute ${(offer.status === "rejeitado" || offer.status === "aprovado") && onToggleSelect ? "left-10" : "left-2.5"} top-2.5 flex flex-col gap-1`}>
           {offer.discountPercent && offer.discountPercent > 0 ? (
             <span className="rounded-lg bg-emerald-600 px-2 py-0.5 text-xs font-black text-white shadow-md">
               -{offer.discountPercent}%

@@ -15,10 +15,14 @@ import type {
 } from "@/lib/types";
 import { OfferCard } from "./OfferCard";
 import { STATUS_STYLES } from "./StatusBadge";
+import { SchedulerConfigModal } from "./SchedulerConfigModal";
+import { ManualPublishModal } from "./ManualPublishModal";
 import {
   IconAlert,
   IconBolt,
   IconCheck,
+  IconClock,
+  IconGear,
   IconKey,
   IconPlus,
   IconSearch,
@@ -70,9 +74,13 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
 
-  // Seleção múltipla para exclusão em Rejeitados
+  // Seleção múltipla para exclusão em Rejeitados e publicação imediata em Aprovados
   const [selectedRejected, setSelectedRejected] = useState<Set<string>>(new Set());
   const [deletingRejected, setDeletingRejected] = useState(false);
+  const [selectedApproved, setSelectedApproved] = useState<Set<string>>(new Set());
+  const [showSchedulerModal, setShowSchedulerModal] = useState(false);
+  const [showManualPublishModal, setShowManualPublishModal] = useState(false);
+  const [isPublishingManual, setIsPublishingManual] = useState(false);
 
   // Diagnósticos seguros de sessão
   const [sessionDiagnostic, setSessionDiagnostic] = useState<{
@@ -97,15 +105,20 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       state: "ativo",
       startHour: "07:00",
       endHour: "00:00",
-      dailyTarget: 60,
+      dailyTarget: 51,
       maxPerHour: 5,
       timezone: "America/Sao_Paulo",
-      channelDestination: "Grupo VIP de Ofertas",
+      channelDestination: "Radar de Ofertas",
       consecutiveFailures: 0,
       maxConsecutiveFailures: 3,
       lastDispatchedAt: null,
       lastDispatchedOfferTitle: null,
       lastError: null,
+      mode: "interval_minutes",
+      distribution: "fixed",
+      intervalMinutes: 20,
+      postsPerHour: 3,
+      minScore: 75,
     }
   );
   const [schedulerStats, setSchedulerStats] = useState<SchedulerStats>(
@@ -116,12 +129,20 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       pendentesProximaJanela: 0,
       comFalha: 0,
       proximoEnvio: null,
-      metaDiaria: 60,
+      metaDiaria: 51,
       limiteHora: 5,
+      mode: "interval_minutes",
+      distribution: "fixed",
+      intervalMinutes: 20,
+      totalEstimadoDia: 51,
+      proximosHorarios: [],
+      minScore: 75,
+      windowStart: "07:00",
+      windowEnd: "00:00",
     }
   );
-  const [channelInput, setChannelInput] = useState(initial.automation?.channelDestination || "Grupo VIP de Ofertas");
-  const [dailyTargetInput, setDailyTargetInput] = useState(initial.scheduler?.dailyTarget || 60);
+  const [channelInput, setChannelInput] = useState(initial.automation?.channelDestination || "Radar de Ofertas");
+  const [dailyTargetInput, setDailyTargetInput] = useState(initial.scheduler?.dailyTarget || 51);
   const [updatingScheduler, setUpdatingScheduler] = useState(false);
   const [dispatchingNow, setDispatchingNow] = useState(false);
 
@@ -181,6 +202,58 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
         o.whatsappStatus !== "falhou"
     ).length;
   }, [offers]);
+
+  const hasLowScoreSelected = useMemo(() => {
+    const minScore = scheduler.minScore ?? 75;
+    return offers.some(
+      (o) => selectedApproved.has(o.id) && (o.opportunityScore ?? 0) < minScore
+    );
+  }, [offers, selectedApproved, scheduler.minScore]);
+
+  const schedulerSummaryText = useMemo(() => {
+    const mode = scheduler.mode || "interval_minutes";
+    const distText = scheduler.distribution === "randomized" ? " · Aleatório" : " · Fixo";
+    if (mode === "daily_target") {
+      return `Meta: ${scheduler.dailyTarget} posts/dia${distText}`;
+    }
+    if (mode === "posts_per_hour") {
+      const postsPerHour = scheduler.postsPerHour || 3;
+      const totalEstimado = schedulerStats.totalEstimadoDia || postsPerHour * 17;
+      return `${postsPerHour} posts/hora · ${totalEstimado} posts/dia${distText}`;
+    }
+    const interval = scheduler.intervalMinutes || 20;
+    const totalEstimado = schedulerStats.totalEstimadoDia || 51;
+    return `A cada ${interval} min · ${totalEstimado} posts/dia${distText}`;
+  }, [scheduler, schedulerStats]);
+
+  const schedulerStatusBadge = useMemo(() => {
+    if (scheduler.state === "pausado") {
+      return {
+        label: "Pausado",
+        color: "bg-amber-500/20 text-amber-300 border-amber-400/30",
+        dot: "bg-amber-400",
+      };
+    }
+    if ((scheduler.consecutiveFailures ?? 0) >= 3) {
+      return {
+        label: "Com Falha Consecutiva",
+        color: "bg-rose-500/20 text-rose-300 border-rose-400/30",
+        dot: "bg-rose-400 animate-pulse",
+      };
+    }
+    if (schedulerStats.aprovadasFila === 0) {
+      return {
+        label: "Sem Ofertas Elegíveis (Score ≥ 75)",
+        color: "bg-sky-500/20 text-sky-300 border-sky-400/30",
+        dot: "bg-sky-400",
+      };
+    }
+    return {
+      label: "Ativo e Operando",
+      color: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
+      dot: "bg-emerald-400 animate-pulse",
+    };
+  }, [scheduler.state, scheduler.consecutiveFailures, schedulerStats.aprovadasFila]);
 
   // Recarrega ofertas e agendador
   async function reloadOffersAndScheduler() {
@@ -339,19 +412,91 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   }
 
   function handleToggleSelect(id: string) {
-    setSelectedRejected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    if (filter === "aprovado") {
+      setSelectedApproved((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    } else {
+      setSelectedRejected((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }
   }
 
   function handleSelectAllVisible() {
-    if (selectedRejected.size === visible.length) {
-      setSelectedRejected(new Set());
+    if (filter === "aprovado") {
+      if (selectedApproved.size === visible.length) {
+        setSelectedApproved(new Set());
+      } else {
+        setSelectedApproved(new Set(visible.map((o) => o.id)));
+      }
     } else {
-      setSelectedRejected(new Set(visible.map((o) => o.id)));
+      if (selectedRejected.size === visible.length) {
+        setSelectedRejected(new Set());
+      } else {
+        setSelectedRejected(new Set(visible.map((o) => o.id)));
+      }
+    }
+  }
+
+  async function handleSaveSchedulerConfig(patch: Partial<SchedulerSettings>) {
+    setUpdatingScheduler(true);
+    try {
+      const res = await fetch("/api/scheduler", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao atualizar agendador");
+      setScheduler(data.settings);
+      setSchedulerStats(data.stats);
+      notify("ok", "Configurações do agendador salvas com sucesso!");
+      await reloadOffersAndScheduler();
+    } catch (err) {
+      notify("erro", err instanceof Error ? err.message : "Erro ao salvar agendador");
+      throw err;
+    } finally {
+      setUpdatingScheduler(false);
+    }
+  }
+
+  async function handleExecuteManualPublish(offerIds: string[], forceLowScore: boolean) {
+    setIsPublishingManual(true);
+    try {
+      const res = await fetch("/api/offers/publish-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offerIds, forceLowScore }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao publicar ofertas");
+
+      setSelectedApproved((prev) => {
+        const next = new Set(prev);
+        for (const item of data.results) {
+          if (item.success) next.delete(item.id);
+        }
+        return next;
+      });
+
+      notify(
+        data.totalSuccess > 0 ? "ok" : "info",
+        `${data.totalSuccess} oferta(s) enviada(s) para o WhatsApp com sucesso!`
+      );
+      await reloadOffersAndScheduler();
+      return data;
+    } catch (err) {
+      notify("erro", err instanceof Error ? err.message : "Erro no envio manual");
+      throw err;
+    } finally {
+      setIsPublishingManual(false);
     }
   }
 
@@ -728,6 +873,40 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
             </div>
           )}
 
+          {/* Barra de Ações para APROVADOS (Publicação Imediata Manual) */}
+          {filter === "aprovado" && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-xs text-emerald-200">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllVisible}
+                  className="rounded-lg border border-emerald-400/30 px-2.5 py-1 text-xs font-semibold hover:bg-emerald-500/20 transition text-emerald-200"
+                >
+                  {selectedApproved.size === visible.length && visible.length > 0
+                    ? "Desmarcar Todas"
+                    : "Selecionar Todas as Aprovadas"}
+                </button>
+                <span className="text-slate-300">
+                  {selectedApproved.size} de {visible.length} selecionada(s)
+                </span>
+                {hasLowScoreSelected && (
+                  <span className="rounded-md bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                    ⚠️ Contém itens com score &lt; {scheduler.minScore ?? 75}
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                disabled={isPublishingManual || selectedApproved.size === 0}
+                onClick={() => setShowManualPublishModal(true)}
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 px-3.5 py-1.5 font-bold text-xs text-white shadow-md shadow-emerald-950/40 transition disabled:opacity-40"
+              >
+                🚀 Enviar Agora para o WhatsApp ({selectedApproved.size})
+              </button>
+            </div>
+          )}
+
           {/* Linha 2: Busca por nome + Ordenação */}
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -768,7 +947,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
                     type="button"
                     onClick={() => handleToggleScheduler("pausado")}
                     disabled={updatingScheduler}
-                    className="rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30 px-3 py-1.5 text-xs font-bold hover:bg-amber-500/30 transition"
+                    className="rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30 px-3 py-1.5 text-xs font-bold hover:bg-amber-500/30 transition shrink-0"
                   >
                     ⏸️ Pausar Agendador
                   </button>
@@ -777,13 +956,40 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
                     type="button"
                     onClick={() => handleToggleScheduler("ativo")}
                     disabled={updatingScheduler}
-                    className="rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1.5 text-xs font-bold hover:bg-emerald-500/30 transition"
+                    className="rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1.5 text-xs font-bold hover:bg-emerald-500/30 transition shrink-0"
                   >
                     ▶️ Iniciar Agendador
                   </button>
                 )}
-                <span className="text-xs text-slate-300">
-                  Janela operacional: <strong>07:00 às 00:00</strong>
+
+                {/* Box compacta e elegante de configurações com ícone SVG de engrenagem próprio */}
+                <button
+                  type="button"
+                  id="btn-configurar-agendador"
+                  onClick={() => setShowSchedulerModal(true)}
+                  className="group flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-200 hover:border-emerald-400/50 hover:bg-white/[0.08] transition shadow-sm cursor-pointer"
+                  title="Clique para configurar modos de agenda, janela de horário e aleatoriedade"
+                >
+                  <IconGear
+                    width={15}
+                    height={15}
+                    className="text-emerald-400 group-hover:rotate-90 transition-transform duration-300 shrink-0"
+                  />
+                  <span className="font-bold text-white tracking-tight">{schedulerSummaryText}</span>
+                  <span className="text-[11px] text-slate-400 font-normal">
+                    · Janela {scheduler.startHour} às {scheduler.endHour}
+                  </span>
+                  <span className="text-[10px] text-emerald-300/80 underline underline-offset-2 ml-1">
+                    Editar
+                  </span>
+                </button>
+
+                {/* Badge de Status Transparente */}
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${schedulerStatusBadge.color}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${schedulerStatusBadge.dot}`} />
+                  {schedulerStatusBadge.label}
                 </span>
               </div>
 
@@ -795,30 +1001,85 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
                   disabled={dispatchingNow || approvedWaitingCount === 0}
                   className="rounded-xl bg-sky-500/20 border border-sky-400/30 text-sky-200 px-3 py-1.5 text-xs font-bold hover:bg-sky-500/30 transition disabled:opacity-40"
                 >
-                  {dispatchingNow ? "Processando envio…" : "⚡ Processar Próxima Agora"}
+                  {dispatchingNow ? "Processando envio…" : "⚡ Processar Próxima da Fila"}
                 </button>
               </div>
             </div>
 
-            {/* Indicadores em Tempo Real */}
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {/* Motivo quando não há ofertas elegíveis */}
+            {schedulerStats.aprovadasFila === 0 && (
+              <div className="mt-3 rounded-xl bg-sky-500/10 border border-sky-500/20 px-3 py-2 text-xs text-sky-200 flex items-start gap-2">
+                <span className="font-bold text-sky-400">ℹ️ Diagnóstico:</span>
+                <span>
+                  {schedulerStats.motivoSemElegivel ||
+                    `Nenhuma oferta aprovada elegível encontrada com score ≥ ${scheduler.minScore ?? 75} e dentro das categorias prioritárias permitidas.`}
+                </span>
+              </div>
+            )}
+
+            {/* Indicadores em Tempo Real Expandidos */}
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <div className="rounded-xl bg-white/[0.03] p-2.5 ring-1 ring-white/5">
-                <span className="block text-[10px] font-medium uppercase text-slate-400">📦 Aprovadas na Fila</span>
+                <span className="block text-[10px] font-medium uppercase text-slate-400">📦 Elegíveis na Fila</span>
                 <span className="mt-0.5 block text-xl font-black text-white">{schedulerStats.aprovadasFila}</span>
+                <span className="text-[10px] text-slate-400">Score ≥ {scheduler.minScore ?? 75}</span>
               </div>
               <div className="rounded-xl bg-sky-500/10 p-2.5 ring-1 ring-sky-500/20">
                 <span className="block text-[10px] font-medium uppercase text-sky-300">🕒 Agendadas Hoje</span>
                 <span className="mt-0.5 block text-xl font-black text-sky-200">{schedulerStats.agendadasHoje}</span>
+                <span className="text-[10px] text-sky-400/80">Janela operacional</span>
               </div>
               <div className="rounded-xl bg-emerald-500/10 p-2.5 ring-1 ring-emerald-500/20">
                 <span className="block text-[10px] font-medium uppercase text-emerald-300">🚀 Enviadas Hoje</span>
                 <span className="mt-0.5 block text-xl font-black text-emerald-200">{schedulerStats.enviadasHoje}</span>
+                <span className="text-[10px] text-emerald-400/80">Meta: {schedulerStats.metaDiaria}</span>
+              </div>
+              <div className="rounded-xl bg-purple-500/10 p-2.5 ring-1 ring-purple-500/20">
+                <span className="block text-[10px] font-medium uppercase text-purple-300">⏰ Próximo Envio</span>
+                <span className="mt-0.5 block text-sm font-black text-purple-200 truncate">
+                  {schedulerStats.proximoEnvio ? formatDateTime(schedulerStats.proximoEnvio) : "Aguardando"}
+                </span>
+                <span className="text-[10px] text-purple-400/80">
+                  {scheduler.state === "pausado" ? "Pausado" : "Automático"}
+                </span>
+              </div>
+              <div className="rounded-xl bg-teal-500/10 p-2.5 ring-1 ring-teal-500/20">
+                <span className="block text-[10px] font-medium uppercase text-teal-300">✅ Último Envio</span>
+                <span className="mt-0.5 block text-sm font-black text-teal-200 truncate" title={scheduler.lastDispatchedOfferTitle || ""}>
+                  {scheduler.lastDispatchedAt ? formatDateTime(scheduler.lastDispatchedAt) : "Nenhum ainda"}
+                </span>
+                <span className="text-[10px] text-teal-400/80 truncate block">
+                  {scheduler.lastDispatchedOfferTitle ? scheduler.lastDispatchedOfferTitle.slice(0, 18) + "…" : "Hoje"}
+                </span>
               </div>
               <div className="rounded-xl bg-rose-500/10 p-2.5 ring-1 ring-rose-500/20">
                 <span className="block text-[10px] font-medium uppercase text-rose-300">⚠️ Com Falha</span>
                 <span className="mt-0.5 block text-xl font-black text-rose-200">{schedulerStats.comFalha}</span>
+                <span className="text-[10px] text-rose-400/80">
+                  {scheduler.consecutiveFailures > 0 ? `${scheduler.consecutiveFailures} consec.` : "Zero falhas"}
+                </span>
               </div>
             </div>
+
+            {/* Próximos horários previstos hoje */}
+            {schedulerStats.proximosHorarios && schedulerStats.proximosHorarios.length > 0 && (
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="font-semibold text-slate-400 text-[11px]">Próximos horários previstos:</span>
+                {schedulerStats.proximosHorarios.slice(0, 8).map((hora, idx) => (
+                  <span
+                    key={idx}
+                    className="rounded-md bg-white/[0.04] border border-white/10 px-1.5 py-0.5 text-[10px] font-mono text-emerald-300"
+                  >
+                    {hora}
+                  </span>
+                ))}
+                {schedulerStats.proximosHorarios.length > 8 && (
+                  <span className="text-[10px] text-slate-500">
+                    +{schedulerStats.proximosHorarios.length - 8} horários
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -845,7 +1106,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
                 index={i}
                 onUpdate={handleUpdate}
                 onDelete={(id) => handleDeleteRejectedList([id])}
-                isSelected={selectedRejected.has(offer.id)}
+                isSelected={filter === "aprovado" ? selectedApproved.has(offer.id) : selectedRejected.has(offer.id)}
                 onToggleSelect={handleToggleSelect}
               />
             ))}
@@ -856,6 +1117,29 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       <footer className="mt-16 text-center text-xs text-slate-500">
         Radar de Ofertas · Supabase PostgreSQL Compartilhado · Envio WhatsApp Oficial Preservado
       </footer>
+
+      {/* ================= Modais de Configuração e Publicação Manual ================= */}
+      {showSchedulerModal && (
+        <SchedulerConfigModal
+          isOpen={showSchedulerModal}
+          settings={scheduler}
+          onClose={() => setShowSchedulerModal(false)}
+          onSave={handleSaveSchedulerConfig}
+          isSaving={updatingScheduler}
+        />
+      )}
+
+      {showManualPublishModal && (
+        <ManualPublishModal
+          isOpen={showManualPublishModal}
+          selectedOffers={offers.filter((o) => selectedApproved.has(o.id))}
+          channelDestination={scheduler.channelDestination}
+          minScore={scheduler.minScore ?? 75}
+          onClose={() => setShowManualPublishModal(false)}
+          onConfirm={handleExecuteManualPublish}
+          isPublishing={isPublishingManual}
+        />
+      )}
 
       {/* ================= Notificações ================= */}
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4">

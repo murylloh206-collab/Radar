@@ -5,11 +5,13 @@ import {
   markOfferOutOfStock,
   recordDispatchFailure,
   recordDispatchSuccess,
+  updateDatabase,
 } from "@/lib/server/storage";
 import {
   getSaoPauloTime,
   isWithinOperatingWindow,
 } from "@/lib/server/scheduler-engine";
+import { isBlockedProductOrCategory } from "@/lib/server/offer-scoring-engine";
 import { revalidateMLItem } from "@/lib/server/mercadolivre";
 import { generateMeliShortLinkDetailed } from "@/lib/server/meli-shortener";
 import { dispatchOfferToChannel } from "@/lib/server/whatsapp-adapter";
@@ -94,6 +96,41 @@ async function handleProcessScheduled(request: Request) {
     while (discardedCount < 5) {
       const candidate = await claimNextScheduledOfferAtomic(isManualTrigger);
       if (!candidate) break;
+
+      // 1. Bloqueio rígido de livros, receitas, cursos e produtos digitais
+      const categoryCheck = isBlockedProductOrCategory(candidate.title, null, candidate.searchTerm);
+      if (categoryCheck.blocked) {
+        const blockReason = categoryCheck.reason || "Categoria bloqueada: livros, receitas, cursos e produtos digitais proibidos.";
+        await updateDatabase((db) => {
+          const target = db.offers.find((o) => o.id === candidate.id);
+          if (target) {
+            target.status = "rejeitado";
+            target.whatsappStatus = "falhou";
+            target.whatsappError = blockReason;
+            target.statusChangedAt = new Date().toISOString();
+          }
+        });
+        discardedCount++;
+        continue;
+      }
+
+      // 2. Bloqueio de score mínimo configurado (padrão 75/100)
+      const minRequiredScore = settings.minScore ?? 75;
+      const currentScore = candidate.opportunityScore ?? 0;
+      if (currentScore < minRequiredScore) {
+        const scoreReason = `Score ${currentScore}/100 abaixo do mínimo configurado de ${minRequiredScore}/100. Retornado para revisão manual.`;
+        await updateDatabase((db) => {
+          const target = db.offers.find((o) => o.id === candidate.id);
+          if (target) {
+            target.status = "pendente"; // Volta para revisão manual
+            target.whatsappStatus = "falhou";
+            target.whatsappError = scoreReason;
+            target.statusChangedAt = new Date().toISOString();
+          }
+        });
+        discardedCount++;
+        continue;
+      }
 
       validatedPrice = candidate.price;
       validatedOriginalPrice = candidate.originalPrice;

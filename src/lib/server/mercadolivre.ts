@@ -28,6 +28,7 @@ export interface MLProduct {
   reviewsCount?: number | null;
   sellerReputation?: string | null;
   categoryId?: string | null;
+  categoryName?: string | null;
 }
 
 export class MercadoLivreError extends Error {

@@ -4,9 +4,11 @@ import { detectCoupon } from "./affiliate";
 import { generateMeliShortLinkDetailed } from "./meli-shortener";
 import { revalidateMLItem } from "./mercadolivre";
 import { generateMeliLaWithPuppeteer } from "./puppeteer-meli";
-import { getStoredAutomationSettings, saveStoredAutomationSettings, updateDatabase } from "./storage";
+import { getStoredAutomationSettings, getSchedulerSettings, saveStoredAutomationSettings, updateDatabase } from "./storage";
 import { dispatchOfferToChannel } from "./whatsapp-adapter";
 import { calcDiscountPercent } from "../offer-rules";
+import { isBlockedProductOrCategory } from "./offer-scoring-engine";
+import { getSaoPauloTime, isWithinOperatingWindow } from "./scheduler-engine";
 import type { Offer } from "../types";
 
 /**
@@ -34,20 +36,25 @@ export interface DispatchResult {
 }
 
 /**
- * Localiza a oferta aprovada mais antiga que ainda não foi enviada nem falhou.
+ * Localiza a oferta aprovada de maior score que atende aos critérios de qualidade (score >= 75)
+ * e não pertence a categorias bloqueadas (livros, receitas, cursos, produtos digitais).
  */
-function findOldestApprovedOffer(offers: Offer[]): Offer | null {
+function findOldestApprovedOffer(offers: Offer[], minScore = 75): Offer | null {
   const approvedCandidates = offers.filter(
     (o) =>
       o.status === "aprovado" &&
       o.whatsappStatus !== "enviado" &&
-      o.whatsappStatus !== "falhou"
+      o.whatsappStatus !== "falhou" &&
+      (o.opportunityScore ?? 0) >= minScore &&
+      !isBlockedProductOrCategory(o.title, null, o.searchTerm).blocked
   );
 
   if (approvedCandidates.length === 0) return null;
 
-  // Ordena pela mais antiga (statusChangedAt ou createdAt ascendente)
+  // Prioriza maior score primeiro e depois antiguidade
   approvedCandidates.sort((a, b) => {
+    const scoreDiff = (b.opportunityScore || 0) - (a.opportunityScore || 0);
+    if (scoreDiff !== 0) return scoreDiff;
     const timeA = a.statusChangedAt || a.createdAt;
     const timeB = b.statusChangedAt || b.createdAt;
     return timeA.localeCompare(timeB);
@@ -73,6 +80,16 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
 
   try {
     const settings = await getStoredAutomationSettings();
+    const schedSettings = await getSchedulerSettings();
+    const spTime = getSaoPauloTime();
+
+    if (!force && !isWithinOperatingWindow(schedSettings, spTime)) {
+      return {
+        dispatched: false,
+        status: "disabled",
+        message: `Fora da janela operacional configurada (${schedSettings.startHour} às ${schedSettings.endHour}).`,
+      };
+    }
 
     if (!settings.autoSendEnabled && !force) {
       return {
@@ -86,17 +103,20 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
     let targetOfferCopy: Offer | null = null;
     let remainingCount = 0;
 
-    // 1. Identifica a oferta mais antiga de forma atômica
+    // 1. Identifica a melhor oferta aprovada de forma atômica
+    const minScore = schedSettings.minScore ?? 75;
     await updateDatabase((db) => {
       const candidates = db.offers.filter(
         (o) =>
           o.status === "aprovado" &&
           o.whatsappStatus !== "enviado" &&
-          o.whatsappStatus !== "falhou"
+          o.whatsappStatus !== "falhou" &&
+          (o.opportunityScore ?? 0) >= minScore &&
+          !isBlockedProductOrCategory(o.title, null, o.searchTerm).blocked
       );
       remainingCount = candidates.length;
 
-      const oldest = findOldestApprovedOffer(db.offers);
+      const oldest = findOldestApprovedOffer(db.offers, minScore);
       if (oldest) {
         targetOfferId = oldest.id;
         targetOfferCopy = { ...oldest };
@@ -104,7 +124,7 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
     });
 
     if (!targetOfferId || !targetOfferCopy) {
-      // Nenhuma oferta aprovada aguardando envio
+      // Nenhuma oferta aprovada elegível aguardando envio
       const nextTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
       await saveStoredAutomationSettings({
         nextScheduledAt: nextTime,

@@ -30,6 +30,84 @@ export interface EvaluationResult {
   fingerprint: string;
 }
 
+export const BLOCKED_KEYWORDS = [
+  "livro",
+  "livros",
+  "ebook",
+  "e-book",
+  "receita",
+  "receitas",
+  "curso",
+  "cursos",
+  "infoproduto",
+  "infoprodutos",
+  "produto digital",
+  "produtos digitais",
+  "digital download",
+  "download imediato",
+  "apostila",
+  "audiobook",
+  "audio book",
+  "arquivo pdf",
+  "pdf",
+  "planilha digital",
+  "licenca digital",
+  "licença digital",
+  "software digital",
+  "videoaula",
+  "treinamento online",
+  "mentoria",
+  "mentorias",
+  "planilha",
+  "planilhas",
+  "drive",
+];
+
+export const BLOCKED_CATEGORY_IDS = [
+  "MLB1196", // Livros, Revistas e Comics
+  "MLB1144", // Livros
+  "MLB271599", // Cursos
+  "MLB1367", // Antiguidades e Coleções não prioritárias
+];
+
+/**
+ * Verifica se um produto ou categoria deve ser bloqueado por padrão.
+ * Utiliza categoria oficial do Mercado Livre quando disponível e regras transparentes de título.
+ */
+export function isBlockedProductOrCategory(
+  title: string,
+  categoryId?: string | null,
+  searchTerm?: string | null
+): { blocked: boolean; reason?: string } {
+  if (categoryId && BLOCKED_CATEGORY_IDS.includes(categoryId)) {
+    return {
+      blocked: true,
+      reason: `Categoria oficial bloqueada (${categoryId}): livros, revistas e cursos não são permitidos no Radar.`,
+    };
+  }
+
+  const normalizedTitle = (title || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const normalizedSearch = (searchTerm || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const text = ` ${normalizedTitle} ${normalizedSearch} `;
+
+  for (const kw of BLOCKED_KEYWORDS) {
+    const cleanKw = kw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (
+      text.includes(` ${cleanKw} `) ||
+      text.includes(` ${cleanKw}`) ||
+      text.includes(`${cleanKw} `) ||
+      normalizedTitle.includes(cleanKw)
+    ) {
+      return {
+        blocked: true,
+        reason: `Categoria bloqueada: livros, receitas, cursos e infoprodutos são proibidos (termo: "${kw}").`,
+      };
+    }
+  }
+
+  return { blocked: false };
+}
+
 /**
  * Gera uma impressão digital consistente (fingerprint) do produto
  * para detecção de duplicidades e tombstones independente de pequenas variações de URL.
@@ -145,6 +223,12 @@ export function evaluateCandidateOffer(input: EvaluationInput): EvaluationResult
   // Filtro 7: Desconto real (se tem preço 'de', não pode ser menor que o preço atual)
   if (candidate.originalPrice !== null && candidate.originalPrice <= candidate.price) {
     failedFilters.push("Inconsistência de desconto: preço original inferior ou igual ao preço promocional.");
+  }
+
+  // Filtro 8: Bloqueio estrito de livros, receitas, cursos e produtos digitais
+  const categoryCheck = isBlockedProductOrCategory(candidate.title, candidate.categoryId, candidate.categoryName);
+  if (categoryCheck.blocked) {
+    failedFilters.push(categoryCheck.reason || "Categoria bloqueada: livros, receitas, cursos e infoprodutos são proibidos.");
   }
 
   // =========================================================================
@@ -373,23 +457,24 @@ export function evaluateCandidateOffer(input: EvaluationInput): EvaluationResult
   const passedMandatoryFilters = failedFilters.length === 0;
 
   // =========================================================================
-  // 3. DECISÃO FINAL BASEADA NO MODO DE ROLLOUT E SCORE
+  // 3. DECISÃO FINAL BASEADA NO MODO DE ROLLOUT E SCORE MÍNIMO (PADRÃO 75)
   // =========================================================================
   let decision: ScoreAudit["decision"] = "pendente";
   let decisionReason = "";
+  const minAutoScore = settings.minAutoApproveScore ?? 75;
 
   if (!passedMandatoryFilters) {
     decision = "rejeitado";
     decisionReason = `Rejeitado pelos filtros eliminatórios: ${failedFilters.join("; ")}`;
-  } else if (settings.rolloutMode === "publicacao_automatica" && finalScore >= settings.minAutoApproveScore) {
+  } else if (settings.rolloutMode === "publicacao_automatica" && finalScore >= minAutoScore) {
     decision = "aprovado";
-    decisionReason = `Aprovado automaticamente: Score ${finalScore} >= limiar ${settings.minAutoApproveScore}.`;
-  } else if (finalScore >= settings.minManualReviewScore) {
+    decisionReason = `Aprovado automaticamente: Score ${finalScore} >= limiar configurado de ${minAutoScore}.`;
+  } else if (finalScore >= (settings.minManualReviewScore ?? 60)) {
     decision = "pendente";
-    decisionReason = `Elegível para aprovação: Score ${finalScore}/100. Aguarda validação humana.`;
+    decisionReason = `Score ${finalScore}/100 abaixo do limiar automático de ${minAutoScore}. Aguarda validação manual.`;
   } else {
     decision = "revisao_manual";
-    decisionReason = `Score ${finalScore}/100 abaixo da recomendação automática (${settings.minManualReviewScore}). Encaminhado para revisão manual.`;
+    decisionReason = `Score ${finalScore}/100 insuficiente (mínimo configurado de ${minAutoScore}). Encaminhado para revisão manual.`;
   }
 
   const audit: ScoreAudit = {

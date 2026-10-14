@@ -43,6 +43,7 @@ export interface NormalizedCandidateProduct {
   searchTerm?: string;
   capturedAt: string;
   categoryName?: string;
+  categoryId?: string | null;
 }
 
 export interface ShortenLinkResult {

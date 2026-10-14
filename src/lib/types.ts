@@ -171,12 +171,14 @@ export interface LastSearchInfo {
 }
 
 export type SchedulerState = "ativo" | "pausado" | "interrompido_erro";
+export type SchedulerMode = "daily_target" | "posts_per_hour" | "interval_minutes";
+export type ScheduleDistribution = "fixed" | "randomized";
 
 export interface SchedulerSettings {
   state: SchedulerState;
   startHour: string; // padrão "07:00"
   endHour: string; // padrão "00:00"
-  dailyTarget: number; // padrão 60 (faixa 50 a 70)
+  dailyTarget: number; // ex: 30, 50, etc.
   maxPerHour: number; // padrão 5
   timezone: string; // padrão "America/Sao_Paulo"
   channelDestination: string;
@@ -185,6 +187,20 @@ export interface SchedulerSettings {
   lastDispatchedAt: string | null;
   lastDispatchedOfferTitle?: string | null;
   lastError?: string | null;
+
+  // Novos campos do controle de agenda
+  mode: SchedulerMode; // "daily_target" | "posts_per_hour" | "interval_minutes"
+  distribution: ScheduleDistribution; // "fixed" | "randomized"
+  postsPerHour: number; // ex: 2 ou 3
+  intervalMinutes: number; // ex: 20
+  minScore: number; // padrão 75 (0–100)
+}
+
+export interface CategoryPolicySettings {
+  allowedCategories: string[];
+  blockedCategories: string[];
+  blockedKeywords: string[];
+  strictAllowedOnly: boolean;
 }
 
 export interface SchedulerStats {
@@ -196,6 +212,17 @@ export interface SchedulerStats {
   proximoEnvio: string | null;
   metaDiaria: number;
   limiteHora: number;
+
+  // Novos indicadores em tempo real
+  mode: SchedulerMode;
+  distribution: ScheduleDistribution;
+  intervalMinutes: number;
+  totalEstimadoDia: number;
+  proximosHorarios: string[]; // ex: ["07:00", "07:20", "07:40", ...]
+  motivoSemElegivel?: string | null;
+  minScore: number;
+  windowStart: string;
+  windowEnd: string;
 }
 
 export interface AutomationSettings {

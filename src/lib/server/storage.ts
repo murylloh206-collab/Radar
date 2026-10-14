@@ -11,6 +11,7 @@ import {
   mapDbToSchedulerSettings,
 } from "./supabase";
 import { generateProductFingerprint } from "./offer-scoring-engine";
+import { rescheduleFutureOffers } from "./scheduler-engine";
 import type {
   AutomationSettings,
   LastSearchInfo,
@@ -30,15 +31,20 @@ export const DEFAULT_SCHEDULER_SETTINGS: SchedulerSettings = {
   state: "ativo",
   startHour: "07:00",
   endHour: "00:00",
-  dailyTarget: 60,
+  dailyTarget: 51,
   maxPerHour: 5,
   timezone: "America/Sao_Paulo",
-  channelDestination: "Grupo VIP de Ofertas",
+  channelDestination: "Radar de Ofertas",
   consecutiveFailures: 0,
   maxConsecutiveFailures: 3,
   lastDispatchedAt: null,
   lastDispatchedOfferTitle: null,
   lastError: null,
+  mode: "interval_minutes",
+  distribution: "fixed",
+  intervalMinutes: 20,
+  postsPerHour: 3,
+  minScore: 75,
 };
 
 export const DEFAULT_AUTOMATION: AutomationSettings = {
@@ -305,8 +311,25 @@ export async function getSchedulerSettings(): Promise<SchedulerSettings> {
         throw new Error(`Erro ao buscar scheduler_settings: ${error.message}`);
       }
 
+      const { data: extData } = await supabase
+        .from("app_metadata")
+        .select("value")
+        .eq("key", "scheduler_extended_config")
+        .maybeSingle();
+
+      const extended = (extData?.value as Partial<SchedulerSettings>) || {};
+
       if (data) {
-        return mapDbToSchedulerSettings(data as Record<string, unknown>);
+        const base = mapDbToSchedulerSettings(data as Record<string, unknown>);
+        return {
+          ...base,
+          ...extended,
+          mode: extended.mode || base.mode || "interval_minutes",
+          distribution: extended.distribution || base.distribution || "fixed",
+          intervalMinutes: extended.intervalMinutes ?? base.intervalMinutes ?? 20,
+          postsPerHour: extended.postsPerHour ?? base.postsPerHour ?? 3,
+          minScore: extended.minScore ?? base.minScore ?? 75,
+        };
       }
     } catch (err) {
       if (isProduction()) throw err;
@@ -323,6 +346,9 @@ export async function updateSchedulerSettings(
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient();
+      const current = await getSchedulerSettings();
+      const updated: SchedulerSettings = { ...current, ...patch };
+
       const dbPatch: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
@@ -345,18 +371,44 @@ export async function updateSchedulerSettings(
         dbPatch.last_dispatched_title = patch.lastDispatchedOfferTitle;
       if (patch.lastError !== undefined) dbPatch.last_error = patch.lastError;
 
-      const { data, error } = await supabase
+      await supabase
         .from("scheduler_settings")
         .update(dbPatch)
-        .eq("id", 1)
-        .select("*")
-        .single();
+        .eq("id", 1);
 
-      if (error) {
-        throw new Error(`Erro ao atualizar scheduler_settings: ${error.message}`);
+      // Persiste metadados estendidos (modo, intervalo, distribuição, minScore)
+      await supabase.from("app_metadata").upsert({
+        key: "scheduler_extended_config",
+        value: updated as unknown as Record<string, unknown>,
+        updated_at: new Date().toISOString(),
+      });
+
+      // Se alterou horários ou intervalo ou modo, recalcula os slots das ofertas futuras
+      const scheduleParamsChanged =
+        patch.startHour !== undefined ||
+        patch.endHour !== undefined ||
+        patch.mode !== undefined ||
+        patch.intervalMinutes !== undefined ||
+        patch.dailyTarget !== undefined ||
+        patch.postsPerHour !== undefined ||
+        patch.distribution !== undefined;
+
+      if (scheduleParamsChanged) {
+        const { data: offersData } = await supabase
+          .from("offers")
+          .select("*")
+          .eq("status", "aprovado")
+          .eq("whatsapp_status", "agendado");
+
+        if (offersData && offersData.length > 0) {
+          const offersToUpdate = offersData.map((row) => mapDbToOffer(row as Record<string, unknown>));
+          const recalculated = rescheduleFutureOffers(offersToUpdate, updated);
+          const dbRows = recalculated.map(mapOfferToDb);
+          await supabase.from("offers").upsert(dbRows, { onConflict: "id" });
+        }
       }
 
-      return mapDbToSchedulerSettings(data as Record<string, unknown>);
+      return updated;
     } catch (err) {
       if (isProduction()) throw err;
     }
@@ -366,6 +418,20 @@ export async function updateSchedulerSettings(
     const current = db.scheduler ?? DEFAULT_SCHEDULER_SETTINGS;
     const updated: SchedulerSettings = { ...current, ...patch };
     db.scheduler = updated;
+
+    const scheduleParamsChanged =
+      patch.startHour !== undefined ||
+      patch.endHour !== undefined ||
+      patch.mode !== undefined ||
+      patch.intervalMinutes !== undefined ||
+      patch.dailyTarget !== undefined ||
+      patch.postsPerHour !== undefined ||
+      patch.distribution !== undefined;
+
+    if (scheduleParamsChanged && db.offers) {
+      db.offers = rescheduleFutureOffers(db.offers, updated);
+    }
+
     return updated;
   });
 }

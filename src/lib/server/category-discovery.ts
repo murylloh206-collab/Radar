@@ -2,11 +2,13 @@ import "server-only";
 
 import { searchProducts, type MLProduct } from "./mercadolivre";
 import { getMockProducts } from "./mock-products";
+import { isBlockedProductOrCategory } from "./offer-scoring-engine";
 
 /**
  * ADAPTADOR E DESCOBERTA POR CATEGORIAS PRIORITÁRIAS
  * --------------------------------------------------
  * Radar de Ofertas | Achados que valem a pena
+ * Foco em Moda, Tênis, Fitness, Suplementos/Creatina, Perfumes e Lifestyle
  */
 
 export interface PriorityCategory {
@@ -42,46 +44,40 @@ export const JUNK_KEYWORDS = [
 
 export const PRIORITY_CATEGORIES: PriorityCategory[] = [
   {
-    id: "tecnologia",
-    name: "Tecnologia e Eletrônicos",
-    mlCategoryId: "MLB1000",
-    fallbackQuery: "fone bluetooth xiaomi jbl",
+    id: "tenis",
+    name: "Tênis e Calçados Esportivos",
+    mlCategoryId: "MLB1088",
+    fallbackQuery: "tenis nike adidas puma kappa corrida",
   },
   {
-    id: "celulares-informatica",
-    name: "Celulares, Acessórios e Informática",
-    mlCategoryId: "MLB1051",
-    fallbackQuery: "ssd nvme kingston logitech",
-  },
-  {
-    id: "games",
-    name: "Games",
-    mlCategoryId: "MLB1144",
-    fallbackQuery: "controle ps5 xbox headset gamer",
-  },
-  {
-    id: "casa-cozinha",
-    name: "Casa e Cozinha",
-    mlCategoryId: "MLB1574",
-    fallbackQuery: "air fryer mondial cafeteira",
-  },
-  {
-    id: "ferramentas",
-    name: "Ferramentas",
-    mlCategoryId: "MLB1500",
-    fallbackQuery: "parafusadeira furadeira eletrica",
-  },
-  {
-    id: "beleza",
-    name: "Beleza e Cuidados Pessoais",
-    mlCategoryId: "MLB1246",
-    fallbackQuery: "escova secadora taiff barbeador",
-  },
-  {
-    id: "moda-utilidades",
-    name: "Moda e Itens Úteis do Dia a Dia",
+    id: "moda-fitness",
+    name: "Moda Fitness e Academia",
     mlCategoryId: "MLB1430",
-    fallbackQuery: "mochila antifurto garrafa termica",
+    fallbackQuery: "camiseta esportiva conjunto fitness bermuda legging",
+  },
+  {
+    id: "suplementos",
+    name: "Creatina e Suplementos",
+    mlCategoryId: "MLB1271",
+    fallbackQuery: "creatina monohidratada whey protein integralmedica max titanium",
+  },
+  {
+    id: "perfumes",
+    name: "Perfumes e Perfumaria Árabe",
+    mlCategoryId: "MLB1276",
+    fallbackQuery: "perfume arabe lattafa armaf importado masculino feminino",
+  },
+  {
+    id: "roupas",
+    name: "Roupas Masculinas e Femininas",
+    mlCategoryId: "MLB1430",
+    fallbackQuery: "camiseta algodao moletom calca jaqueta corta vento",
+  },
+  {
+    id: "lifestyle-esporte",
+    name: "Esporte, Beleza e Lifestyle",
+    mlCategoryId: "MLB1246",
+    fallbackQuery: "garrafa termica mochila esportiva smartwatch fone corrida",
   },
 ];
 
@@ -93,9 +89,16 @@ export interface CategoryDiscoveryResult {
 
 /** Valida se um produto tem apelo real e atratividade para afiliados */
 export function isAttractiveOffer(product: MLProduct): boolean {
-  // Preço mínimo configurado: no mínimo R$ 24,99
+  // 1. Preço mínimo configurado: no mínimo R$ 24,99
   if (product.price < 24.99) return false;
 
+  // 2. Bloqueio estrito de livros, receitas, cursos e produtos digitais
+  const blockedCheck = isBlockedProductOrCategory(product.title, product.categoryId, product.categoryName);
+  if (blockedCheck.blocked) {
+    return false;
+  }
+
+  // 3. Blacklist de miudezas e itens de baixo apelo
   const titleLower = product.title.toLowerCase();
   for (const junk of JUNK_KEYWORDS) {
     if (titleLower.includes(junk)) return false;
@@ -106,7 +109,7 @@ export function isAttractiveOffer(product: MLProduct): boolean {
 
 export async function discoverCategoryOffers(
   categoryIds?: string[],
-  limitPerCategory = 8,
+  limitPerCategory = 8
 ): Promise<CategoryDiscoveryResult[]> {
   const targets = categoryIds && categoryIds.length > 0
     ? PRIORITY_CATEGORIES.filter((c) => categoryIds.includes(c.id))
