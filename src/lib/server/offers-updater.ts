@@ -1,28 +1,8 @@
 import "server-only";
 
-import { buildAffiliateUrl } from "./affiliate";
-import { config } from "./config";
-import { getAccessToken, MercadoLivreError } from "./mercadolivre";
-import { calcDiscountPercent } from "../offer-rules";
-import { getTombstones, readDatabase, updateDatabase } from "./storage";
-import {
-  extractBrand,
-  isOfferBlocked,
-  rankOffersWithExploration,
-} from "./recommendation-engine";
-import { getLearnedPreferences, getAllFeedbacks } from "./feedback-service";
-import { enqueueMeliShorten } from "./puppeteer-meli";
-import { generateMeliShortLinkDetailed } from "./meli-shortener";
-import type { LastSearchInfo, Offer, PriceHistoryItem } from "../types";
-
-/**
- * SERVIÇO DE COLETA E ATUALIZAÇÃO OFICIAL DO MERCADO LIVRE BRASIL (MLB)
- * -------------------------------------------------------------------
- * - Busca ofertas ativas direto da API oficial do Mercado Livre (MLB).
- * - Sem scraping HTML.
- * - Sem filtros de score bloqueantes.
- * - Priorização transparente de categorias e filtros objetivos.
- */
+import { readDatabase } from "./storage";
+import { runOffersScanner, type ScannerPipelineResult } from "./scanner";
+import type { LastSearchInfo, Offer } from "../types";
 
 export interface RadarCategoryConfig {
   id: string;
@@ -33,7 +13,7 @@ export interface RadarCategoryConfig {
 }
 
 export const RADAR_CATEGORIES: RadarCategoryConfig[] = [
-  // 1. Eletrodomésticos: Buy Box comprovadamente ativa
+  // 1. Eletrodomésticos
   {
     id: "eletrodomesticos",
     name: "Eletrodomésticos",
@@ -48,7 +28,7 @@ export const RADAR_CATEGORIES: RadarCategoryConfig[] = [
       "liquidificador potente",
     ],
   },
-  // 2. Suplementos: Alta densidade de buy box e busca diária
+  // 2. Suplementos
   {
     id: "suplementos",
     name: "Suplementos",
@@ -62,7 +42,7 @@ export const RADAR_CATEGORIES: RadarCategoryConfig[] = [
       "whey protein concentrado",
     ],
   },
-  // 3. Perfumes e Beleza e cuidados pessoais: Marcas líderes
+  // 3. Perfumes e Beleza
   {
     id: "beleza-cuidados",
     name: "Beleza e Cuidados Pessoais",
@@ -76,7 +56,7 @@ export const RADAR_CATEGORIES: RadarCategoryConfig[] = [
       "protetor solar facial",
     ],
   },
-  // 4. Eletrônicos e Games / Smartwatches
+  // 4. Eletrônicos e Games
   {
     id: "eletronicos-games",
     name: "Eletrônicos e Games",
@@ -121,7 +101,7 @@ export const RADAR_CATEGORIES: RadarCategoryConfig[] = [
 ];
 
 /**
- * Detecta réplicas ou falsificações em tênis de marcas
+ * Detecta réplicas ou falsificações em produtos e tênis
  */
 export function isReplicaOrKnockoff(title: string): boolean {
   const normalized = title
@@ -144,107 +124,27 @@ export function isReplicaOrKnockoff(title: string): boolean {
 }
 
 /**
- * Remove itens indesejados de miudezas sem apelo comercial
+ * Ordena ofertas com base nas regras de priorização:
+ * 1. Nota >= 4.4 com >= 30 avaliações (ou > R$300 com >= 4.5 e >= 10 avaliações)
+ * 2. Frete grátis
+ * 3. Maior desconto percentual
+ * 4. Mais recente
  */
-const JUNK_TERMS = [
-  "almofada",
-  "capa de almofada",
-  "capa para almofada",
-  "botons",
-  "pin para",
-  "pins para",
-  "chaveiro",
-  "adesivo",
-  "pano de prato",
-  "pano de chao",
-  "palmilha",
-  "cadarco",
-  "presilha",
-];
+export function sortPrioritizedOffers(offers: Offer[]): Offer[] {
+  return [...offers].sort((a, b) => {
+    const isTopA =
+      (typeof a.rating === "number" && a.rating >= 4.4 && typeof a.reviewsCount === "number" && a.reviewsCount >= 30) ||
+      (a.price > 300 && typeof a.rating === "number" && a.rating >= 4.5 && typeof a.reviewsCount === "number" && a.reviewsCount >= 10);
 
-function isJunkItem(title: string): boolean {
-  const normalized = title
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    const isTopB =
+      (typeof b.rating === "number" && b.rating >= 4.4 && typeof b.reviewsCount === "number" && b.reviewsCount >= 30) ||
+      (b.price > 300 && typeof b.rating === "number" && b.rating >= 4.5 && typeof b.reviewsCount === "number" && b.reviewsCount >= 10);
 
-  return JUNK_TERMS.some((term) => normalized.includes(term));
-}
-
-function toHttps(url: string | undefined | null): string | null {
-  if (!url) return null;
-  return url.replace(/^http:\/\//i, "https://");
-}
-
-/**
- * Fetch com retry inteligente para erros 429 e falhas de rede transitórias (otimizado para serverless)
- */
-async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
-  let attempt = 0;
-  while (attempt <= retries) {
-    try {
-      const res = await fetch(url, options);
-      if (res.status === 429 && attempt < retries) {
-        const delay = (attempt + 1) * 500;
-        console.warn(`[offers-updater] Rate limit 429 em ${url}. Aguardando ${delay}ms para retry...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        attempt++;
-        continue;
-      }
-      return res;
-    } catch (err) {
-      if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, 350));
-        attempt++;
-        continue;
-      }
-      throw err;
-    }
-  }
-  return fetch(url, options);
-}
-
-export interface DiscoveredProductItem {
-  externalId: string;
-  title: string;
-  thumbnail: string | null;
-  price: number;
-  originalPrice: number | null;
-  discountPercent: number | null;
-  currency: string;
-  originalUrl: string;
-  freeShipping: boolean;
-  categoryName: string;
-  rating: number | null;
-  reviewsCount: number | null;
-}
-
-/**
- * Busca avaliações na API oficial do Mercado Livre para itens pré-selecionados (timeout ágil)
- */
-async function fetchItemReviews(
-  itemId: string,
-  token: string
-): Promise<{ rating: number | null; reviewsCount: number | null }> {
-  try {
-    const res = await fetchWithRetry(`https://api.mercadolibre.com/reviews/item/${itemId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(2000),
-    });
-
-    if (!res.ok) return { rating: null, reviewsCount: null };
-    const data = await res.json().catch(() => null);
-    if (!data) return { rating: null, reviewsCount: null };
-
-    const rating = typeof data.rating_average === "number" ? data.rating_average : null;
-    const reviewsCount = typeof data.paging?.total === "number" ? data.paging.total : null;
-    return { rating, reviewsCount };
-  } catch {
-    return { rating: null, reviewsCount: null };
-  }
+    if (isTopA !== isTopB) return isTopA ? -1 : 1;
+    if (Boolean(a.freeShipping) !== Boolean(b.freeShipping)) return a.freeShipping ? -1 : 1;
+    if ((a.discountPercent ?? 0) !== (b.discountPercent ?? 0)) return (b.discountPercent ?? 0) - (a.discountPercent ?? 0);
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 }
 
 export interface PipelineStageCounts {
@@ -282,243 +182,15 @@ export interface RadarUpdateResult {
   stageCounts: PipelineStageCounts;
 }
 
-/**
- * Coleta produtos do catálogo oficial e resolve os itens e preços reais
- * com execução sequencial rápida e limite de 18 segundos (Deadline Budget)
- * para garantir alta densidade de ofertas e evitar qualquer 504 Gateway Timeout na Vercel.
- */
-async function collectProductsFromML(
-  token: string,
-  existingExternalIds: Set<string>,
-  counters: {
-    etapa1: number;
-    etapa2: number;
-    etapa3: number;
-    etapa4: number;
-  },
-  diagnostics: RadarDiagnostics
-): Promise<DiscoveredProductItem[]> {
-  const discovered: DiscoveredProductItem[] = [];
-  const seenIds = new Set<string>();
-  let apiErrorsCount = 0;
-  let lastApiErrorMessage = "";
-
-  // Orçamento máximo de 18 segundos para varredura de todas as categorias
-  const DEADLINE_AT = Date.now() + 18_000;
-
-  for (const category of RADAR_CATEGORIES) {
-    if (Date.now() > DEADLINE_AT) {
-      console.log(`[offers-updater] Orçamento de tempo atingido (18s). Prosseguindo para gravação.`);
-      break;
-    }
-
-    // Rotaciona a consulta da categoria a cada ciclo para diversidade constante
-    const queryIndex = Math.floor(Date.now() / 60_000) % category.queries.length;
-    const query = category.queries[queryIndex] || category.queries[0];
-
-    try {
-      // Consulta 8 produtos por termo para alta densidade
-      const searchUrl = `https://api.mercadolibre.com/products/search?status=active&site_id=${config.mercadoLivre.siteId}&q=${encodeURIComponent(query)}&limit=8`;
-      const res = await fetchWithRetry(searchUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        signal: AbortSignal.timeout(3500),
-      });
-
-      if (!res.ok) {
-        apiErrorsCount++;
-        const errBody = await res.text().catch(() => "");
-        lastApiErrorMessage = `HTTP ${res.status}: ${errBody.slice(0, 150)}`;
-        diagnostics.errors.push(`"${query}": ${lastApiErrorMessage}`);
-        console.warn(`[offers-updater] Busca retornou erro para "${query}": ${lastApiErrorMessage}`);
-        if (res.status === 401 || res.status === 403) {
-          throw new MercadoLivreError(
-            `Erro de autenticação/autorização na API Mercado Livre (${res.status}): ${errBody || "Verifique as credenciais ou reconecte o OAuth."}`,
-            res.status
-          );
-        }
-        continue;
-      }
-
-      const data = (await res.json().catch(() => ({}))) as {
-        results?: Array<{
-          id: string;
-          name: string;
-          permalink?: string;
-          pictures?: Array<{ url?: string; secure_url?: string }>;
-        }>;
-      };
-
-      const products = data.results || [];
-      diagnostics.found += products.length;
-      let newInCat = 0;
-
-      for (const p of products) {
-        if (newInCat >= 4 || Date.now() > DEADLINE_AT) break;
-
-        // Filtro: Miudezas irrelevantes
-        if (isJunkItem(p.name)) continue;
-
-        try {
-          const itRes = await fetchWithRetry(
-            `https://api.mercadolibre.com/products/${p.id}/items?limit=1`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/json",
-              },
-              signal: AbortSignal.timeout(2500),
-            }
-          );
-
-          // Ao receber 404 No winners found, registra e continua sem abortar a categoria
-          if (!itRes.ok) {
-            diagnostics.skippedNoBuyBox++;
-            continue;
-          }
-
-          const itData = (await itRes.json().catch(() => ({}))) as {
-            results?: Array<{
-              item_id?: string;
-              price?: number;
-              original_price?: number | null;
-              currency_id?: string;
-              shipping?: { free_shipping?: boolean };
-            }>;
-          };
-
-          const item = itData.results?.[0];
-          if (!item || typeof item.price !== "number") {
-            diagnostics.skippedNoBuyBox++;
-            continue;
-          }
-
-          // 1. Itens retornados pela API Mercado Livre com anúncio ativo e preço
-          counters.etapa1++;
-
-          // 2. Itens após preço mínimo de R$25
-          if (item.price < 25.0) {
-            diagnostics.skippedPrice++;
-            continue;
-          }
-          counters.etapa2++;
-
-          // 3. Itens após bloqueio de réplicas
-          if (isReplicaOrKnockoff(p.name)) {
-            diagnostics.skippedReplica++;
-            console.log(`[offers-updater] Anúncio réplica/inspirado bloqueado: "${p.name}"`);
-            continue;
-          }
-          counters.etapa3++;
-
-          // 4. Itens após filtros de avaliação (avaliações são opcionais)
-          counters.etapa4++;
-
-          const externalId = item.item_id || p.id;
-          if (seenIds.has(externalId)) continue;
-          seenIds.add(externalId);
-
-          // Busca avaliações se disponíveis com timeout curto (não bloqueante)
-          const reviews = await fetchItemReviews(externalId, token);
-
-          const picture = p.pictures?.[0];
-          const cleanId = (item.item_id || p.id || "").replace(/^MLB-?/, "");
-          const originalUrl = item.item_id
-            ? `https://produto.mercadolivre.com.br/MLB-${cleanId}`
-            : (p.permalink || `https://produto.mercadolivre.com.br/MLB-${cleanId}`);
-          const discountPercent = calcDiscountPercent(item.price, item.original_price ?? null);
-
-          discovered.push({
-            externalId,
-            title: p.name,
-            thumbnail: toHttps(picture?.secure_url || picture?.url),
-            price: item.price,
-            originalPrice: item.original_price ?? null,
-            discountPercent,
-            currency: item.currency_id || "BRL",
-            originalUrl,
-            freeShipping: Boolean(item.shipping?.free_shipping),
-            categoryName: category.name,
-            rating: reviews.rating,
-            reviewsCount: reviews.reviewsCount,
-          });
-
-          if (!existingExternalIds.has(externalId)) {
-            newInCat++;
-          }
-        } catch {
-          // Continua para o próximo item
-        }
-      }
-    } catch (catErr) {
-      if (catErr instanceof MercadoLivreError) {
-        throw catErr;
-      }
-      console.warn(`[offers-updater] Falha ao consultar termo "${query}":`, catErr);
-      diagnostics.errors.push(`"${query}": ${catErr instanceof Error ? catErr.message : "Erro"}`);
-    }
-  }
-
-  if (discovered.length === 0 && apiErrorsCount > 0 && lastApiErrorMessage) {
-    throw new MercadoLivreError(
-      `Falha na comunicação com a API Mercado Livre: ${lastApiErrorMessage}`,
-      502
-    );
-  }
-
-  return discovered;
-}
-
-/**
- * Ordena ofertas com base nas regras de priorização:
- * 1. Nota >= 4.4 com >= 30 avaliações (ou > R$300 com >= 4.5 e >= 10 avaliações)
- * 2. Frete grátis
- * 3. Maior desconto percentual
- * 4. Mais recente
- */
-export function sortPrioritizedOffers(offers: Offer[]): Offer[] {
-  function getPriorityScore(o: Offer): number {
-    let score = 0;
-    const r = o.rating;
-    const count = o.reviewsCount;
-
-    // Critério 1: Avaliações excelentes
-    if (r !== null && r !== undefined && count !== null && count !== undefined) {
-      if (r >= 4.4 && count >= 30) score += 1000;
-      else if (o.price > 300 && r >= 4.5 && count >= 10) score += 1000;
-      else if (r >= 4.0 && count >= 10) score += 500;
-    }
-
-    // Critério 2: Frete grátis
-    if (o.freeShipping) score += 200;
-
-    // Critério 3: Desconto comprovado
-    if (o.discountPercent && o.discountPercent > 0) {
-      score += Math.min(o.discountPercent, 100);
-    }
-
-    return score;
-  }
-
-  return [...offers].sort((a, b) => {
-    const scoreDiff = getPriorityScore(b) - getPriorityScore(a);
-    if (scoreDiff !== 0) return scoreDiff;
-    return (
-      b.lastSeenAt.localeCompare(a.lastSeenAt) ||
-      (b.discountPercent ?? 0) - (a.discountPercent ?? 0)
-    );
-  });
-}
-
 let isUpdatingInProgress = false;
 
 /**
- * Executa a atualização completa do Radar de Ofertas
+ * Executa a atualização completa do Radar de Ofertas delegando para o
+ * novo motor modular de escaneamento e validação em camadas.
  */
 export async function runRadarUpdate(): Promise<RadarUpdateResult> {
   if (isUpdatingInProgress) {
+    console.log("[offers-updater] Atualização já em andamento. Retornando dados atuais.");
     const currentDb = await readDatabase();
     const fallbackStageCounts: PipelineStageCounts = {
       etapa1_itens_retornados_api: 0,
@@ -553,301 +225,35 @@ export async function runRadarUpdate(): Promise<RadarUpdateResult> {
   isUpdatingInProgress = true;
 
   try {
-    // Carrega em paralelo token, banco, tombstones, preferências e feedbacks para velocidade máxima
-    const [token, initialDb, tombstones, preferences, feedbacks] = await Promise.all([
-      getAccessToken(),
-      readDatabase(),
-      getTombstones(),
-      getLearnedPreferences(),
-      getAllFeedbacks(),
-    ]);
-
-    const existingExternalIds = new Set(initialDb.offers.map((o) => o.externalId));
-    const manualTombstones = new Set(
-      tombstones
-        .filter((t) => !t.reason?.toLowerCase().includes("score"))
-        .map((t) => t.id)
-    );
-
-    // Contadores das 4 primeiras etapas
-    const rawCounters = {
-      etapa1: 0,
-      etapa2: 0,
-      etapa3: 0,
-      etapa4: 0,
-    };
-
-    const diagnostics: RadarDiagnostics = {
-      found: 0,
-      added: 0,
-      updated: 0,
-      skippedNoBuyBox: 0,
-      skippedBlocked: 0,
-      skippedReplica: 0,
-      skippedPrice: 0,
-      errors: [],
-    };
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const output: R[] = new Array(items.length);
-  let index = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (index < items.length) {
-      const current = index++;
-      output[current] = await fn(items[current]);
-    }
-  });
-  await Promise.all(workers);
-  return output;
-}
-
-    const candidates = await collectProductsFromML(token, existingExternalIds, rawCounters, diagnostics);
-
-    const now = new Date().toISOString();
-    let addedCount = 0;
-    let updatedCount = 0;
-    const termsFound = new Set<string>();
-
-    // Encurtamento SÍNCRONO via API REST oficial meli.la para novas ofertas e pendentes sem link
-    const newItemsToShorten = candidates.filter((item) => !existingExternalIds.has(item.externalId));
-    const shortUrlMap = new Map<string, string>();
-
-    await mapWithConcurrency(newItemsToShorten.slice(0, 10), 3, async (item) => {
-      const cleanId = (item.externalId || "").replace(/^MLB-?/, "");
-      const fallbacks = cleanId
-        ? [
-            `https://produto.mercadolivre.com.br/MLB-${cleanId}`,
-            `https://produto.mercadolivre.com.br/MLB${cleanId}`,
-          ]
-        : [];
-      try {
-        const direct = await generateMeliShortLinkDetailed(item.originalUrl, undefined, fallbacks);
-        if (direct.shortUrl) {
-          shortUrlMap.set(item.externalId, direct.shortUrl);
-        }
-      } catch {
-        // segue
-      }
-    });
-
-    const existingPendingsWithoutShort = initialDb.offers
-      .filter((o) => o.status === "pendente" && !o.shortUrl)
-      .slice(0, 5);
-
-    await mapWithConcurrency(existingPendingsWithoutShort, 3, async (o) => {
-      const cleanId = (o.externalId || "").replace(/^MLB-?/, "");
-      const fallbacks = cleanId
-        ? [
-            `https://produto.mercadolivre.com.br/MLB-${cleanId}`,
-            `https://produto.mercadolivre.com.br/MLB${cleanId}`,
-          ]
-        : [];
-      try {
-        const direct = await generateMeliShortLinkDetailed(o.originalUrl, undefined, fallbacks);
-        if (direct.shortUrl) {
-          shortUrlMap.set(o.externalId, direct.shortUrl);
-        }
-      } catch {
-        // segue
-      }
-    });
-
-    const updatedDb = await updateDatabase((db) => {
-      for (const item of candidates) {
-        termsFound.add(item.categoryName);
-        const id = `mercadolivre:${item.externalId}`;
-
-        // Se foi excluído manualmente pelo usuário anteriormente, respeita o tombstone
-        if (manualTombstones.has(id)) {
-          diagnostics.skippedBlocked++;
-          continue;
-        }
-
-        const brand = extractBrand(item.title);
-
-        // 1. Aplica bloqueios manuais aprendidos
-        const { blocked, reason: blockReason } = isOfferBlocked(
-          {
-            title: item.title,
-            brand,
-            searchTerm: item.categoryName,
-          },
-          preferences
-        );
-
-        if (blocked) {
-          diagnostics.skippedBlocked++;
-          console.log(`[offers-updater] Oferta descartada por bloqueio manual (${blockReason}): "${item.title}"`);
-          continue;
-        }
-
-        const existing = db.offers.find((o) => o.id === id || o.externalId === item.externalId);
-        const newlyShortened = shortUrlMap.get(item.externalId);
-
-        if (existing) {
-          // Atualiza dados existentes sem alterar status
-          existing.title = item.title;
-          existing.brand = brand;
-          existing.thumbnail = item.thumbnail ?? existing.thumbnail;
-          existing.freeShipping = item.freeShipping;
-          existing.rating = item.rating ?? existing.rating ?? null;
-          existing.reviewsCount = item.reviewsCount ?? existing.reviewsCount ?? null;
-          existing.lastSeenAt = now;
-          existing.originalUrl = item.originalUrl || existing.originalUrl;
-          if (newlyShortened && !existing.shortUrl) {
-            existing.shortUrl = newlyShortened;
-            existing.shortUrlStatus = "pronto";
-            existing.shortUrlGeneratedAt = now;
-            existing.affiliateUrl = newlyShortened;
-          }
-
-          if (item.price !== existing.price) {
-            existing.price = item.price;
-            existing.originalPrice = item.originalPrice ?? existing.originalPrice ?? null;
-            existing.discountPercent = item.discountPercent;
-
-            const history: PriceHistoryItem[] = existing.priceHistory || [];
-            history.push({ price: item.price, recordedAt: now });
-            existing.priceHistory = history.slice(-30);
-          }
-
-          updatedCount++;
-        } else {
-          // Insere nova oferta válida com status 'pendente' e link meli.la já pronto
-          const defaultAffiliateUrl = buildAffiliateUrl(item.originalUrl);
-          const finalShortUrl = newlyShortened || null;
-          const finalAffiliateUrl = finalShortUrl || defaultAffiliateUrl;
-
-          db.offers.push({
-            id,
-            source: "mercadolivre",
-            externalId: item.externalId,
-            title: item.title,
-            thumbnail: item.thumbnail,
-            price: item.price,
-            originalPrice: item.originalPrice,
-            discountPercent: item.discountPercent,
-            currency: item.currency,
-            originalUrl: item.originalUrl,
-            freeShipping: item.freeShipping,
-            searchTerm: item.categoryName,
-            status: "pendente",
-            affiliateUrl: finalAffiliateUrl,
-            shortUrl: finalShortUrl,
-            shortUrlStatus: finalShortUrl ? "pronto" : "pendente",
-            coupon: null,
-            couponDescription: null,
-            rating: item.rating,
-            reviewsCount: item.reviewsCount,
-            sellerReputation: null,
-            commission: null,
-            opportunityScore: 80, // Score neutro e visível em Pendentes
-            opportunityReason: "Oferta encontrada agora",
-            priceHistory: [{ price: item.price, recordedAt: now }],
-            whatsappStatus: "rascunho",
-            createdAt: now,
-            updatedAt: now,
-            lastSeenAt: now,
-            statusChangedAt: now,
-            brand,
-            sellerName: "Mercado Livre",
-            preferenceScore: 0.5,
-            recommendationReason: "Oferta em destaque",
-            isExploration: false,
-          });
-
-          addedCount++;
-        }
-      }
-
-      // Atualiza também quaisquer outras ofertas no banco que foram encurtadas neste ciclo
-      for (const o of db.offers) {
-        if (!o.shortUrl && shortUrlMap.has(o.externalId)) {
-          const s = shortUrlMap.get(o.externalId)!;
-          o.shortUrl = s;
-          o.shortUrlStatus = "pronto";
-          o.shortUrlGeneratedAt = now;
-          o.affiliateUrl = s;
-        }
-      }
-
-      // Ordena pelo algoritmo de recomendação com exploração
-      const rankedOffers = rankOffersWithExploration(db.offers, feedbacks, preferences);
-      db.offers = rankedOffers;
-
-      const lastSearch: LastSearchInfo = {
-        at: now,
-        terms: Array.from(termsFound),
-        found: candidates.length,
-        added: addedCount,
-        updated: updatedCount,
-      };
-
-      db.lastSearch = lastSearch;
-
-      return {
-        offers: rankedOffers,
-        lastSearch,
-      };
-    });
-
-    // 5. Itens gravados/atualizados no banco
-    const etapa5_gravados_atualizados_banco = addedCount + updatedCount;
-
-    // 6. Itens retornados ao frontend
-    const etapa6_retornados_frontend = updatedDb.offers.length;
+    const scannerResult = await runOffersScanner();
 
     const stageCounts: PipelineStageCounts = {
-      etapa1_itens_retornados_api: rawCounters.etapa1,
-      etapa2_apos_preco_minimo_25: rawCounters.etapa2,
-      etapa3_apos_bloqueio_replicas: rawCounters.etapa3,
-      etapa4_apos_filtros_avaliacao: rawCounters.etapa4,
-      etapa5_gravados_atualizados_banco,
-      etapa6_retornados_frontend,
+      etapa1_itens_retornados_api: scannerResult.stageCounts.etapa1_itens_retornados_api,
+      etapa2_apos_preco_minimo_25: scannerResult.stageCounts.etapa2_apos_preco_minimo_80,
+      etapa3_apos_bloqueio_replicas: scannerResult.stageCounts.etapa3_apos_blacklist_e_replicas,
+      etapa4_apos_filtros_avaliacao: scannerResult.stageCounts.etapa4_apos_desconto_real_15,
+      etapa5_gravados_atualizados_banco: scannerResult.stageCounts.etapa5_gravados_atualizados_banco,
+      etapa6_retornados_frontend: scannerResult.stageCounts.etapa6_retornados_frontend,
     };
-
-    diagnostics.added = addedCount;
-    diagnostics.updated = updatedCount;
-
-    // REGISTRO OBRIGATÓRIO NO LOG DO SERVIDOR EM CADA ETAPA
-    console.log(`\n================ RELATÓRIO DO RADAR DE OFERTAS: ETAPAS ================`);
-    console.log(`Itens retornados pelo catálogo da API: ${diagnostics.found}`);
-    console.log(`1. Itens com anúncio e preço ativo: ${stageCounts.etapa1_itens_retornados_api}`);
-    console.log(`2. Itens após preço mínimo de R$25: ${stageCounts.etapa2_apos_preco_minimo_25} (${diagnostics.skippedPrice} < R$25)`);
-    console.log(`3. Itens após bloqueio de réplicas: ${stageCounts.etapa3_apos_bloqueio_replicas} (${diagnostics.skippedReplica} réplicas)`);
-    console.log(`4. Itens após filtros de avaliação: ${stageCounts.etapa4_apos_filtros_avaliacao}`);
-    console.log(`Descartes sem Buy Box (404 No winners found): ${diagnostics.skippedNoBuyBox}`);
-    console.log(`Descartes por bloqueio/tombstone: ${diagnostics.skippedBlocked}`);
-    console.log(`5. Itens gravados/atualizados no banco: ${stageCounts.etapa5_gravados_atualizados_banco} (${addedCount} novas ofertas pendentes, ${updatedCount} atualizadas)`);
-    console.log(`6. Itens retornados ao frontend: ${stageCounts.etapa6_retornados_frontend}`);
-    console.log(`========================================================================\n`);
-
-    // Dispara encurtamento automático meli.la para quaisquer novas ofertas pendentes
-    try {
-      enqueueMeliShorten();
-    } catch (shortErr) {
-      console.warn("[offers-updater] Falha ao disparar enfileirador de encurtamento:", shortErr);
-    }
 
     return {
       ok: true,
-      offers: updatedDb.offers,
-      lastSearch: updatedDb.lastSearch,
-      added: addedCount,
-      updated: updatedCount,
-      found: diagnostics.found,
-      skippedNoBuyBox: diagnostics.skippedNoBuyBox,
-      skippedBlocked: diagnostics.skippedBlocked,
-      skippedReplica: diagnostics.skippedReplica,
-      skippedPrice: diagnostics.skippedPrice,
-      errors: diagnostics.errors,
+      offers: scannerResult.offers,
+      lastSearch: scannerResult.lastSearch,
+      added: scannerResult.added,
+      updated: scannerResult.updated,
+      found: scannerResult.found,
+      skippedNoBuyBox: 0,
+      skippedBlocked: scannerResult.rejected.blacklistTerm,
+      skippedReplica: 0,
+      skippedPrice: scannerResult.rejected.minPrice,
+      errors: [],
       stageCounts,
     };
   } finally {
     isUpdatingInProgress = false;
   }
 }
+
+/** Alias para compatibilidade com chamadores antigos */
+export const updateOffersFromMercadoLivre = runRadarUpdate;
