@@ -4,7 +4,7 @@ import type { ApiError, Offer, OfferUpdate } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_FIELDS = ["status", "affiliateUrl", "coupon", "couponDescription"] as const;
+const ALLOWED_FIELDS = ["status", "affiliateUrl", "shortUrl", "shortUrlStatus", "coupon", "couponDescription"] as const;
 
 /**
  * PATCH /api/offers/:id — salva link de afiliado, cupom e/ou muda o status.

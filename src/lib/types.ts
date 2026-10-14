@@ -221,6 +221,7 @@ export interface OfferUpdate {
   status?: OfferStatus;
   affiliateUrl?: string | null;
   shortUrl?: string | null;
+  shortUrlStatus?: "pendente" | "gerando" | "pronto" | "falhou";
   coupon?: string | null;
   couponDescription?: string | null;
   whatsappStatus?: WhatsAppQueueStatus;

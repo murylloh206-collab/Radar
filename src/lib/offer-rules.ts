@@ -127,6 +127,10 @@ export function applyOfferUpdate(
     next.shortUrl = update.shortUrl?.trim() || null;
   }
 
+  if (update.shortUrlStatus !== undefined) {
+    next.shortUrlStatus = update.shortUrlStatus;
+  }
+
   if (update.whatsappStatus !== undefined) {
     next.whatsappStatus = update.whatsappStatus;
   }

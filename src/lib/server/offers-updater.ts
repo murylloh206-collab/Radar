@@ -12,6 +12,7 @@ import {
 } from "./recommendation-engine";
 import { getLearnedPreferences, getAllFeedbacks } from "./feedback-service";
 import { enqueueMeliShorten } from "./puppeteer-meli";
+import { generateMeliShortLinkDetailed } from "./meli-shortener";
 import type { LastSearchInfo, Offer, PriceHistoryItem } from "../types";
 
 /**
@@ -587,12 +588,73 @@ export async function runRadarUpdate(): Promise<RadarUpdateResult> {
       errors: [],
     };
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const output: R[] = new Array(items.length);
+  let index = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const current = index++;
+      output[current] = await fn(items[current]);
+    }
+  });
+  await Promise.all(workers);
+  return output;
+}
+
     const candidates = await collectProductsFromML(token, existingExternalIds, rawCounters, diagnostics);
 
     const now = new Date().toISOString();
     let addedCount = 0;
     let updatedCount = 0;
     const termsFound = new Set<string>();
+
+    // Encurtamento SÍNCRONO via API REST oficial meli.la para novas ofertas e pendentes sem link
+    const newItemsToShorten = candidates.filter((item) => !existingExternalIds.has(item.externalId));
+    const shortUrlMap = new Map<string, string>();
+
+    await mapWithConcurrency(newItemsToShorten.slice(0, 10), 3, async (item) => {
+      const cleanId = (item.externalId || "").replace(/^MLB-?/, "");
+      const fallbacks = cleanId
+        ? [
+            `https://produto.mercadolivre.com.br/MLB-${cleanId}`,
+            `https://produto.mercadolivre.com.br/MLB${cleanId}`,
+          ]
+        : [];
+      try {
+        const direct = await generateMeliShortLinkDetailed(item.originalUrl, undefined, fallbacks);
+        if (direct.shortUrl) {
+          shortUrlMap.set(item.externalId, direct.shortUrl);
+        }
+      } catch {
+        // segue
+      }
+    });
+
+    const existingPendingsWithoutShort = initialDb.offers
+      .filter((o) => o.status === "pendente" && !o.shortUrl)
+      .slice(0, 5);
+
+    await mapWithConcurrency(existingPendingsWithoutShort, 3, async (o) => {
+      const cleanId = (o.externalId || "").replace(/^MLB-?/, "");
+      const fallbacks = cleanId
+        ? [
+            `https://produto.mercadolivre.com.br/MLB-${cleanId}`,
+            `https://produto.mercadolivre.com.br/MLB${cleanId}`,
+          ]
+        : [];
+      try {
+        const direct = await generateMeliShortLinkDetailed(o.originalUrl, undefined, fallbacks);
+        if (direct.shortUrl) {
+          shortUrlMap.set(o.externalId, direct.shortUrl);
+        }
+      } catch {
+        // segue
+      }
+    });
 
     const updatedDb = await updateDatabase((db) => {
       for (const item of candidates) {
@@ -624,6 +686,7 @@ export async function runRadarUpdate(): Promise<RadarUpdateResult> {
         }
 
         const existing = db.offers.find((o) => o.id === id || o.externalId === item.externalId);
+        const newlyShortened = shortUrlMap.get(item.externalId);
 
         if (existing) {
           // Atualiza dados existentes sem alterar status
@@ -635,6 +698,12 @@ export async function runRadarUpdate(): Promise<RadarUpdateResult> {
           existing.reviewsCount = item.reviewsCount ?? existing.reviewsCount ?? null;
           existing.lastSeenAt = now;
           existing.originalUrl = item.originalUrl || existing.originalUrl;
+          if (newlyShortened && !existing.shortUrl) {
+            existing.shortUrl = newlyShortened;
+            existing.shortUrlStatus = "pronto";
+            existing.shortUrlGeneratedAt = now;
+            existing.affiliateUrl = newlyShortened;
+          }
 
           if (item.price !== existing.price) {
             existing.price = item.price;
@@ -648,8 +717,10 @@ export async function runRadarUpdate(): Promise<RadarUpdateResult> {
 
           updatedCount++;
         } else {
-          // Insere nova oferta válida com status 'pendente'
-          const affiliateUrl = buildAffiliateUrl(item.originalUrl);
+          // Insere nova oferta válida com status 'pendente' e link meli.la já pronto
+          const defaultAffiliateUrl = buildAffiliateUrl(item.originalUrl);
+          const finalShortUrl = newlyShortened || null;
+          const finalAffiliateUrl = finalShortUrl || defaultAffiliateUrl;
 
           db.offers.push({
             id,
@@ -665,9 +736,9 @@ export async function runRadarUpdate(): Promise<RadarUpdateResult> {
             freeShipping: item.freeShipping,
             searchTerm: item.categoryName,
             status: "pendente",
-            affiliateUrl,
-            shortUrl: null,
-            shortUrlStatus: "pendente",
+            affiliateUrl: finalAffiliateUrl,
+            shortUrl: finalShortUrl,
+            shortUrlStatus: finalShortUrl ? "pronto" : "pendente",
             coupon: null,
             couponDescription: null,
             rating: item.rating,
@@ -690,6 +761,17 @@ export async function runRadarUpdate(): Promise<RadarUpdateResult> {
           });
 
           addedCount++;
+        }
+      }
+
+      // Atualiza também quaisquer outras ofertas no banco que foram encurtadas neste ciclo
+      for (const o of db.offers) {
+        if (!o.shortUrl && shortUrlMap.has(o.externalId)) {
+          const s = shortUrlMap.get(o.externalId)!;
+          o.shortUrl = s;
+          o.shortUrlStatus = "pronto";
+          o.shortUrlGeneratedAt = now;
+          o.affiliateUrl = s;
         }
       }
 

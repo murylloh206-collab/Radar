@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatDateTime, formatPrice, largerThumbnail } from "@/lib/format";
 import { LIMITS, validateAffiliateUrl } from "@/lib/offer-rules";
 import { formatWhatsAppMessage } from "@/lib/whatsapp-format";
@@ -15,10 +15,12 @@ import {
 import {
   IconAlert,
   IconBan,
+  IconBolt,
   IconBrain,
   IconCheck,
   IconExternal,
   IconImage,
+  IconLink,
   IconSpinner,
   IconThumbDown,
   IconThumbUp,
@@ -71,13 +73,22 @@ export function OfferCard({
   isSelected = false,
   onToggleSelect,
 }: OfferCardProps) {
-  const [affiliateUrl, setAffiliateUrl] = useState(offer.affiliateUrl ?? "");
+  const [affiliateUrl, setAffiliateUrl] = useState(offer.shortUrl || offer.affiliateUrl || "");
   const [coupon, setCoupon] = useState(offer.coupon ?? "");
   const [couponDescription, setCouponDescription] = useState(offer.couponDescription ?? "");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [busy, setBusy] = useState<OfferStatus | "salvar" | "excluir" | "feedback" | null>(null);
+  const [shortening, setShortening] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
+
+  // Sincroniza estados caso a prop offer seja atualizada pelo pai ou ciclo de coleta
+  useEffect(() => {
+    setAffiliateUrl(offer.shortUrl || offer.affiliateUrl || "");
+    setCoupon(offer.coupon ?? "");
+    setCouponDescription(offer.couponDescription ?? "");
+  }, [offer.shortUrl, offer.affiliateUrl, offer.coupon, offer.couponDescription]);
 
   // Estados do Modal de Rejeição e Bloqueios
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -103,10 +114,49 @@ export function OfferCard({
     coupon.trim().toUpperCase() !== (offer.coupon ?? "") ||
     couponDescription.trim() !== (offer.couponDescription ?? "");
 
+  async function handleCopyShortLink() {
+    const linkToCopy = offer.shortUrl || (affiliateUrl.trim().startsWith("https://meli.la/") ? affiliateUrl.trim() : null) || activeLink;
+    try {
+      await navigator.clipboard.writeText(linkToCopy);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2200);
+    } catch {
+      setError("Não foi possível copiar o link.");
+    }
+  }
+
+  async function handleGenerateShortLink() {
+    setShortening(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/offers/${encodeURIComponent(offer.id)}/shorten`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.shortUrl) {
+        throw new Error(data.error || "Não foi possível gerar link meli.la");
+      }
+      setAffiliateUrl(data.shortUrl);
+      await onUpdate(offer.id, {
+        shortUrl: data.shortUrl,
+        affiliateUrl: data.shortUrl,
+        shortUrlStatus: "pronto",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao gerar link meli.la.");
+    } finally {
+      setShortening(false);
+    }
+  }
+
   async function handleCopyWhatsApp() {
+    const activeShort =
+      offer.shortUrl ||
+      (affiliateUrl.trim().startsWith("https://meli.la/") ? affiliateUrl.trim() : undefined);
     const text = formatWhatsAppMessage({
       ...offer,
-      affiliateUrl: affiliateUrl.trim() || offer.affiliateUrl,
+      shortUrl: activeShort || offer.shortUrl,
+      affiliateUrl: activeShort || affiliateUrl.trim() || offer.affiliateUrl,
       coupon: coupon.trim() || offer.coupon,
       couponDescription: couponDescription.trim() || offer.couponDescription,
     });
@@ -130,8 +180,13 @@ export function OfferCard({
       return;
     }
 
+    const effectiveShortUrl =
+      offer.shortUrl ||
+      (affiliateUrl.trim().startsWith("https://meli.la/") ? affiliateUrl.trim() : null);
+
     const update: OfferUpdate = {
       affiliateUrl: affiliateUrl.trim() || null,
+      shortUrl: effectiveShortUrl,
       coupon: coupon.trim() || null,
       couponDescription: couponDescription.trim() || null,
     };
@@ -464,17 +519,66 @@ export function OfferCard({
           </div>
         </div>
 
-        {/* Avisos de link meli.la */}
-        {offer.shortUrlStatus === "falhou" && (
-          <div className="rounded bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 border border-rose-500/20">
-            Link meli.la indisponível após 2 tentativas. Link oficial preservado.
-          </div>
-        )}
-        {offer.shortUrlStatus === "gerando" && (
-          <div className="rounded bg-sky-500/10 px-2 py-1 text-[10px] text-sky-300 border border-sky-500/20 flex items-center gap-1.5">
-            <IconSpinner width={12} height={12} /> Gerando meli.la na fila segura…
-          </div>
-        )}
+        {/* Bloco de Link Curto meli.la com Destaque e Cópia Imediata */}
+        <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2.5 text-xs shadow-inner">
+          {offer.shortUrl ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/40">
+                  <IconLink width={11} height={11} /> meli.la
+                </span>
+                <span className="font-mono text-xs text-slate-100 font-semibold truncate select-all">
+                  {offer.shortUrl}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyShortLink}
+                className={`shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition shadow-sm ${
+                  copiedLink
+                    ? "bg-emerald-500/30 text-emerald-200 border border-emerald-400"
+                    : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30"
+                }`}
+                title="Copiar link meli.la"
+              >
+                {copiedLink ? (
+                  <>
+                    <IconCheck width={12} height={12} /> Copiado!
+                  </>
+                ) : (
+                  <>Copiar link</>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[11px] text-slate-300 truncate">
+                {shortening ? (
+                  <span className="inline-flex items-center gap-1 text-sky-300 font-medium">
+                    <IconSpinner width={12} height={12} /> Gerando meli.la oficial…
+                  </span>
+                ) : offer.shortUrlStatus === "gerando" ? (
+                  <span className="inline-flex items-center gap-1 text-sky-300 font-medium">
+                    <IconSpinner width={12} height={12} /> Gerando na fila segura…
+                  </span>
+                ) : offer.shortUrlStatus === "falhou" ? (
+                  <span className="text-amber-300 text-[11px]">Link meli.la não gerado (usando padrão)</span>
+                ) : (
+                  <span className="text-slate-400">Link encurtado pendente</span>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={shortening || busy !== null}
+                onClick={handleGenerateShortLink}
+                className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/40 px-2 py-1 text-[11px] font-bold text-teal-200 transition disabled:opacity-50"
+              >
+                {shortening ? <IconSpinner width={11} height={11} /> : <IconBolt width={11} height={11} />}
+                Gerar meli.la
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Status de Envio Automático */}
         {offer.whatsappStatus === "falhou" && (
