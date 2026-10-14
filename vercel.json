@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/dispatch-offer",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/update-offers",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

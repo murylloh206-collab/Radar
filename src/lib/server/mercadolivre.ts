@@ -156,7 +156,7 @@ export async function hasActiveMLConnection(): Promise<boolean> {
   return false;
 }
 
-async function getAccessToken(forceRefresh = false): Promise<string> {
+export async function getAccessToken(forceRefresh = false): Promise<string> {
   const stored = await getStoredMLTokens();
   if (stored) {
     if (!forceRefresh && stored.expiresAt > Date.now()) {

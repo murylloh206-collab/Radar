@@ -31,8 +31,22 @@ export async function patchOffer(id: string, update: OfferUpdate): Promise<Offer
   return handle<Offer>(res);
 }
 
+export async function updateOffers(): Promise<{
+  ok: boolean;
+  offers: Offer[];
+  lastSearch: SearchResponse["lastSearch"];
+  added: number;
+  updated: number;
+}> {
+  const res = await fetch("/api/ofertas/atualizar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handle(res);
+}
+
 export async function discoverOffers(categoryIds?: string[]): Promise<SearchResponse> {
-  const res = await fetch("/api/offers/discover", {
+  const res = await fetch("/api/ofertas/atualizar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ categoryIds }),

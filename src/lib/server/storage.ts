@@ -70,7 +70,20 @@ export interface DatabaseShape {
   automation?: AutomationSettings;
   scheduler?: SchedulerSettings;
   tombstones?: TombstoneRecord[];
+  feedbacks?: import("../types").OfferFeedback[];
+  learnedPreferences?: import("../types").LearnedPreferences;
 }
+
+export const DEFAULT_LEARNED_PREFERENCES: import("../types").LearnedPreferences = {
+  blockedBrands: [],
+  blockedSellers: [],
+  blockedKeywords: [],
+  blockedCategories: [],
+  featureWeights: {},
+  totalApprovals: 0,
+  totalRejections: 0,
+  lastTrainedAt: null,
+};
 
 const EMPTY_DB: DatabaseShape = {
   version: 1,
@@ -81,6 +94,8 @@ const EMPTY_DB: DatabaseShape = {
   automation: DEFAULT_AUTOMATION,
   scheduler: DEFAULT_SCHEDULER_SETTINGS,
   tombstones: [],
+  feedbacks: [],
+  learnedPreferences: DEFAULT_LEARNED_PREFERENCES,
 };
 
 function isProduction(): boolean {

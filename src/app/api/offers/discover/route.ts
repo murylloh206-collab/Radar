@@ -1,27 +1,23 @@
 import { NextResponse } from "next/server";
 import { MercadoLivreError } from "@/lib/server/mercadolivre";
-import { QueueCapacityLimitError, RadarBusyError, runAutoDiscovery } from "@/lib/server/offers-service";
+import { runRadarUpdate } from "@/lib/server/offers-updater";
 import type { ApiError, SearchResponse } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/offers/discover
- * Executa a descoberta automática pelas categorias prioritárias do Radar de Ofertas
- * com respeito estrito ao limite de 500 ofertas pendentes.
+ * Ponto de entrada de descoberta compatível com o fluxo de atualização do Radar.
  */
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const body = (await request.json().catch(() => ({}))) as { categoryIds?: string[] };
-    const result = await runAutoDiscovery(body.categoryIds);
-    return NextResponse.json<SearchResponse>(result);
+    const result = await runRadarUpdate();
+    return NextResponse.json<SearchResponse>({
+      offers: result.offers,
+      lastSearch: result.lastSearch,
+      errors: [],
+    });
   } catch (err) {
-    if (err instanceof QueueCapacityLimitError) {
-      return NextResponse.json<ApiError>({ error: err.message }, { status: 429 });
-    }
-    if (err instanceof RadarBusyError) {
-      return NextResponse.json<ApiError>({ error: err.message }, { status: 409 });
-    }
     if (err instanceof MercadoLivreError) {
       return NextResponse.json<ApiError>({ error: err.message }, { status: err.status ?? 502 });
     }
@@ -30,3 +26,4 @@ export async function POST(request: Request) {
     return NextResponse.json<ApiError>({ error: message }, { status: 500 });
   }
 }
+

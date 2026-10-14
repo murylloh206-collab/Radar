@@ -16,6 +16,8 @@ import { getAlgorithmSettings } from "./scoring-rules";
 import { getSchedulerSettings, readDatabase, updateDatabase } from "./storage";
 import { calculateNextScheduledSlot } from "./scheduler-engine";
 import { applyOfferUpdate, calcDiscountPercent } from "../offer-rules";
+import { rankOffersWithExploration } from "./recommendation-engine";
+import { getLearnedPreferences, getAllFeedbacks } from "./feedback-service";
 import type {
   AlgorithmSettings,
   LastSearchInfo,
@@ -107,9 +109,13 @@ export async function listOffers() {
 
   const queueStats = computeQueueStats(db.offers);
   const algorithmSettings = await getAlgorithmSettings();
+  const preferences = await getLearnedPreferences();
+  const feedbacks = await getAllFeedbacks();
+
+  const rankedOffers = rankOffersWithExploration(db.offers, feedbacks, preferences);
 
   return {
-    offers: sortOffers(db.offers),
+    offers: rankedOffers,
     lastSearch: db.lastSearch,
     queueStats,
     algorithmSettings,

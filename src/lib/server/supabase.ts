@@ -92,6 +92,14 @@ export function mapDbToOffer(row: Record<string, unknown>): Offer {
     updatedAt: (row.updated_at as string) || new Date().toISOString(),
     lastSeenAt: (row.last_seen_at as string) || new Date().toISOString(),
     statusChangedAt: (row.status_changed_at as string) || null,
+    rejectionDetail: row.rejection_detail ? (row.rejection_detail as Offer["rejectionDetail"]) : undefined,
+    scoreAudit: row.score_audit ? (row.score_audit as Offer["scoreAudit"]) : undefined,
+    productFingerprint: (row.product_fingerprint as string) || undefined,
+    brand: (row.brand as string) || null,
+    sellerName: (row.seller_name as string) || null,
+    preferenceScore: row.preference_score != null ? Number(row.preference_score) : null,
+    recommendationReason: (row.recommendation_reason as string) || null,
+    isExploration: Boolean(row.is_exploration),
   };
 }
 
@@ -138,6 +146,14 @@ export function mapOfferToDb(offer: Offer): Record<string, unknown> {
     updated_at: offer.updatedAt,
     last_seen_at: offer.lastSeenAt,
     status_changed_at: offer.statusChangedAt,
+    rejection_detail: offer.rejectionDetail || null,
+    score_audit: offer.scoreAudit || null,
+    product_fingerprint: offer.productFingerprint || null,
+    brand: offer.brand || null,
+    seller_name: offer.sellerName || null,
+    preference_score: offer.preferenceScore ?? null,
+    recommendation_reason: offer.recommendationReason || null,
+    is_exploration: offer.isExploration ?? false,
   };
 }
 

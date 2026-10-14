@@ -451,6 +451,18 @@ export function evaluateCandidateOffer(input: EvaluationInput): EvaluationResult
       }
     }
 
+    const titleLower = candidate.title.toLowerCase();
+    const priorityKeywords = [
+      "nike", "adidas", "puma", "kappa", "mizuno", "asics", "olympikus", "fila", "under armour",
+      "creatina", "whey", "suplemento", "max titanium", "integralmedica", "growth",
+      "lattafa", "armaf", "perfume arabe", "importado", "eau de parfum",
+      "corrida", "academia", "fitness", "moletom", "corta vento"
+    ];
+    if (priorityKeywords.some((pk) => titleLower.includes(pk))) {
+      pts += 5;
+      notes.push("Marca/Categoria prioritária");
+    }
+
     const source: FieldDataSource = notes.length > 0 ? "confirmado" : "nao_aplicavel";
     const detail = notes.length > 0 ? notes.join(" · ") : "Nenhum sinal adicional aplicável";
 

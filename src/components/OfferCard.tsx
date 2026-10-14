@@ -5,12 +5,23 @@ import { useState } from "react";
 import { formatDateTime, formatPrice, largerThumbnail } from "@/lib/format";
 import { LIMITS, validateAffiliateUrl } from "@/lib/offer-rules";
 import { formatWhatsAppMessage } from "@/lib/whatsapp-format";
-import type { Offer, OfferStatus, OfferUpdate } from "@/lib/types";
 import {
+  REJECTION_REASONS,
+  type Offer,
+  type OfferStatus,
+  type OfferUpdate,
+  type RejectionReason,
+} from "@/lib/types";
+import {
+  IconAlert,
+  IconBan,
+  IconBrain,
   IconCheck,
   IconExternal,
   IconImage,
   IconSpinner,
+  IconThumbDown,
+  IconThumbUp,
   IconTruck,
   IconX,
 } from "./icons";
@@ -64,11 +75,20 @@ export function OfferCard({
   const [coupon, setCoupon] = useState(offer.coupon ?? "");
   const [couponDescription, setCouponDescription] = useState(offer.couponDescription ?? "");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [busy, setBusy] = useState<OfferStatus | "salvar" | "excluir" | null>(null);
+  const [busy, setBusy] = useState<OfferStatus | "salvar" | "excluir" | "feedback" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
 
+  // Estados do Modal de Rejeição e Bloqueios
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedReason, setSelectedReason] = useState<RejectionReason | "">("");
+  const [blockMenuOpen, setBlockMenuOpen] = useState(false);
+
   const styles = STATUS_STYLES[offer.status] || STATUS_STYLES.pendente;
+
+  // Marca e Vendedor da oferta
+  const brandDisplay = offer.brand || "Marca";
+  const sellerDisplay = offer.sellerName || "Mercado Livre";
 
   // Link ativo preferencial: link curto se pronto, senão affiliateUrl
   const activeLink = offer.shortUrl || affiliateUrl.trim() || offer.originalUrl;
@@ -127,6 +147,160 @@ export function OfferCard({
     }
   }
 
+  /**
+   * Registra a aprovação com feedback positivo para o aprendizado de preferências
+   */
+  async function handleApprove() {
+    setError(null);
+    setBusy("aprovado");
+
+    try {
+      // 1. Envia feedback positivo para o motor de aprendizado
+      await fetch("/api/offers/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerId: offer.id,
+          externalId: offer.externalId,
+          action: "aprovar",
+          customBrand: offer.brand,
+          customSeller: offer.sellerName,
+          offerData: offer,
+        }),
+      }).catch((fbErr) => {
+        console.warn("[OfferCard] Feedback offline ou transitório:", fbErr);
+      });
+
+      // 2. Atualiza o status da oferta no painel
+      await submit("aprovado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao aprovar oferta.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Abre o modal de motivo obrigatório para rejeição
+   */
+  function handleOpenRejectModal() {
+    setSelectedReason("");
+    setRejectModalOpen(true);
+  }
+
+  /**
+   * Confirma a rejeição com o motivo obrigatório selecionado
+   */
+  async function handleConfirmRejection() {
+    if (!selectedReason) {
+      setError("Por favor, selecione um dos motivos para rejeitar.");
+      return;
+    }
+
+    setBusy("rejeitado");
+    setRejectModalOpen(false);
+
+    try {
+      // 1. Envia feedback de rejeição com motivo para o motor de aprendizado
+      await fetch("/api/offers/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerId: offer.id,
+          externalId: offer.externalId,
+          action: "rejeitar",
+          reason: selectedReason,
+          customBrand: offer.brand,
+          customSeller: offer.sellerName,
+          offerData: offer,
+        }),
+      }).catch((fbErr) => {
+        console.warn("[OfferCard] Feedback offline ou transitório:", fbErr);
+      });
+
+      // 2. Atualiza status no painel
+      await submit("rejeitado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao rejeitar oferta.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Bloqueia permanentemente a marca da oferta
+   */
+  async function handleBlockBrand() {
+    const brand = brandDisplay;
+    if (!brand || brand === "Genérica") {
+      alert("Esta oferta não possui uma marca identificada específica para bloqueio.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Bloquear a marca "${brand}" permanentemente?\n\nO Radar nunca mais exibirá anúncios desta marca.`
+    );
+    if (!confirmed) return;
+
+    setBusy("rejeitado");
+    setBlockMenuOpen(false);
+
+    try {
+      await fetch("/api/offers/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerId: offer.id,
+          externalId: offer.externalId,
+          action: "bloquear_marca",
+          reason: "marca_indesejada",
+          customBrand: brand,
+          offerData: offer,
+        }),
+      });
+
+      await submit("rejeitado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao bloquear marca.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Bloqueia permanentemente o vendedor da oferta
+   */
+  async function handleBlockSeller() {
+    const seller = sellerDisplay;
+    const confirmed = window.confirm(
+      `Bloquear o vendedor "${seller}" permanentemente?\n\nO Radar nunca mais exibirá anúncios deste vendedor.`
+    );
+    if (!confirmed) return;
+
+    setBusy("rejeitado");
+    setBlockMenuOpen(false);
+
+    try {
+      await fetch("/api/offers/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerId: offer.id,
+          externalId: offer.externalId,
+          action: "bloquear_vendedor",
+          customSeller: seller,
+          offerData: offer,
+        }),
+      });
+
+      await submit("rejeitado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao bloquear vendedor.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleDeletePermanently() {
     if (!onDelete) return;
     const confirmed = window.confirm(
@@ -144,15 +318,10 @@ export function OfferCard({
   }
 
   const fieldId = (name: string) => `${name}-${offer.externalId}`;
-  const score = offer.opportunityScore ?? 0;
-  const scoreColor =
-    score >= 80
-      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-      : score >= 65
-      ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
-      : score >= 50
-      ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-      : "bg-rose-500/20 text-rose-300 border-rose-500/40";
+
+  // Afinidade / Score de preferência
+  const prefScorePercent =
+    typeof offer.preferenceScore === "number" ? Math.round(offer.preferenceScore * 100) : null;
 
   return (
     <article
@@ -182,36 +351,65 @@ export function OfferCard({
           </div>
         )}
 
-        {/* Badges de Desconto e Score */}
-        <div className={`absolute ${(offer.status === "rejeitado" || offer.status === "aprovado") && onToggleSelect ? "left-10" : "left-2.5"} top-2.5 flex flex-col gap-1`}>
+        {/* Badges de Desconto e Identificação */}
+        <div
+          className={`absolute ${
+            (offer.status === "rejeitado" || offer.status === "aprovado") && onToggleSelect
+              ? "left-10"
+              : "left-2.5"
+          } top-2.5 flex flex-col gap-1 z-10`}
+        >
           {offer.discountPercent && offer.discountPercent > 0 ? (
-            <span className="rounded-lg bg-emerald-600 px-2 py-0.5 text-xs font-black text-white shadow-md">
+            <span className="rounded-lg bg-emerald-600 px-2.5 py-0.5 text-xs font-black text-white shadow-md">
               -{offer.discountPercent}%
             </span>
+          ) : (
+            <span className="rounded-lg bg-teal-600/95 border border-teal-400/30 px-2 py-0.5 text-[11px] font-bold text-white shadow-md">
+              Oferta encontrada agora
+            </span>
+          )}
+
+          {/* Badge de Recomendação Inteligente */}
+          {offer.isExploration || offer.recommendationReason === "Novo teste de categoria" ? (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-purple-700/95 border border-purple-400/40 px-2 py-0.5 text-[10px] font-bold text-purple-100 shadow-md">
+              ✨ Novo teste de categoria
+            </span>
+          ) : offer.recommendationReason === "Parecido com ofertas que você aprovou" ? (
+            <span className="inline-flex items-center gap-1 rounded-lg bg-teal-800/95 border border-teal-400/40 px-2 py-0.5 text-[10px] font-bold text-teal-100 shadow-md">
+              <IconBrain width={11} height={11} /> Parecido com o que você aprovou
+            </span>
           ) : null}
-          <span className={`rounded-lg px-2 py-0.5 text-[11px] font-black border shadow-md ${scoreColor}`}>
-            Score {score}/100
-          </span>
         </div>
 
-        <div className="absolute right-2.5 top-2.5">
+        <div className="absolute right-2.5 top-2.5 z-10">
           <StatusBadge status={offer.status} />
         </div>
 
         {offer.freeShipping && (
-          <span className="absolute bottom-2 left-2.5 inline-flex items-center gap-1 rounded-full bg-ink-950/85 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+          <span className="absolute bottom-2 left-2.5 inline-flex items-center gap-1 rounded-full bg-ink-950/85 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 z-10">
             <IconTruck width={11} height={11} /> Frete grátis
+          </span>
+        )}
+
+        {prefScorePercent !== null && prefScorePercent >= 70 && (
+          <span className="absolute bottom-2 right-2.5 inline-flex items-center gap-1 rounded-full bg-ink-950/85 border border-teal-500/30 px-2 py-0.5 text-[10px] font-semibold text-teal-300 z-10">
+            {prefScorePercent}% afinidade
           </span>
         )}
       </div>
 
-      {/* Conteúdo compacto */}
+      {/* Conteúdo do Card */}
       <div className="flex flex-1 flex-col gap-2.5 p-3.5 sm:p-4">
-        {/* Motivo de recomendação ou rejeição */}
+        {/* Marca, Categoria e Verificação */}
         <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <span className="truncate font-medium text-amber-300/90">
-            {offer.opportunityReason || `Oportunidade · ${offer.searchTerm}`}
-          </span>
+          <div className="truncate flex items-center gap-1.5 font-medium">
+            <span className="font-bold text-teal-300">
+              {brandDisplay !== "Genérica" ? brandDisplay : offer.searchTerm || "Geral"}
+            </span>
+            {brandDisplay !== "Genérica" && offer.searchTerm && (
+              <span className="text-slate-500">• {offer.searchTerm}</span>
+            )}
+          </div>
           <span className="shrink-0 text-[10px] text-slate-500" title="Última verificação de preço">
             {formatDateTime(offer.lastSeenAt)}
           </span>
@@ -222,7 +420,9 @@ export function OfferCard({
           <div className="rounded-lg bg-rose-500/10 border border-rose-500/25 p-2 text-xs text-rose-300">
             <strong className="block font-semibold">Motivo da Rejeição:</strong>
             <p className="mt-0.5 text-[11px] text-rose-200">
-              {offer.rejectionDetail?.reason || offer.opportunityReason || "Critérios mínimos eliminatórios não atendidos."}
+              {offer.rejectionDetail?.reason ||
+                offer.opportunityReason ||
+                "Rejeitado pelo usuário ou critérios mínimos não atendidos."}
             </p>
           </div>
         )}
@@ -241,12 +441,10 @@ export function OfferCard({
             <span className="text-xs text-slate-400 line-through">
               {formatPrice(offer.originalPrice, offer.currency)}
             </span>
-          ) : (
-            <span className="text-[11px] text-slate-500">preço anterior indisponível</span>
-          )}
+          ) : null}
         </div>
 
-        {/* Avaliação e Origem */}
+        {/* Avaliação e Vendedor */}
         <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] py-1 border-y border-white/5 text-slate-300">
           <div>
             {typeof offer.rating === "number" && offer.rating > 0 ? (
@@ -258,14 +456,15 @@ export function OfferCard({
               <span className="text-slate-500">Avaliação indisponível</span>
             )}
           </div>
-          <div>
-            <span className="font-semibold text-slate-400">
-              Provedor: {offer.source === "mercadolivre" ? "Mercado Livre" : "Shopee"}
+          <div className="truncate max-w-[170px] text-right">
+            <span className="text-slate-400">Vendedor: </span>
+            <span className="font-semibold text-slate-300" title={sellerDisplay}>
+              {sellerDisplay}
             </span>
           </div>
         </div>
 
-        {/* Aviso de link meli.la se em processamento ou erro */}
+        {/* Avisos de link meli.la */}
         {offer.shortUrlStatus === "falhou" && (
           <div className="rounded bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300 border border-rose-500/20">
             Link meli.la indisponível após 2 tentativas. Link oficial preservado.
@@ -296,7 +495,7 @@ export function OfferCard({
             onClick={() => setDetailsOpen(!detailsOpen)}
             className="text-xs font-semibold text-slate-400 hover:text-slate-200 transition underline-offset-2"
           >
-            {detailsOpen ? "▲ Ocultar auditoria e cupom" : "▼ Ver auditoria do score, cupom e links"}
+            {detailsOpen ? "▲ Ocultar auditoria e links" : "▼ Ver auditoria, cupom e links"}
           </button>
 
           {detailsOpen && (
@@ -310,7 +509,10 @@ export function OfferCard({
                   </div>
                   <div className="space-y-1 text-[10px]">
                     {offer.scoreAudit.components.map((comp) => (
-                      <div key={comp.name} className="flex items-center justify-between py-0.5 border-b border-white/[0.03]">
+                      <div
+                        key={comp.name}
+                        className="flex items-center justify-between py-0.5 border-b border-white/[0.03]"
+                      >
                         <span className="text-slate-300">{comp.name}:</span>
                         <div className="flex items-center gap-1.5">
                           <span className="text-slate-400">{comp.detail}</span>
@@ -330,7 +532,10 @@ export function OfferCard({
               )}
 
               <div>
-                <label htmlFor={fieldId("afiliado")} className="block text-[11px] font-semibold text-slate-300 mb-1">
+                <label
+                  htmlFor={fieldId("afiliado")}
+                  className="block text-[11px] font-semibold text-slate-300 mb-1"
+                >
                   Link de afiliado
                 </label>
                 <input
@@ -385,7 +590,7 @@ export function OfferCard({
                   rel="noopener noreferrer"
                   className="text-[11px] text-sky-400 hover:underline inline-flex items-center gap-1"
                 >
-                  Link original na loja <IconExternal width={10} height={10} />
+                  Link original no Mercado Livre <IconExternal width={10} height={10} />
                 </a>
                 {dirty && (
                   <button
@@ -403,47 +608,42 @@ export function OfferCard({
         </div>
 
         {error && (
-          <p role="alert" className="rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 ring-1 ring-rose-400/20">
+          <p
+            role="alert"
+            className="rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300 ring-1 ring-rose-400/20"
+          >
             {error}
           </p>
         )}
 
-        {/* AÇÕES PRINCIPAIS MOBILE-FIRST */}
+        {/* AÇÕES PRINCIPAIS */}
         <div className="mt-auto space-y-2 pt-2">
-          {/* BOTÃO 'TESTAR LINK' */}
+          {/* BOTÃO 'ABRIR OFERTA' */}
           <a
-            href={hasAffiliate ? activeLink : undefined}
+            href={activeLink || offer.originalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={(e) => {
-              if (!hasAffiliate) {
-                e.preventDefault();
-                setError("Nenhum link de afiliado disponível para testar.");
-              }
-            }}
-            className={`flex w-full items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-bold transition ${
-              hasAffiliate
-                ? "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
-                : "border-slate-700 bg-slate-800/40 text-slate-500 cursor-not-allowed"
-            }`}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/20"
           >
-            <IconExternal width={13} height={13} /> Testar link
+            <IconExternal width={13} height={13} /> Abrir oferta no Mercado Livre
           </a>
 
-          {/* Linha com botões de decisão */}
-          <div className="flex gap-2">
+          {/* LINHA PRINCIPAL: GOSTEI / APROVAR | REJEITAR */}
+          <div className="flex items-center gap-2">
+            {/* BOTÃO REJEITAR (OBRIGA MOTIVO) */}
             {offer.status !== "rejeitado" && (
               <button
                 type="button"
                 id={fieldId("rejeitar")}
                 disabled={busy !== null}
-                onClick={() => submit("rejeitado")}
-                className="flex-1 rounded-xl border border-rose-400/25 py-2.5 text-xs font-bold text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
+                onClick={handleOpenRejectModal}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/35 bg-rose-500/10 py-2.5 text-xs font-bold text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50"
               >
-                Rejeitar
+                <IconThumbDown width={14} height={14} /> Rejeitar
               </button>
             )}
 
+            {/* BOTÃO EXCLUIR DEFINITIVO (SE JÁ REJEITADO) */}
             {offer.status === "rejeitado" && onDelete && (
               <button
                 type="button"
@@ -456,31 +656,25 @@ export function OfferCard({
               </button>
             )}
 
-            {offer.status !== "pendente" && (
-              <button
-                type="button"
-                id={fieldId("pendente")}
-                disabled={busy !== null}
-                onClick={() => submit("pendente")}
-                className="flex-1 rounded-xl border border-amber-400/25 py-2.5 text-xs font-bold text-amber-300 transition hover:bg-amber-400/10 disabled:opacity-50"
-              >
-                Pendente
-              </button>
-            )}
-
+            {/* BOTÃO 'GOSTEI / APROVAR' (COM APRENDIZADO DE PREFERÊNCIAS) */}
             {offer.status !== "aprovado" && offer.status !== "publicado" && (
               <button
                 type="button"
-                id={fieldId("aprovar")}
+                id={fieldId("gostei-aprovar")}
                 disabled={busy !== null || !canApprove}
-                onClick={() => submit("aprovado")}
+                onClick={handleApprove}
                 className="flex-[1.5] flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-950/40 transition hover:brightness-110 disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400"
               >
-                {busy === "aprovado" ? <IconSpinner width={14} height={14} /> : <IconCheck width={14} height={14} />}
-                Aprovar
+                {busy === "aprovado" ? (
+                  <IconSpinner width={14} height={14} />
+                ) : (
+                  <IconThumbUp width={14} height={14} />
+                )}
+                Gostei / Aprovar
               </button>
             )}
 
+            {/* BOTÃO MARCAR PUBLICADO */}
             {offer.status === "aprovado" && (
               <button
                 type="button"
@@ -494,7 +688,37 @@ export function OfferCard({
             )}
           </div>
 
-          {/* Botão de Copiar para o WhatsApp (quando aprovado ou publicado) */}
+          {/* BOTÕES DE BLOQUEIO DIRETO: MARCA & VENDEDOR */}
+          <div className="relative pt-0.5">
+            <button
+              type="button"
+              onClick={() => setBlockMenuOpen(!blockMenuOpen)}
+              className="text-[11px] text-slate-400 hover:text-rose-300 transition flex items-center gap-1"
+            >
+              <IconBan width={12} height={12} /> Bloquear marca ou vendedor…
+            </button>
+
+            {blockMenuOpen && (
+              <div className="mt-1.5 rounded-xl border border-rose-500/30 bg-ink-950/95 backdrop-blur-md p-2 space-y-1.5 text-xs shadow-xl animate-fade-in z-20">
+                <button
+                  type="button"
+                  onClick={handleBlockBrand}
+                  className="w-full text-left rounded-lg px-2.5 py-1.5 text-rose-300 hover:bg-rose-500/20 font-medium transition flex items-center justify-between"
+                >
+                  <span>🚫 Nunca mostrar esta marca ({brandDisplay})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBlockSeller}
+                  className="w-full text-left rounded-lg px-2.5 py-1.5 text-rose-300 hover:bg-rose-500/20 font-medium transition flex items-center justify-between border-t border-white/5 pt-1.5"
+                >
+                  <span>🚫 Nunca mostrar este vendedor ({sellerDisplay})</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* BOTÃO DE COPIAR PARA O WHATSAPP (QUANDO APROVADO OU PUBLICADO) */}
           {(offer.status === "aprovado" || offer.status === "publicado") && (
             <button
               type="button"
@@ -511,14 +735,80 @@ export function OfferCard({
                   <IconCheck width={14} height={14} /> Mensagem do WhatsApp Copiada! 🎉
                 </>
               ) : (
-                <>
-                  Copiar Mensagem para WhatsApp
-                </>
+                <>Copiar Mensagem para WhatsApp</>
               )}
             </button>
           )}
         </div>
       </div>
+
+      {/* MODAL OBRIGATÓRIO DE MOTIVO DA REJEIÇÃO */}
+      {rejectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="glass ring-1 ring-white/10 max-w-md w-full rounded-2xl p-5 shadow-2xl bg-ink-950 text-slate-100 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h4 className="text-base font-bold text-white flex items-center gap-2">
+                  <IconThumbDown width={18} height={18} className="text-rose-400" />
+                  Por que você está rejeitando?
+                </h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  Obrigatório: sua resposta ensina o algoritmo a calibrar as próximas ofertas para o seu gosto.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejectModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1"
+                aria-label="Fechar"
+              >
+                <IconX width={18} height={18} />
+              </button>
+            </div>
+
+            {/* SELEÇÃO DOS 7 MOTIVOS OBRIGATÓRIOS */}
+            <div className="space-y-1.5 py-1">
+              {REJECTION_REASONS.map((reason) => {
+                const isSelectedReason = selectedReason === reason.id;
+                return (
+                  <button
+                    key={reason.id}
+                    type="button"
+                    onClick={() => setSelectedReason(reason.id)}
+                    className={`w-full text-left rounded-xl px-3.5 py-2.5 text-xs font-semibold transition border flex items-center justify-between ${
+                      isSelectedReason
+                        ? "border-rose-500 bg-rose-500/20 text-rose-200 shadow-md ring-1 ring-rose-400"
+                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]"
+                    }`}
+                  >
+                    <span>{reason.label}</span>
+                    {isSelectedReason && <IconCheck width={14} height={14} className="text-rose-400" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* BOTÕES DE CONFIRMAR OU CANCELAR */}
+            <div className="flex gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setRejectModalOpen(false)}
+                className="flex-1 rounded-xl border border-white/10 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!selectedReason || busy !== null}
+                onClick={handleConfirmRejection}
+                className="flex-1 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 py-2 text-xs font-bold text-white shadow-md hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                {busy === "rejeitado" ? "Rejeitando…" : "Confirmar Rejeição"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

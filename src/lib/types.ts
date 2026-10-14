@@ -53,6 +53,57 @@ export interface RejectionDetail {
   previousStatus?: OfferStatus;
 }
 
+export type RejectionReason =
+  | "nao_e_promocao"
+  | "produto_tipo_errado"
+  | "marca_indesejada"
+  | "preco_alto"
+  | "baixa_qualidade"
+  | "nao_quero_parecidos"
+  | "duplicado";
+
+export const REJECTION_REASONS: { id: RejectionReason; label: string }[] = [
+  { id: "nao_e_promocao", label: "Não é promoção" },
+  { id: "produto_tipo_errado", label: "Produto/tipo errado" },
+  { id: "marca_indesejada", label: "Marca indesejada" },
+  { id: "preco_alto", label: "Preço alto" },
+  { id: "baixa_qualidade", label: "Baixa qualidade" },
+  { id: "nao_quero_parecidos", label: "Não quero mais produtos parecidos" },
+  { id: "duplicado", label: "Duplicado" },
+];
+
+export type FeedbackAction = "aprovar" | "rejeitar" | "bloquear_marca" | "bloquear_vendedor";
+
+export interface OfferFeedback {
+  id: string;
+  offerId: string;
+  externalId: string;
+  action: FeedbackAction;
+  reason?: RejectionReason | string | null;
+  createdAt: string;
+  category?: string;
+  brand?: string;
+  title: string;
+  price: number;
+  discountPercent?: number | null;
+  rating?: number | null;
+  reviewsCount?: number | null;
+  freeShipping: boolean;
+  seller?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LearnedPreferences {
+  blockedBrands: string[];
+  blockedSellers: string[];
+  blockedKeywords: string[];
+  blockedCategories: string[];
+  featureWeights?: Record<string, number>;
+  totalApprovals: number;
+  totalRejections: number;
+  lastTrainedAt?: string | null;
+}
+
 export interface TombstoneRecord {
   id: string;
   fingerprint: string;
@@ -156,6 +207,13 @@ export interface Offer {
   /** Última vez que a oferta apareceu numa busca (preço atualizado). */
   lastSeenAt: string;
   statusChangedAt: string | null;
+
+  // Sistema de recomendação inteligente e aprendizado de preferências
+  brand?: string | null;
+  sellerName?: string | null;
+  preferenceScore?: number | null;
+  recommendationReason?: string | null;
+  isExploration?: boolean;
 }
 
 /** Campos que o usuário pode editar pela interface. */

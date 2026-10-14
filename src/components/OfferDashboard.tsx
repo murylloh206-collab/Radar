@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { deleteRejectedOffers, discoverOffers, patchOffer, searchOffers } from "@/lib/api-client";
+import { deleteRejectedOffers, discoverOffers, patchOffer, searchOffers, updateOffers } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/format";
 import type {
   AutomationSettings,
@@ -17,9 +17,11 @@ import { OfferCard } from "./OfferCard";
 import { STATUS_STYLES } from "./StatusBadge";
 import { SchedulerConfigModal } from "./SchedulerConfigModal";
 import { ManualPublishModal } from "./ManualPublishModal";
+import { LearnedPreferencesModal } from "./LearnedPreferencesModal";
 import {
   IconAlert,
   IconBolt,
+  IconBrain,
   IconCheck,
   IconClock,
   IconGear,
@@ -80,6 +82,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [selectedApproved, setSelectedApproved] = useState<Set<string>>(new Set());
   const [showSchedulerModal, setShowSchedulerModal] = useState(false);
   const [showManualPublishModal, setShowManualPublishModal] = useState(false);
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
   const [isPublishingManual, setIsPublishingManual] = useState(false);
 
   // Diagnósticos seguros de sessão
@@ -191,43 +194,29 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const minPending = scheduler.minPendingScore ?? 75;
   const minManual = scheduler.minManualPublishScore ?? 75;
 
-  // Detecta ofertas inconsistentes que possam existir no banco com score abaixo do mínimo
-  const inconsistentOffers = useMemo(() => {
-    return offers.filter(
-      (o) =>
-        (o.status === "pendente" && (o.opportunityScore ?? 0) < minPending) ||
-        (o.status === "aprovado" && (o.opportunityScore ?? 0) < minManual)
-    );
-  }, [offers, minPending, minManual]);
+  const inconsistentOffers: Offer[] = [];
 
-  // ---------- Contadores estritos (ofertas abaixo do limite não inflam Pendentes/Aprovados) ----------
+  // ---------- Contadores de ofertas ----------
   const counts = useMemo(() => {
     const c: Record<OfferStatus, number> = { pendente: 0, aprovado: 0, publicado: 0, rejeitado: 0 };
     for (const o of offers) {
-      if (o.status === "pendente" && (o.opportunityScore ?? 0) < minPending) continue;
-      if (o.status === "aprovado" && (o.opportunityScore ?? 0) < minManual) continue;
       if (c[o.status] !== undefined) {
         c[o.status]++;
       }
     }
     return c;
-  }, [offers, minPending, minManual]);
+  }, [offers]);
 
   const approvedWaitingCount = useMemo(() => {
     return offers.filter(
       (o) =>
         o.status === "aprovado" &&
-        (o.opportunityScore ?? 0) >= minManual &&
         o.whatsappStatus !== "enviado" &&
         o.whatsappStatus !== "falhou"
     ).length;
-  }, [offers, minManual]);
+  }, [offers]);
 
-  const hasLowScoreSelected = useMemo(() => {
-    return offers.some(
-      (o) => selectedApproved.has(o.id) && (o.opportunityScore ?? 0) < minManual
-    );
-  }, [offers, selectedApproved, minManual]);
+  const hasLowScoreSelected = false;
 
   const schedulerSummaryText = useMemo(() => {
     const mode = scheduler.mode || "interval_minutes";
@@ -309,10 +298,6 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       // Filtro estrito de categoria
       if (o.status !== filter) return false;
 
-      // Não permite que cards abaixo do limite de qualidade apareçam em Pendentes ou Aprovados
-      if (o.status === "pendente" && (o.opportunityScore ?? 0) < minPending) return false;
-      if (o.status === "aprovado" && (o.opportunityScore ?? 0) < minManual) return false;
-
       // Filtros rápidos
       if (quickFilter === "frete-gratis" && !o.freeShipping) return false;
       if (quickFilter === "comissao" && (!o.commission || o.commission.amount <= 0)) return false;
@@ -336,10 +321,12 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       list.sort((a, b) => a.price - b.price);
     }
     return list;
-  }, [offers, filter, quickFilter, query, sort, minPending, minManual]);
+  }, [offers, filter, quickFilter, query, sort]);
 
-  // ---------- Descoberta Automática (Radar) com trava de 500 pendentes ----------
-  async function handleDiscoverRadar() {
+  // ---------- Atualização de Ofertas pelo Mercado Livre Brasil (MLB) ----------
+  async function handleUpdateOffers() {
+    if (discovering) return;
+
     if (counts.pendente >= 500) {
       notify(
         "info",
@@ -351,20 +338,26 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     setDiscovering(true);
     setSearchError(null);
     try {
-      const result = await discoverOffers();
+      const result = await updateOffers();
       setOffers(result.offers);
-      setLastSearch(result.lastSearch);
-      const { added, updated } = result.lastSearch;
-      notify("ok", `Radar de Ofertas atualizado: ${added} nova(s) pendente(s), ${updated} atualizada(s).`);
-      for (const e of result.errors) notify("erro", `“${e.term}”: ${e.message}`);
+      if (result.lastSearch) setLastSearch(result.lastSearch);
+      const added = result.added ?? result.lastSearch?.added ?? 0;
+      const updated = result.updated ?? result.lastSearch?.updated ?? 0;
+      notify(
+        "ok",
+        `Atualização concluída: ${added} nova(s) oferta(s) adicionada(s), ${updated} atualizada(s)!`
+      );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao rodar descoberta automática.";
+      const msg = err instanceof Error ? err.message : "Erro ao atualizar ofertas do Mercado Livre.";
       setSearchError(msg);
       notify("erro", msg);
     } finally {
       setDiscovering(false);
     }
   }
+
+  // Alias para retrocompatibilidade
+  const handleDiscoverRadar = handleUpdateOffers;
 
   // ---------- Busca Manual por Termos ----------
   async function handleSearch() {
@@ -829,7 +822,17 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowPreferencesModal(true)}
+              title="Visualizar e gerenciar marcas, vendedores e categorias bloqueadas"
+              className="inline-flex items-center gap-1.5 rounded-2xl border border-teal-500/30 bg-teal-500/10 px-4 py-3.5 text-xs font-semibold text-teal-200 hover:bg-teal-500/20 transition"
+            >
+              <IconBrain width={14} height={14} />
+              Preferências Aprendidas
+            </button>
+
             <button
               type="button"
               onClick={handleRunSanitize}
@@ -855,35 +858,10 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
             >
               <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               {discovering ? <IconSpinner width={18} height={18} /> : <IconBolt width={18} height={18} />}
-              {discovering ? "Varrendo Categorias…" : isQueueFull ? "Fila Cheia (500 Pendentes)" : "Atualizar Radar de Ofertas"}
+              {discovering ? "Atualizando ofertas…" : isQueueFull ? "Fila Cheia (500 Pendentes)" : "Atualizar ofertas"}
             </button>
           </div>
         </div>
-
-        {/* Diagnóstico Administrativo Transparente */}
-        {inconsistentOffers.length > 0 && (
-          <div className="mt-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in">
-            <div className="flex items-start gap-2.5">
-              <span className="text-xl">⚠️</span>
-              <div>
-                <strong className="text-sm font-bold text-amber-200">
-                  Diagnóstico Administrativo: {inconsistentOffers.length} produto(s) com score abaixo do limite detectados
-                </strong>
-                <p className="text-xs text-amber-300/90 mt-0.5">
-                  Estes produtos foram isolados da lista de Pendentes e Aprovados por não atenderem ao score mínimo ({minPending}/100) ou por desconto não verificável.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleRunSanitize}
-              disabled={isSanitizing}
-              className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 transition shrink-0 disabled:opacity-50"
-            >
-              {isSanitizing ? "Saneando…" : "Executar Saneamento"}
-            </button>
-          </div>
-        )}
 
         {searchError && (
           <p role="alert" className="mt-3 rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-200 ring-1 ring-rose-400/20">
@@ -1238,6 +1216,17 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
           onClose={() => setShowManualPublishModal(false)}
           onConfirm={handleExecuteManualPublish}
           isPublishing={isPublishingManual}
+        />
+      )}
+
+      {showPreferencesModal && (
+        <LearnedPreferencesModal
+          isOpen={showPreferencesModal}
+          onClose={() => setShowPreferencesModal(false)}
+          onLearningReset={async () => {
+            notify("ok", "Aprendizado redefinido. Atualizando ofertas...");
+            await reloadOffersAndScheduler();
+          }}
         />
       )}
 
