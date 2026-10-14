@@ -31,77 +31,80 @@ export interface RadarCategoryConfig {
 }
 
 export const RADAR_CATEGORIES: RadarCategoryConfig[] = [
-  // 1. Roupas de academia e roupas casuais: prioridade alta.
-  {
-    id: "moda-fitness-casual",
-    name: "Roupas e Moda Fitness",
-    priority: "alta",
-    queries: [
-      "camiseta academia masculina",
-      "bermuda treino masculina",
-      "conjunto fitness feminino",
-      "calca moletom masculina",
-      "camiseta casual algodao",
-    ],
-  },
-  // 2. Tênis de marcas (Nike, Adidas, Puma, New Balance): prioridade alta.
+  // 1. Tênis de marcas (Nike, Adidas, Puma): prioridade alta.
   {
     id: "tenis-marcas",
     name: "Tênis de Marca",
     priority: "alta",
     isSneaker: true,
     queries: [
-      "tenis nike masculino",
-      "tenis adidas masculino",
+      "tenis nike",
+      "tenis adidas",
       "tenis puma",
-      "tenis new balance",
-      "tenis corrida masculino",
+      "tenis nike corrida",
+      "tenis adidas running",
+      "tenis puma smash",
     ],
   },
-  // 3. Eletrodomésticos: prioridade alta.
+  // 2. Roupas e Moda Fitness: camiseta academia, legging fitness, bermuda treino
+  {
+    id: "moda-fitness-casual",
+    name: "Roupas e Moda Fitness",
+    priority: "alta",
+    queries: [
+      "camiseta academia",
+      "legging fitness",
+      "bermuda treino",
+      "camiseta academia masculina",
+      "bermuda treino masculina",
+    ],
+  },
+  // 3. Eletrodomésticos: air fryer, cafeteira, liquidificador
   {
     id: "eletrodomesticos",
     name: "Eletrodomésticos",
     priority: "alta",
     queries: [
       "air fryer",
+      "cafeteira",
+      "liquidificador",
       "cafeteira eletrica",
       "liquidificador potente",
-      "microondas inox",
     ],
   },
-  // 4. Suplementos: prioridade média.
+  // 4. Suplementos: creatina, whey protein
   {
     id: "suplementos",
     name: "Suplementos",
     priority: "media",
     queries: [
-      "creatina monohidratada pura",
-      "whey protein concentrado",
+      "creatina",
+      "whey protein",
       "creatina 300g",
+      "whey protein concentrado",
     ],
   },
-  // 5. Beleza e cuidados pessoais: prioridade média.
+  // 5. Beleza e cuidados pessoais: perfume, protetor solar
   {
     id: "beleza-cuidados",
     name: "Beleza e Cuidados Pessoais",
     priority: "media",
     queries: [
+      "perfume",
+      "protetor solar",
       "perfume masculino importado",
-      "perfume feminino importado",
       "protetor solar facial",
-      "hidratante corporal",
     ],
   },
-  // 6. Eletrônicos e games: prioridade menor.
+  // 6. Eletrônicos e games: fone bluetooth, controle gamer
   {
     id: "eletronicos-games",
     name: "Eletrônicos e Games",
     priority: "menor",
     queries: [
-      "fone bluetooth sem fio",
+      "fone bluetooth",
       "controle gamer",
-      "smartwatch esportivo",
+      "fone bluetooth sem fio",
     ],
   },
 ];
@@ -234,33 +237,64 @@ async function fetchItemReviews(
   }
 }
 
+export interface PipelineStageCounts {
+  etapa1_itens_retornados_api: number;
+  etapa2_apos_preco_minimo_25: number;
+  etapa3_apos_bloqueio_replicas: number;
+  etapa4_apos_filtros_avaliacao: number;
+  etapa5_gravados_atualizados_banco: number;
+  etapa6_retornados_frontend: number;
+}
+
 /**
  * Coleta produtos do catálogo oficial e resolve os itens e preços reais
+ * aplicando as regras temporárias e contadores de cada etapa.
  */
-async function collectProductsFromML(token: string): Promise<DiscoveredProductItem[]> {
+async function collectProductsFromML(
+  token: string,
+  existingExternalIds: Set<string>,
+  counters: {
+    etapa1: number;
+    etapa2: number;
+    etapa3: number;
+    etapa4: number;
+  }
+): Promise<DiscoveredProductItem[]> {
   const discovered: DiscoveredProductItem[] = [];
   const seenIds = new Set<string>();
+  let apiErrorsCount = 0;
+  let lastApiErrorMessage = "";
 
   // Processa as categorias na ordem de prioridade
   for (const category of RADAR_CATEGORIES) {
-    let itemsInCat = 0;
-    const maxItemsPerCat = category.priority === "alta" ? 6 : category.priority === "media" ? 4 : 2;
+    let newItemsInCat = 0;
+    // Limitar a até 10 novas ofertas por categoria em cada atualização
+    const maxNewPerCat = 10;
 
     for (const query of category.queries) {
-      if (itemsInCat >= maxItemsPerCat) break;
+      if (newItemsInCat >= maxNewPerCat) break;
 
       try {
-        const searchUrl = `https://api.mercadolibre.com/products/search?status=active&site_id=${config.mercadoLivre.siteId}&q=${encodeURIComponent(query)}&limit=5`;
+        const searchUrl = `https://api.mercadolibre.com/products/search?status=active&site_id=${config.mercadoLivre.siteId}&q=${encodeURIComponent(query)}&limit=15`;
         const res = await fetchWithRetry(searchUrl, {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
           },
-          signal: AbortSignal.timeout(6000),
+          signal: AbortSignal.timeout(8000),
         });
 
         if (!res.ok) {
-          console.warn(`[offers-updater] Busca falhou para "${query}" (${res.status}). Continuando...`);
+          apiErrorsCount++;
+          const errBody = await res.text().catch(() => "");
+          lastApiErrorMessage = `HTTP ${res.status}: ${errBody.slice(0, 150)}`;
+          console.warn(`[offers-updater] Busca retornou erro para "${query}": ${lastApiErrorMessage}`);
+          if (res.status === 401 || res.status === 403) {
+            throw new MercadoLivreError(
+              `Erro de autenticação/autorização na API Mercado Livre (${res.status}): ${errBody || "Verifique as credenciais ou reconecte o OAuth."}`,
+              res.status
+            );
+          }
           continue;
         }
 
@@ -276,20 +310,12 @@ async function collectProductsFromML(token: string): Promise<DiscoveredProductIt
         const products = data.results || [];
 
         for (const p of products) {
-          if (itemsInCat >= maxItemsPerCat) break;
+          if (newItemsInCat >= maxNewPerCat) break;
 
           // Filtro: Miudezas irrelevantes
           if (isJunkItem(p.name)) continue;
 
-          // Filtro específico obrigatório para tênis: evitar réplicas ou cópias
-          if (category.isSneaker || p.name.toLowerCase().includes("tenis")) {
-            if (isReplicaOrKnockoff(p.name)) {
-              console.log(`[offers-updater] Tênis réplica/inspirado ignorado: "${p.name}"`);
-              continue;
-            }
-          }
-
-          // Busca detalhes completos do item vencedor apenas para quem passou no filtro de título
+          // Busca detalhes completos do item vencedor apenas para quem passou no filtro básico
           try {
             const itRes = await fetchWithRetry(
               `https://api.mercadolibre.com/products/${p.id}/items?limit=1`,
@@ -316,16 +342,32 @@ async function collectProductsFromML(token: string): Promise<DiscoveredProductIt
             const item = itData.results?.[0];
             if (!item || typeof item.price !== "number") continue;
 
-            // Filtro obrigatório: Nunca mostrar itens abaixo de R$ 25
+            // 1. Itens retornados pela API Mercado Livre com anúncio ativo e preço
+            counters.etapa1++;
+
+            // 2. Itens após preço mínimo de R$25
             if (item.price < 25.0) {
               continue;
             }
+            counters.etapa2++;
+
+            // 3. Itens após bloqueio de réplicas
+            if (isReplicaOrKnockoff(p.name)) {
+              console.log(`[offers-updater] Anúncio réplica/inspirado bloqueado: "${p.name}"`);
+              continue;
+            }
+            counters.etapa3++;
+
+            // 4. Itens após filtros de avaliação
+            // Regra temporária: Aceitar anúncios sem avaliação quando a API não fornecer avaliações.
+            // Não exigir histórico de preço, não exigir desconto calculado.
+            counters.etapa4++;
 
             const externalId = item.item_id || p.id;
             if (seenIds.has(externalId)) continue;
             seenIds.add(externalId);
 
-            // Tenta buscar avaliações para o item pré-selecionado
+            // Busca avaliações se disponíveis
             const reviews = await fetchItemReviews(externalId, token);
 
             const picture = p.pictures?.[0];
@@ -347,15 +389,27 @@ async function collectProductsFromML(token: string): Promise<DiscoveredProductIt
               reviewsCount: reviews.reviewsCount,
             });
 
-            itemsInCat++;
+            if (!existingExternalIds.has(externalId)) {
+              newItemsInCat++;
+            }
           } catch (itErr) {
-            console.warn(`[offers-updater] Erro ao buscar item de ${p.id}:`, itErr);
+            // Continua para o próximo item
           }
         }
       } catch (catErr) {
+        if (catErr instanceof MercadoLivreError) {
+          throw catErr;
+        }
         console.warn(`[offers-updater] Falha ao consultar termo "${query}":`, catErr);
       }
     }
+  }
+
+  if (discovered.length === 0 && apiErrorsCount > 0 && lastApiErrorMessage) {
+    throw new MercadoLivreError(
+      `Falha na comunicação com a API Mercado Livre: ${lastApiErrorMessage}`,
+      502
+    );
   }
 
   return discovered;
@@ -413,9 +467,18 @@ export async function runRadarUpdate(): Promise<{
   lastSearch: LastSearchInfo;
   added: number;
   updated: number;
+  stageCounts: PipelineStageCounts;
 }> {
   if (isUpdatingInProgress) {
     const currentDb = await readDatabase();
+    const fallbackStageCounts: PipelineStageCounts = {
+      etapa1_itens_retornados_api: 0,
+      etapa2_apos_preco_minimo_25: 0,
+      etapa3_apos_bloqueio_replicas: 0,
+      etapa4_apos_filtros_avaliacao: 0,
+      etapa5_gravados_atualizados_banco: 0,
+      etapa6_retornados_frontend: currentDb.offers.length,
+    };
     return {
       ok: true,
       offers: sortPrioritizedOffers(currentDb.offers),
@@ -428,6 +491,7 @@ export async function runRadarUpdate(): Promise<{
       },
       added: 0,
       updated: 0,
+      stageCounts: fallbackStageCounts,
     };
   }
 
@@ -435,13 +499,27 @@ export async function runRadarUpdate(): Promise<{
 
   try {
     const token = await getAccessToken();
-    const candidates = await collectProductsFromML(token);
+
+    // Lê o estado atual do banco para rastrear itens existentes e tombstones
+    const initialDb = await readDatabase();
+    const existingExternalIds = new Set(initialDb.offers.map((o) => o.externalId));
+
     const tombstones = await getTombstones();
     const manualTombstones = new Set(
       tombstones
         .filter((t) => !t.reason?.toLowerCase().includes("score"))
         .map((t) => t.id)
     );
+
+    // Contadores das 4 primeiras etapas
+    const rawCounters = {
+      etapa1: 0,
+      etapa2: 0,
+      etapa3: 0,
+      etapa4: 0,
+    };
+
+    const candidates = await collectProductsFromML(token, existingExternalIds, rawCounters);
 
     // Carrega preferências aprendidas e feedbacks históricos
     const preferences = await getLearnedPreferences();
@@ -464,7 +542,7 @@ export async function runRadarUpdate(): Promise<{
 
         const brand = extractBrand(item.title);
 
-        // 1. Aplica primeiro os bloqueios manuais (marcas, vendedores, termos)
+        // 1. Aplica bloqueios manuais aprendidos
         const { blocked, reason: blockReason } = isOfferBlocked(
           {
             title: item.title,
@@ -482,7 +560,7 @@ export async function runRadarUpdate(): Promise<{
         const existing = db.offers.find((o) => o.id === id || o.externalId === item.externalId);
 
         if (existing) {
-          // Atualiza dados e adiciona snapshot de histórico se o preço mudou
+          // Atualiza dados existentes
           existing.title = item.title;
           existing.brand = brand;
           existing.thumbnail = item.thumbnail ?? existing.thumbnail;
@@ -530,7 +608,7 @@ export async function runRadarUpdate(): Promise<{
             reviewsCount: item.reviewsCount,
             sellerReputation: null,
             commission: null,
-            opportunityScore: 80, // Score neutro para compatibilidade
+            opportunityScore: 80, // Score neutro e visível
             opportunityReason: "Oferta encontrada agora",
             priceHistory: [{ price: item.price, recordedAt: now }],
             whatsappStatus: "rascunho",
@@ -549,7 +627,7 @@ export async function runRadarUpdate(): Promise<{
         }
       }
 
-      // 2. Ordena pelo aprendizado de preferência com 15% de exploração reservada
+      // Ordena pelo algoritmo de recomendação com exploração
       const rankedOffers = rankOffersWithExploration(db.offers, feedbacks, preferences);
       db.offers = rankedOffers;
 
@@ -569,12 +647,38 @@ export async function runRadarUpdate(): Promise<{
       };
     });
 
+    // 5. Itens gravados/atualizados no banco
+    const etapa5_gravados_atualizados_banco = addedCount + updatedCount;
+
+    // 6. Itens retornados ao frontend
+    const etapa6_retornados_frontend = updatedDb.offers.length;
+
+    const stageCounts: PipelineStageCounts = {
+      etapa1_itens_retornados_api: rawCounters.etapa1,
+      etapa2_apos_preco_minimo_25: rawCounters.etapa2,
+      etapa3_apos_bloqueio_replicas: rawCounters.etapa3,
+      etapa4_apos_filtros_avaliacao: rawCounters.etapa4,
+      etapa5_gravados_atualizados_banco,
+      etapa6_retornados_frontend,
+    };
+
+    // REGISTRO OBRIGATÓRIO NO LOG DO SERVIDOR EM CADA ETAPA
+    console.log(`\n================ RELATÓRIO DO RADAR DE OFERTAS: ETAPAS ================`);
+    console.log(`1. Itens retornados pela API Mercado Livre: ${stageCounts.etapa1_itens_retornados_api}`);
+    console.log(`2. Itens após preço mínimo de R$25: ${stageCounts.etapa2_apos_preco_minimo_25}`);
+    console.log(`3. Itens após bloqueio de réplicas: ${stageCounts.etapa3_apos_bloqueio_replicas}`);
+    console.log(`4. Itens após filtros de avaliação: ${stageCounts.etapa4_apos_filtros_avaliacao}`);
+    console.log(`5. Itens gravados/atualizados no banco: ${stageCounts.etapa5_gravados_atualizados_banco} (${addedCount} novas ofertas gravadas, ${updatedCount} atualizadas)`);
+    console.log(`6. Itens retornados ao frontend: ${stageCounts.etapa6_retornados_frontend}`);
+    console.log(`========================================================================\n`);
+
     return {
       ok: true,
       offers: updatedDb.offers,
       lastSearch: updatedDb.lastSearch,
       added: addedCount,
       updated: updatedCount,
+      stageCounts,
     };
   } finally {
     isUpdatingInProgress = false;

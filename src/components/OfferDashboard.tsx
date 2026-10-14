@@ -202,6 +202,8 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     for (const o of offers) {
       if (c[o.status] !== undefined) {
         c[o.status]++;
+      } else if ((o.status as string) === "oferta_encontrada_agora") {
+        c.pendente++;
       }
     }
     return c;
@@ -295,8 +297,11 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       .replace(/[\u0300-\u036f]/g, "");
 
     const list = offers.filter((o) => {
-      // Filtro estrito de categoria
-      if (o.status !== filter) return false;
+      // Filtro de categoria com suporte a pendente e oferta_encontrada_agora
+      const isPendenteMatch =
+        filter === "pendente" &&
+        (o.status === "pendente" || (o.status as string) === "oferta_encontrada_agora");
+      if (o.status !== filter && !isPendenteMatch) return false;
 
       // Filtros rápidos
       if (quickFilter === "frete-gratis" && !o.freeShipping) return false;
@@ -339,13 +344,22 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     setSearchError(null);
     try {
       const result = await updateOffers();
+      // Atualiza o estado das ofertas diretamente com o retorno da API sem depender de dados antigos
       setOffers(result.offers);
       if (result.lastSearch) setLastSearch(result.lastSearch);
+      
       const added = result.added ?? result.lastSearch?.added ?? 0;
       const updated = result.updated ?? result.lastSearch?.updated ?? 0;
+
+      // Garante que o painel mostre a aba de Pendentes onde as novas ofertas estão
+      setFilter("pendente");
+
+      const totalLidas = result.stageCounts?.etapa1_itens_retornados_api;
+      const stageInfo = typeof totalLidas === "number" ? ` (${totalLidas} anúncios analisados na API MLB)` : "";
+
       notify(
         "ok",
-        `Atualização concluída: ${added} nova(s) oferta(s) adicionada(s), ${updated} atualizada(s)!`
+        `Atualização concluída: ${added} nova(s) oferta(s) inserida(s), ${updated} atualizada(s)!${stageInfo}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao atualizar ofertas do Mercado Livre.";

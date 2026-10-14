@@ -37,6 +37,14 @@ export async function updateOffers(): Promise<{
   lastSearch: SearchResponse["lastSearch"];
   added: number;
   updated: number;
+  stageCounts?: {
+    etapa1_itens_retornados_api: number;
+    etapa2_apos_preco_minimo_25: number;
+    etapa3_apos_bloqueio_replicas: number;
+    etapa4_apos_filtros_avaliacao: number;
+    etapa5_gravados_atualizados_banco: number;
+    etapa6_retornados_frontend: number;
+  };
 }> {
   const res = await fetch("/api/ofertas/atualizar", {
     method: "POST",
