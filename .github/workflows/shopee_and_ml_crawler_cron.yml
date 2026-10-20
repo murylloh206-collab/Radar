@@ -1,0 +1,67 @@
+name: Radar de Ofertas - Coletor Autônomo (Shopee & ML)
+
+on:
+  schedule:
+    # Executa a cada 30 minutos
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Forçar execução imediata ignorando intervalo mínimo'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  run-scanner:
+    name: Disparar Coletor Autônomo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Acionar API do Radar de Ofertas
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::error::Secret APP_URL não configurada no repositório! Cadastre a URL base da sua aplicação (ex: https://meu-painel.vercel.app)."
+            exit 1
+          fi
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Secret CRON_SECRET não configurada no repositório! Cadastre o mesmo token definido no .env da aplicação."
+            exit 1
+          fi
+
+          # Normaliza URL removendo barra final se houver
+          CLEAN_APP_URL="${APP_URL%/}"
+          ENDPOINT="${CLEAN_APP_URL}/api/cron/update-offers?force=true"
+
+          echo "=========================================================="
+          echo "Disparando Coletor Autônomo do Radar de Ofertas"
+          echo "Endpoint: ${CLEAN_APP_URL}/api/cron/update-offers"
+          echo "Data/Hora UTC: $(date -u)"
+          echo "=========================================================="
+
+          # Executa chamada HTTP POST com Bearer token
+          HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: GitHub-Actions-Scheduler/1.0" \
+            "${ENDPOINT}")
+
+          # Separa corpo da resposta e status HTTP
+          HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
+
+          echo "HTTP Status Code: ${HTTP_STATUS}"
+          echo "Resposta:"
+          echo "${HTTP_BODY}"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "::notice::Coleta concluída com sucesso! Status HTTP $HTTP_STATUS"
+          else
+            echo "::error::Falha na chamada do coletor! Status HTTP $HTTP_STATUS"
+            exit 1
+          fi

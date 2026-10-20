@@ -713,8 +713,23 @@ export interface CategoryPriceRange {
 }
 
 /**
+ * Calcula o percentil p (0.0 a 1.0) a partir de um array numérico ordenado
+ */
+export function calculatePercentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const index = (sorted.length - 1) * p;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  const weight = index - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+/**
  * Calcula faixas de preço por categoria aprendidas a partir das aprovações.
- * Se houver menos de 3 aprovações na categoria, recorre ao teto padrão (R$ 450).
+ * - Exige pelo menos 5 aprovações na categoria antes de ativar a faixa aprendida.
+ * - Usa percentis robustos (p10 a p90) com margem de segurança (15%), evitando distorção por outliers.
+ * - Recorre ao piso (R$ 80) e teto padrão (R$ 450) como fallback enquanto houver menos de 5 aprovações.
  */
 export function getCategoryPriceRange(
   category: string,
@@ -729,10 +744,10 @@ export function getCategoryPriceRange(
         (category === "Geral" || !f.category || f.category.toLowerCase() === category.toLowerCase())
     )
     .map((f) => f.price)
-    .filter((p) => p > 0)
+    .filter((p) => typeof p === "number" && p > 0)
     .sort((a, b) => a - b);
 
-  if (approvedPrices.length < 3) {
+  if (approvedPrices.length < 5) {
     return {
       minPrice: defaultMin,
       maxPrice: defaultMax,
@@ -741,11 +756,12 @@ export function getCategoryPriceRange(
     };
   }
 
-  const minApproved = approvedPrices[0];
-  const maxApproved = approvedPrices[approvedPrices.length - 1];
+  const p10 = calculatePercentile(approvedPrices, 0.1);
+  const p90 = calculatePercentile(approvedPrices, 0.9);
 
-  const learnedMin = Math.max(defaultMin, Math.round(minApproved * 0.8 * 100) / 100);
-  const learnedMax = Math.max(learnedMin + 50, Math.round(maxApproved * 1.2 * 100) / 100);
+  // Aplica margem de segurança de 15% sobre os percentis p10 e p90
+  const learnedMin = Math.max(defaultMin, Math.round(p10 * 0.85 * 100) / 100);
+  const learnedMax = Math.max(learnedMin + 30, Math.round(p90 * 1.15 * 100) / 100);
 
   return {
     minPrice: learnedMin,

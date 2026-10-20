@@ -16,6 +16,7 @@ export interface CandidateRawItem {
   condition?: string;
   rating?: number | null;
   reviewsCount?: number | null;
+  salesCount?: number | null;
   source?: OfferSource;
   affiliateUrl?: string | null;
   shortUrl?: string | null;

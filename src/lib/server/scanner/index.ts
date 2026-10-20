@@ -8,12 +8,17 @@ import { readDatabase } from "../storage";
 import { rankOffersWithExploration, getCategoryPriceRange } from "../recommendation-engine";
 import { getLearnedPreferences, getAllFeedbacks } from "../feedback-service";
 import { recordScanRun } from "../history-service";
+import { runShopeeCategoryScan } from "./shopee-scanner";
+import { runMercadoLivreWebScan } from "./ml-web-scanner";
 import type { Offer, LastSearchInfo } from "../../types";
 
 export * from "./terms";
 export * from "./validator";
 export * from "./fetcher";
 export * from "./database";
+export * from "./shopee-scanner";
+export * from "./ml-web-scanner";
+export * from "./ml-dom-extractor";
 
 export interface ScannerPipelineResult {
   ok: boolean;
@@ -57,44 +62,10 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
   const startedAt = new Date().toISOString();
 
   console.log("\n=======================================================");
-  console.log("🚀 [SCANNER] INICIANDO MOTOR DE ESCANEAMENTO RIGOROSO");
+  console.log("🚀 [SCANNER] INICIANDO MOTOR AUTÔNOMO (SHOPEE + MERCADO LIVRE)");
   console.log("=======================================================");
 
-  const token = await getAccessToken();
-
-  // 1. Fetcher: Consulta a API do Mercado Livre com os termos de desejo
-  const fetchResult = await fetchDesiredOffers({
-    token,
-    maxTermsPerRun: 8,
-    maxItemsPerTerm: 8,
-    deadlineMs: 16_000,
-  });
-
-  const rawItems = fetchResult.items;
-  console.log(`\n📦 [SCANNER] Total de itens brutos retornados pela API: ${rawItems.length}`);
-
-  // Contadores para o relatório em etapas
-  const stageCounts = {
-    etapa1_itens_retornados_api: rawItems.length,
-    etapa2_apos_preco_minimo_80: 0,
-    etapa3_apos_blacklist_e_replicas: 0,
-    etapa4_apos_desconto_real_15: 0,
-    etapa5_gravados_atualizados_banco: 0,
-    etapa6_retornados_frontend: 0,
-  };
-
-  const rejectedCounts = {
-    minPrice: 0,
-    maxPrice: 0,
-    noOriginalPrice: 0,
-    lowDiscount: 0,
-    blacklistTerm: 0,
-    total: 0,
-  };
-
-  const approvedCandidates: CandidateRawItem[] = [];
-
-  // Carrega histórico de preferências e feedbacks para determinar faixas de preço aprendidas
+  // Carrega histórico de preferências e feedbacks para determinação de faixas aprendidas e bloqueios
   const [preferences, feedbacks] = await Promise.all([
     getLearnedPreferences().catch(() => ({
       blockedBrands: [],
@@ -107,48 +78,83 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
     getAllFeedbacks().catch(() => []),
   ]);
 
-  // 2. Validator: Aplica as barreiras de validação com faixa de preço aprendida por categoria (Etapa D)
-  for (const item of rawItems) {
-    const categoryName = item.categoryName || "Geral";
-    const categoryPriceRange = getCategoryPriceRange(categoryName, feedbacks);
-    const validation = validateOfferCandidate(item, categoryPriceRange);
+  const priceRangeByCat = (category: string) => getCategoryPriceRange(category, feedbacks);
 
-    if (!validation.valid) {
-      rejectedCounts.total++;
-      if (validation.rejectionCode === "MIN_PRICE") rejectedCounts.minPrice++;
-      else if (validation.rejectionCode === "MAX_PRICE") rejectedCounts.maxPrice++;
-      else if (validation.rejectionCode === "NO_ORIGINAL_PRICE") rejectedCounts.noOriginalPrice++;
-      else if (validation.rejectionCode === "LOW_DISCOUNT") rejectedCounts.lowDiscount++;
-      else if (validation.rejectionCode === "BLACKLIST_TERM") rejectedCounts.blacklistTerm++;
-      continue;
-    }
+  const MAX_CYCLE_PENDING = 15;
+  const rawCandidates: CandidateRawItem[] = [];
 
-    // Passou no piso de preço
-    stageCounts.etapa2_apos_preco_minimo_80++;
-    // Passou na blacklist e réplicas
-    stageCounts.etapa3_apos_blacklist_e_replicas++;
-    // Passou no desconto real >= 15%
-    stageCounts.etapa4_apos_desconto_real_15++;
+  let totalRejectedSales = 0;
+  let totalRejectedRating = 0;
+  let totalRejectedDiscount = 0;
+  let totalRejectedPrice = 0;
+  let totalRejectedBlacklist = 0;
+  const errorsLog: string[] = [];
+  const queriedTermsOrCategories: string[] = [];
 
-    approvedCandidates.push(item);
+  // =========================================================================
+  // ETAPA 1: FONTE PRIMÁRIA — SHOPEE (Top Sales sortType: 2 por productCatId)
+  // =========================================================================
+  console.log("\n🛍️ [SCANNER] Executando Fonte Primária: Shopee Open API...");
+  try {
+    const shopeeResult = await runShopeeCategoryScan({
+      preferences,
+      feedbacks,
+      priceRangeByCat,
+      maxPendingQuota: MAX_CYCLE_PENDING,
+    });
+
+    rawCandidates.push(...shopeeResult.candidates);
+    totalRejectedSales += shopeeResult.stats.rejectedSales;
+    totalRejectedRating += shopeeResult.stats.rejectedRating;
+    totalRejectedDiscount += shopeeResult.stats.rejectedDiscount;
+    totalRejectedPrice += shopeeResult.stats.rejectedPrice;
+    totalRejectedBlacklist += shopeeResult.stats.rejectedBlacklist;
+    queriedTermsOrCategories.push(...shopeeResult.stats.categoriesQueried.map((id) => `Shopee Cat:${id}`));
+  } catch (shopeeErr) {
+    const msg = shopeeErr instanceof Error ? shopeeErr.message : "Erro na Shopee";
+    console.error("[SCANNER] Erro na coleta Shopee:", msg);
+    errorsLog.push(`Shopee: ${msg}`);
   }
 
-  console.log(`\n✅ [SCANNER] Produtos rigorosamente APROVADOS no pipeline: ${approvedCandidates.length}`);
-  console.log(`🚫 [SCANNER] Produtos REJEITADOS no pipeline: ${rejectedCounts.total}`);
-  console.log(`   - Preço < piso ou > teto da categoria: ${rejectedCounts.minPrice + rejectedCounts.maxPrice}`);
-  console.log(`   - Termos proibidos na blacklist: ${rejectedCounts.blacklistTerm}`);
-  console.log(`   - Sem preço original / Sem desconto: ${rejectedCounts.noOriginalPrice}`);
-  console.log(`   - Desconto real < 15%: ${rejectedCounts.lowDiscount}`);
+  // =========================================================================
+  // ETAPA 2: MERCADO LIVRE WEB — (/ofertas + Páginas Individuais >100 vendidos/avaliações)
+  // =========================================================================
+  const remainingSlots = Math.max(0, MAX_CYCLE_PENDING - rawCandidates.length);
+  if (remainingSlots > 0) {
+    console.log(`\n🟡 [SCANNER] Executando Coletor Web do Mercado Livre (/ofertas, até ${Math.min(20, remainingSlots * 3)} páginas)...`);
+    try {
+      const mlResult = await runMercadoLivreWebScan({
+        preferences,
+        feedbacks,
+        priceRangeByCat,
+        maxPagesPerCycle: 20,
+      });
 
-  // 3. Database: Salva os produtos aprovados no banco
-  const saveResult = await saveApprovedOffers(approvedCandidates);
-  stageCounts.etapa5_gravados_atualizados_banco = saveResult.added + saveResult.updated;
+      rawCandidates.push(...mlResult.candidates);
+      totalRejectedSales += mlResult.stats.rejectedSalesUnder100;
+      totalRejectedRating += mlResult.stats.rejectedLowRating;
+      totalRejectedPrice += mlResult.stats.rejectedPrice;
+      totalRejectedBlacklist += mlResult.stats.rejectedBlacklist;
+      errorsLog.push(...mlResult.stats.errors);
+      queriedTermsOrCategories.push("ML: /ofertas vitrine pública");
+    } catch (mlErr) {
+      const msg = mlErr instanceof Error ? mlErr.message : "Erro no ML";
+      console.error("[SCANNER] Erro na coleta Web do Mercado Livre:", msg);
+      errorsLog.push(`ML Web: ${msg}`);
+    }
+  }
+
+  console.log(`\n📦 [SCANNER] Total bruto de candidatos qualificados pré-banco: ${rawCandidates.length}`);
+
+  // Teto rígido de 15 novas ofertas por ciclo
+  const finalCandidatesToSave = rawCandidates.slice(0, MAX_CYCLE_PENDING);
+
+  // 3. Database: Salva os produtos aprovados no banco sem duplicatas
+  const saveResult = await saveApprovedOffers(finalCandidatesToSave);
 
   // 4. Carrega o banco atualizado e aplica ordenação inteligente para o frontend
   const db = await readDatabase();
   const rankedOffers = rankOffersWithExploration(db.offers, feedbacks, preferences);
-
-  stageCounts.etapa6_retornados_frontend = rankedOffers.length;
 
   // 5. Calcula métricas de aprovação separando cérebro x exploração
   const brainFeedbacks = feedbacks.filter((f) => !(f.metadata as Record<string, unknown>)?.isExploration);
@@ -168,8 +174,8 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
   const now = new Date().toISOString();
   const lastSearch: LastSearchInfo = {
     at: now,
-    terms: fetchResult.termsQueried,
-    found: rawItems.length,
+    terms: queriedTermsOrCategories,
+    found: rawCandidates.length,
     added: saveResult.added,
     updated: saveResult.updated,
   };
@@ -185,21 +191,24 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
     startedAt,
     finishedAt: now,
     durationMs,
-    itemsFound: rawItems.length,
+    itemsFound: rawCandidates.length,
     itemsInserted: saveResult.added,
     itemsUpdated: saveResult.updated,
-    itemsRejectedPrice: rejectedCounts.minPrice + (rejectedCounts.maxPrice || 0),
-    itemsRejectedDiscount: rejectedCounts.noOriginalPrice + rejectedCounts.lowDiscount,
-    itemsRejectedBlacklist: rejectedCounts.blacklistTerm,
+    itemsRejectedPrice: totalRejectedPrice,
+    itemsRejectedDiscount: totalRejectedDiscount,
+    itemsRejectedBlacklist: totalRejectedBlacklist,
+    itemsRejectedSales: totalRejectedSales,
+    itemsRejectedRating: totalRejectedRating,
     approvalRateBrain,
     approvalRateExploration,
     itemsBrain,
     itemsExploration,
-    status: fetchResult.apiErrors.length > 0 && saveResult.added === 0 ? "parcial" : "sucesso",
-    errorsLog: fetchResult.apiErrors,
+    status: errorsLog.length > 0 && saveResult.added === 0 ? "parcial" : "sucesso",
+    errorsLog,
     metadata: {
       itemsBrain,
       itemsExploration,
+      maxCyclePending: MAX_CYCLE_PENDING,
       brainTotalFeedbackDecisions: brainTotal,
       explorationTotalFeedbackDecisions: explorationTotal,
     },
@@ -211,8 +220,27 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
     lastSearch,
     added: saveResult.added,
     updated: saveResult.updated,
-    found: rawItems.length,
-    rejected: rejectedCounts,
-    stageCounts,
+    found: rawCandidates.length,
+    rejected: {
+      minPrice: totalRejectedPrice,
+      maxPrice: 0,
+      noOriginalPrice: 0,
+      lowDiscount: totalRejectedDiscount,
+      blacklistTerm: totalRejectedBlacklist,
+      total:
+        totalRejectedPrice +
+        totalRejectedDiscount +
+        totalRejectedBlacklist +
+        totalRejectedSales +
+        totalRejectedRating,
+    },
+    stageCounts: {
+      etapa1_itens_retornados_api: rawCandidates.length,
+      etapa2_apos_preco_minimo_80: rawCandidates.length,
+      etapa3_apos_blacklist_e_replicas: rawCandidates.length,
+      etapa4_apos_desconto_real_15: rawCandidates.length,
+      etapa5_gravados_atualizados_banco: saveResult.added + saveResult.updated,
+      etapa6_retornados_frontend: rankedOffers.length,
+    },
   };
 }
