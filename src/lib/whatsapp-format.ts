@@ -54,7 +54,11 @@ export function formatAutoDispatchMessage(offer: Offer): string {
   }
 
   lines.push("");
-  lines.push("🛒 *COMPRAR NO MERCADO LIVRE*");
+  const isShopee =
+    offer.source === "shopee" ||
+    offer.id.startsWith("shopee:") ||
+    shortLink.includes("shopee.com");
+  lines.push(isShopee ? "🛒 *COMPRAR NA SHOPEE*" : "🛒 *COMPRAR NO MERCADO LIVRE*");
   lines.push(shortLink);
   lines.push("");
   lines.push("⚠️ Preço e estoque podem mudar.");

@@ -412,10 +412,12 @@ export function evaluateCandidateOffer(input: EvaluationInput): EvaluationResult
     let source: FieldDataSource = "indisponivel";
     let detail = "Link de afiliado pendente";
 
-    if (candidate.shortUrl && candidate.shortUrl.includes("meli.la")) {
+    if (candidate.shortUrl && (candidate.shortUrl.includes("meli.la") || candidate.shortUrl.includes("shopee"))) {
       pts = maxPts;
       source = "confirmado";
-      detail = "Link oficial meli.la verificado";
+      detail = candidate.shortUrl.includes("shopee")
+        ? "Link oficial Shopee verificado"
+        : "Link oficial meli.la verificado";
     } else if (candidate.affiliateUrl && linkValidation.ok) {
       pts = Math.round(maxPts * 0.8);
       source = "confirmado";

@@ -40,13 +40,30 @@ interface OfferCardProps {
 
 function ProductImage({ offer }: { offer: Offer }) {
   const [src, setSrc] = useState(largerThumbnail(offer.thumbnail));
-  const [failed, setFailed] = useState(false);
+  const [useNativeImg, setUseNativeImg] = useState(false);
 
-  if (!src || failed) {
+  if (!src) {
     return (
       <div className="flex h-full w-full items-center justify-center text-slate-400">
         <IconImage width={40} height={40} />
       </div>
+    );
+  }
+
+  if (useNativeImg) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={offer.title}
+        loading="lazy"
+        className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
+        onError={() => {
+          if (offer.thumbnail && src !== offer.thumbnail) {
+            setSrc(offer.thumbnail);
+          }
+        }}
+      />
     );
   }
 
@@ -55,11 +72,11 @@ function ProductImage({ offer }: { offer: Offer }) {
       src={src}
       alt={offer.title}
       fill
+      unoptimized={offer.source === "shopee" || src.includes("shopee") || src.includes("susercontent")}
       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
       className="object-contain p-3 transition-transform duration-300 group-hover:scale-105"
       onError={() => {
-        if (offer.thumbnail && src !== offer.thumbnail) setSrc(offer.thumbnail);
-        else setFailed(true);
+        setUseNativeImg(true);
       }}
     />
   );
@@ -134,7 +151,7 @@ export function OfferCard({
       });
       const data = await res.json();
       if (!res.ok || !data.shortUrl) {
-        throw new Error(data.error || "Não foi possível gerar link meli.la");
+        throw new Error(data.error || (offer.source === "shopee" ? "Não foi possível gerar link da Shopee" : "Não foi possível gerar link meli.la"));
       }
       setAffiliateUrl(data.shortUrl);
       await onUpdate(offer.id, {
@@ -143,7 +160,7 @@ export function OfferCard({
         shortUrlStatus: "pronto",
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao gerar link meli.la.");
+      setError(err instanceof Error ? err.message : (offer.source === "shopee" ? "Erro ao gerar link Shopee." : "Erro ao gerar link meli.la."));
     } finally {
       setShortening(false);
     }
@@ -152,7 +169,7 @@ export function OfferCard({
   async function handleCopyWhatsApp() {
     const activeShort =
       offer.shortUrl ||
-      (affiliateUrl.trim().startsWith("https://meli.la/") ? affiliateUrl.trim() : undefined);
+      (affiliateUrl.trim().startsWith("https://meli.la/") || affiliateUrl.trim().includes("shopee.com") ? affiliateUrl.trim() : undefined);
     const text = formatWhatsAppMessage({
       ...offer,
       shortUrl: activeShort || offer.shortUrl,
@@ -182,7 +199,7 @@ export function OfferCard({
 
     const effectiveShortUrl =
       offer.shortUrl ||
-      (affiliateUrl.trim().startsWith("https://meli.la/") ? affiliateUrl.trim() : null);
+      (affiliateUrl.trim().startsWith("https://meli.la/") || affiliateUrl.trim().includes("shopee.com") ? affiliateUrl.trim() : null);
 
     const update: OfferUpdate = {
       affiliateUrl: affiliateUrl.trim() || null,
@@ -458,6 +475,15 @@ export function OfferCard({
         {/* Marca, Categoria e Verificação */}
         <div className="flex items-center justify-between text-[11px] text-slate-400">
           <div className="truncate flex items-center gap-1.5 font-medium">
+            {offer.source === "shopee" ? (
+              <span className="rounded bg-orange-500/20 text-orange-300 border border-orange-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                Shopee
+              </span>
+            ) : (
+              <span className="rounded bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                Mercado Livre
+              </span>
+            )}
             <span className="font-bold text-teal-300">
               {brandDisplay !== "Genérica" ? brandDisplay : offer.searchTerm || "Geral"}
             </span>
@@ -519,14 +545,20 @@ export function OfferCard({
           </div>
         </div>
 
-        {/* Bloco de Link Curto meli.la com Destaque e Cópia Imediata */}
+        {/* Bloco de Link Curto meli.la / shopee com Destaque e Cópia Imediata */}
         <div className="rounded-xl border border-white/10 bg-slate-900/80 p-2.5 text-xs shadow-inner">
           {offer.shortUrl ? (
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 truncate">
-                <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/40">
-                  <IconLink width={11} height={11} /> meli.la
-                </span>
+                {offer.source === "shopee" || offer.shortUrl?.includes("shopee") ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-orange-500/20 px-2 py-0.5 text-[10px] font-bold text-orange-300 border border-orange-500/40">
+                    <IconLink width={11} height={11} /> shopee
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/40">
+                    <IconLink width={11} height={11} /> meli.la
+                  </span>
+                )}
                 <span className="font-mono text-xs text-slate-100 font-semibold truncate select-all">
                   {offer.shortUrl}
                 </span>
@@ -539,7 +571,7 @@ export function OfferCard({
                     ? "bg-emerald-500/30 text-emerald-200 border border-emerald-400"
                     : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30"
                 }`}
-                title="Copiar link meli.la"
+                title={offer.source === "shopee" ? "Copiar link de afiliado Shopee" : "Copiar link meli.la"}
               >
                 {copiedLink ? (
                   <>
@@ -694,7 +726,8 @@ export function OfferCard({
                   rel="noopener noreferrer"
                   className="text-[11px] text-sky-400 hover:underline inline-flex items-center gap-1"
                 >
-                  Link original no Mercado Livre <IconExternal width={10} height={10} />
+                  {offer.source === "shopee" ? "Link original na Shopee" : "Link original no Mercado Livre"}{" "}
+                  <IconExternal width={10} height={10} />
                 </a>
                 {dirty && (
                   <button
@@ -729,7 +762,7 @@ export function OfferCard({
             rel="noopener noreferrer"
             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/20"
           >
-            <IconExternal width={13} height={13} /> Abrir oferta no Mercado Livre
+            <IconExternal width={13} height={13} /> {offer.source === "shopee" ? "Abrir oferta na Shopee" : "Abrir oferta no Mercado Livre"}
           </a>
 
           {/* LINHA PRINCIPAL: GOSTEI / APROVAR | REJEITAR */}

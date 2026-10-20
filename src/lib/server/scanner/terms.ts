@@ -8,116 +8,49 @@ export interface WishlistCategory {
 }
 
 /**
- * LISTA PRÉ-DEFINIDA DE CATEGORIAS E PRODUTOS DE ALTO VALOR AGREGADO E DESEJO
+ * LISTA PRÉ-DEFINIDA DE CATEGORIAS E PRODUTOS DE ALTO DESEJO E VALOR ACESSÍVEL
  * ---------------------------------------------------------------------------
- * Substitui buscas genéricas por termos estratégicos com alto interesse de compra:
- * - Smartphones
- * - Notebooks
- * - Consoles
- * - Eletroportáteis premium
- * - Ferramentas
- * - Áudio
- * - Suplementos líderes
- * - Tênis de marca e moda fitness
+ * Prioriza produtos com alta taxa de conversão e faixa de preço acessível (R$ 80 a R$ 450):
+ * - Eletroportáteis para o lar (Air Fryers, Cafeteiras, Liquidificadores)
+ * - Suplementação Esportiva (Creatina, Whey, DUX)
+ * - Tênis de Marca Oficiais (Olympikus, Puma, Fila, Asics, Adidas)
+ * - Moda Fitness e Treino
+ * - Perfumaria e Beleza
+ * - Áudio e Fones
+ * - Ferramentas elétricas úteis
  */
 export const DESIRED_CATEGORIES: WishlistCategory[] = [
-  // 1. Smartphones de Alto Desejo
-  {
-    id: "smartphones",
-    name: "Smartphones",
-    priority: "alta",
-    terms: [
-      "smartphone 5g",
-      "iphone 13",
-      "iphone 14",
-      "samsung galaxy s23",
-      "samsung galaxy s24",
-      "xiaomi poco x6",
-      "motorola edge",
-    ],
-  },
-  // 2. Notebooks e Computação
-  {
-    id: "notebooks",
-    name: "Notebooks",
-    priority: "alta",
-    terms: [
-      "notebook dell inspiron",
-      "notebook lenovo ideapad",
-      "notebook acer aspire",
-      "macbook air m1",
-      "notebook gamer",
-    ],
-  },
-  // 3. Consoles e Games
-  {
-    id: "consoles-games",
-    name: "Consoles",
-    priority: "alta",
-    terms: [
-      "playstation 5",
-      "nintendo switch oled",
-      "xbox series s",
-      "controle dualsense ps5",
-      "controle xbox series",
-    ],
-  },
-  // 4. Eletroportáteis Premium
+  // 1. Eletroportáteis para o Lar (Campeões de Vendas)
   {
     id: "eletrodomesticos-premium",
-    name: "Eletroportáteis premium",
+    name: "Eletroportáteis",
     priority: "alta",
     terms: [
       "air fryer mondial",
       "air fryer philco",
-      "cafeteira nespresso",
       "cafeteira tres coracoes",
-      "aspirador robo",
+      "cafeteira nespresso",
       "liquidificador arno",
       "liquidificador philips walita",
+      "sanduicheira grill",
+      "aspirador de po vertical",
     ],
   },
-  // 5. Ferramentas Elétricas e Manuais de Linha Profissional
-  {
-    id: "ferramentas",
-    name: "Ferramentas",
-    priority: "media",
-    terms: [
-      "parafusadeira bosch",
-      "parafusadeira makita",
-      "serra circular",
-      "lavadora alta pressao karcher",
-      "furadeira de impacto bosch",
-      "maleta de ferramentas",
-    ],
-  },
-  // 6. Áudio e Caixas de Som
-  {
-    id: "audio",
-    name: "Áudio",
-    priority: "media",
-    terms: [
-      "caixa jbl flip",
-      "caixa jbl charge",
-      "fone jbl tune",
-      "fone sony wh",
-      "soundbar samsung",
-      "fone bluetooth cancelamento ruido",
-    ],
-  },
-  // 7. Suplementação Esportiva Consolidada
+  // 2. Suplementação Esportiva Consolidada
   {
     id: "suplementos",
     name: "Suplementos",
-    priority: "media",
+    priority: "alta",
     terms: [
       "creatina max titanium",
       "whey dux 900g",
       "whey max titanium",
       "creatina integralmedica",
+      "creatina soldiers 500g",
+      "whey protein isolado",
     ],
   },
-  // 8. Tênis de Marca Oficiais
+  // 3. Tênis de Marca Oficiais
   {
     id: "tenis-marcas",
     name: "Tênis de Marca",
@@ -125,13 +58,13 @@ export const DESIRED_CATEGORIES: WishlistCategory[] = [
     terms: [
       "tenis olympikus",
       "tenis puma",
-      "tenis asics",
       "tenis fila",
-      "tenis nike corrida",
+      "tenis asics",
       "tenis adidas running",
+      "tenis nike masculino",
     ],
   },
-  // 9. Moda Fitness e Roupas de Treino
+  // 4. Moda Fitness e Roupas de Treino
   {
     id: "moda-fitness-casual",
     name: "Roupas e Moda Fitness",
@@ -142,18 +75,82 @@ export const DESIRED_CATEGORIES: WishlistCategory[] = [
       "legging fitness feminina",
       "camiseta academia masculina",
       "bermuda treino masculina",
+      "cueca calvin klein",
     ],
   },
-  // 10. Perfumaria e Beleza
+  // 5. Perfumaria e Beleza
   {
     id: "beleza-cuidados",
     name: "Beleza e Cuidados Pessoais",
-    priority: "menor",
+    priority: "alta",
     terms: [
       "perfume malbec",
       "perfume kaiak",
       "protetor solar la roche posay",
       "perfume egeo",
+      "protetor solar nivea",
+      "perfume importado masculino",
+    ],
+  },
+  // 6. Áudio e Fones Bluetooth
+  {
+    id: "audio",
+    name: "Áudio",
+    priority: "media",
+    terms: [
+      "fone jbl tune",
+      "caixa jbl flip",
+      "fone bluetooth cancelamento ruido",
+      "fone jbl wave",
+      "caixa de som jbl",
+    ],
+  },
+  // 7. Ferramentas Elétricas para Casa e Trabalho
+  {
+    id: "ferramentas",
+    name: "Ferramentas",
+    priority: "media",
+    terms: [
+      "parafusadeira bosch",
+      "parafusadeira makita",
+      "furadeira de impacto",
+      "maleta de ferramentas completa",
+      "serra tico tico",
+    ],
+  },
+  // 8. Eletrônicos e Games (Acessórios e Periféricos)
+  {
+    id: "consoles-games",
+    name: "Games e Periféricos",
+    priority: "menor",
+    terms: [
+      "controle xbox series",
+      "controle dualsense ps5",
+      "controle 8bitdo",
+      "mouse gamer logitech",
+      "teclado mecanico gamer",
+    ],
+  },
+  // 9. Smartphones Acessíveis
+  {
+    id: "smartphones",
+    name: "Smartphones Acessíveis",
+    priority: "menor",
+    terms: [
+      "smartphone 128gb",
+      "smartphone motorola moto g",
+      "smartphone xiaomi redmi",
+    ],
+  },
+  // 10. Notebooks e Periféricos
+  {
+    id: "notebooks",
+    name: "Notebooks",
+    priority: "menor",
+    terms: [
+      "mochila notebook executiva",
+      "suporte notebook articulado",
+      "base cooler notebook",
     ],
   },
 ];

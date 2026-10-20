@@ -25,6 +25,42 @@ export async function POST(
     return NextResponse.json<ApiError>({ error: "Oferta não encontrada." }, { status: 404 });
   }
 
+  const isShopee =
+    offer.source === "shopee" ||
+    offer.id.startsWith("shopee:") ||
+    offer.originalUrl.includes("shopee.com");
+
+  if (isShopee) {
+    const { generateShopeeShortLink } = await import("@/lib/server/shopee");
+    const result = await generateShopeeShortLink(offer.originalUrl);
+    const shopeeShort = result?.shortUrl;
+    if (!shopeeShort) {
+      return NextResponse.json<ApiError>(
+        { error: "Não foi possível gerar o link de afiliado oficial da Shopee." },
+        { status: 502 },
+      );
+    }
+
+    await updateDatabase((data) => {
+      const target = data.offers.find((o) => o.id === offerId);
+      if (target) {
+        target.shortUrl = shopeeShort;
+        target.affiliateUrl = shopeeShort;
+        target.shortUrlStatus = "pronto";
+        target.shortUrlGeneratedAt = new Date().toISOString();
+        target.shortUrlAttempts = (target.shortUrlAttempts || 0) + 1;
+        target.shortUrlError = null;
+      }
+    });
+
+    return NextResponse.json({
+      ok: true,
+      shortUrl: shopeeShort,
+      affiliateUrl: shopeeShort,
+      provider: "shopee",
+    });
+  }
+
   let hasCookie = Boolean(config.mercadoLivre.sessionCookie);
   if (!hasCookie) {
     const { loadDecryptedSession } = await import("@/lib/server/session-vault");

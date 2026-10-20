@@ -5,7 +5,7 @@ import { fetchDesiredOffers } from "./fetcher";
 import { validateOfferCandidate, type CandidateRawItem, type ValidationResult } from "./validator";
 import { saveApprovedOffers, type SaveApprovedResult } from "./database";
 import { readDatabase } from "../storage";
-import { rankOffersWithExploration } from "../recommendation-engine";
+import { rankOffersWithExploration, getCategoryPriceRange } from "../recommendation-engine";
 import { getLearnedPreferences, getAllFeedbacks } from "../feedback-service";
 import { recordScanRun } from "../history-service";
 import type { Offer, LastSearchInfo } from "../../types";
@@ -94,9 +94,24 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   const approvedCandidates: CandidateRawItem[] = [];
 
-  // 2. Validator: Aplica as barreiras de validação item a item com logs
+  // Carrega histórico de preferências e feedbacks para determinar faixas de preço aprendidas
+  const [preferences, feedbacks] = await Promise.all([
+    getLearnedPreferences().catch(() => ({
+      blockedBrands: [],
+      blockedSellers: [],
+      blockedKeywords: [],
+      blockedCategories: [],
+      totalApprovals: 0,
+      totalRejections: 0,
+    })),
+    getAllFeedbacks().catch(() => []),
+  ]);
+
+  // 2. Validator: Aplica as barreiras de validação com faixa de preço aprendida por categoria (Etapa D)
   for (const item of rawItems) {
-    const validation = validateOfferCandidate(item);
+    const categoryName = item.categoryName || "Geral";
+    const categoryPriceRange = getCategoryPriceRange(categoryName, feedbacks);
+    const validation = validateOfferCandidate(item, categoryPriceRange);
 
     if (!validation.valid) {
       rejectedCounts.total++;
@@ -120,7 +135,7 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   console.log(`\n✅ [SCANNER] Produtos rigorosamente APROVADOS no pipeline: ${approvedCandidates.length}`);
   console.log(`🚫 [SCANNER] Produtos REJEITADOS no pipeline: ${rejectedCounts.total}`);
-  console.log(`   - Preço < R$ 80: ${rejectedCounts.minPrice}`);
+  console.log(`   - Preço < piso ou > teto da categoria: ${rejectedCounts.minPrice + rejectedCounts.maxPrice}`);
   console.log(`   - Termos proibidos na blacklist: ${rejectedCounts.blacklistTerm}`);
   console.log(`   - Sem preço original / Sem desconto: ${rejectedCounts.noOriginalPrice}`);
   console.log(`   - Desconto real < 15%: ${rejectedCounts.lowDiscount}`);
@@ -131,11 +146,24 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   // 4. Carrega o banco atualizado e aplica ordenação inteligente para o frontend
   const db = await readDatabase();
-  const preferences = await getLearnedPreferences();
-  const feedbacks = await getAllFeedbacks();
   const rankedOffers = rankOffersWithExploration(db.offers, feedbacks, preferences);
 
   stageCounts.etapa6_retornados_frontend = rankedOffers.length;
+
+  // 5. Calcula métricas de aprovação separando cérebro x exploração
+  const brainFeedbacks = feedbacks.filter((f) => !(f.metadata as Record<string, unknown>)?.isExploration);
+  const explorationFeedbacks = feedbacks.filter((f) => Boolean((f.metadata as Record<string, unknown>)?.isExploration));
+
+  const brainApprovals = brainFeedbacks.filter((f) => f.action === "aprovar").length;
+  const brainTotal = brainFeedbacks.length;
+  const explorationApprovals = explorationFeedbacks.filter((f) => f.action === "aprovar").length;
+  const explorationTotal = explorationFeedbacks.length;
+
+  const approvalRateBrain = brainTotal > 0 ? Number(((brainApprovals / brainTotal) * 100).toFixed(1)) : 100.0;
+  const approvalRateExploration = explorationTotal > 0 ? Number(((explorationApprovals / explorationTotal) * 100).toFixed(1)) : 50.0;
+
+  const itemsExploration = rankedOffers.filter((o) => o.isExploration).length;
+  const itemsBrain = rankedOffers.length - itemsExploration;
 
   const now = new Date().toISOString();
   const lastSearch: LastSearchInfo = {
@@ -148,6 +176,7 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   console.log("=======================================================");
   console.log(`🏁 [SCANNER] FINALIZADO: ${saveResult.added} novas ofertas salvas, ${saveResult.updated} atualizadas.`);
+  console.log(`📊 [SCANNER] Taxa aprovação: Cérebro ${approvalRateBrain}% (${brainApprovals}/${brainTotal}) | Exploração ${approvalRateExploration}% (${explorationApprovals}/${explorationTotal})`);
   console.log("=======================================================\n");
 
   const durationMs = Date.now() - startTime;
@@ -162,8 +191,18 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
     itemsRejectedPrice: rejectedCounts.minPrice + (rejectedCounts.maxPrice || 0),
     itemsRejectedDiscount: rejectedCounts.noOriginalPrice + rejectedCounts.lowDiscount,
     itemsRejectedBlacklist: rejectedCounts.blacklistTerm,
+    approvalRateBrain,
+    approvalRateExploration,
+    itemsBrain,
+    itemsExploration,
     status: fetchResult.apiErrors.length > 0 && saveResult.added === 0 ? "parcial" : "sucesso",
     errorsLog: fetchResult.apiErrors,
+    metadata: {
+      itemsBrain,
+      itemsExploration,
+      brainTotalFeedbackDecisions: brainTotal,
+      explorationTotalFeedbackDecisions: explorationTotal,
+    },
   }).catch((err) => console.warn("[scanner] Falha ao registrar scan run:", err));
 
   return {

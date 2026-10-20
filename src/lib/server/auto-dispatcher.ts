@@ -39,13 +39,14 @@ export interface DispatchResult {
  * Localiza a oferta aprovada de maior score que atende aos critérios de qualidade (score >= 75)
  * e não pertence a categorias bloqueadas (livros, receitas, cursos, produtos digitais).
  */
-function findOldestApprovedOffer(offers: Offer[], minScore = 75): Offer | null {
+function findOldestApprovedOffer(offers: Offer[], minScore = 75, maxPrice = 450): Offer | null {
   const approvedCandidates = offers.filter(
     (o) =>
       o.status === "aprovado" &&
       o.whatsappStatus !== "enviado" &&
       o.whatsappStatus !== "falhou" &&
       (o.opportunityScore ?? 0) >= minScore &&
+      o.price <= maxPrice &&
       !isBlockedProductOrCategory(o.title, null, o.searchTerm).blocked
   );
 
@@ -105,6 +106,11 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
 
     // 1. Identifica a melhor oferta aprovada de forma atômica
     const minScore = schedSettings.minAutoPublishScore ?? schedSettings.minScore ?? 75;
+    const maxAllowedPrice =
+      (schedSettings as unknown as Record<string, unknown>).maxPrice != null
+        ? Number((schedSettings as unknown as Record<string, unknown>).maxPrice)
+        : 450;
+
     await updateDatabase((db) => {
       const candidates = db.offers.filter(
         (o) =>
@@ -112,11 +118,12 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
           o.whatsappStatus !== "enviado" &&
           o.whatsappStatus !== "falhou" &&
           (o.opportunityScore ?? 0) >= minScore &&
+          o.price <= maxAllowedPrice &&
           !isBlockedProductOrCategory(o.title, null, o.searchTerm).blocked
       );
       remainingCount = candidates.length;
 
-      const oldest = findOldestApprovedOffer(db.offers, minScore);
+      const oldest = findOldestApprovedOffer(db.offers, minScore, maxAllowedPrice);
       if (oldest) {
         targetOfferId = oldest.id;
         targetOfferCopy = { ...oldest };
@@ -140,20 +147,92 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
     }
 
     const offer: Offer = targetOfferCopy;
+    const isShopee =
+      offer.source === "shopee" ||
+      offer.id.startsWith("shopee:") ||
+      offer.originalUrl.includes("shopee.com") ||
+      Boolean(offer.shortUrl?.includes("shopee.com"));
 
     // 2. Revalidação de Link Curto
-    // Se não tiver link meli.la, tenta gerar ou verificar
-    if (!offer.shortUrl || !offer.shortUrl.includes("meli.la")) {
-      let short = (await generateMeliShortLinkDetailed(offer.originalUrl)).shortUrl;
-      if (!short) {
-        short = await generateMeliLaWithPuppeteer(offer.originalUrl);
-      }
+    if (isShopee) {
+      if (!offer.shortUrl || !offer.shortUrl.includes("shopee.com")) {
+        const { generateShopeeShortLink } = await import("./shopee");
+        const res = await generateShopeeShortLink(offer.originalUrl);
+        const short = res?.shortUrl;
+        if (short) {
+          offer.shortUrl = short;
+        } else {
+          const errorReason = "Link de afiliado oficial da Shopee não pôde ser gerado";
+          const nextTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-      if (short) {
-        offer.shortUrl = short;
-      } else {
-        // Falha no link curto: marca como falhou com motivo claro
-        const errorReason = "Link curto meli.la não pôde ser gerado";
+          await updateDatabase((db) => {
+            const target = db.offers.find((o) => o.id === offer.id);
+            if (target) {
+              target.whatsappStatus = "falhou";
+              target.whatsappError = errorReason;
+              target.statusChangedAt = new Date().toISOString();
+            }
+            if (db.automation) {
+              db.automation.lastError = errorReason;
+              db.automation.nextScheduledAt = nextTime;
+            }
+          });
+
+          return {
+            dispatched: false,
+            status: "failed",
+            message: errorReason,
+            error: errorReason,
+            remainingApprovedCount: Math.max(0, remainingCount - 1),
+            nextScheduledAt: nextTime,
+          };
+        }
+      }
+    } else {
+      // Mercado Livre
+      if (!offer.shortUrl || !offer.shortUrl.includes("meli.la")) {
+        let short = (await generateMeliShortLinkDetailed(offer.originalUrl)).shortUrl;
+        if (!short) {
+          short = await generateMeliLaWithPuppeteer(offer.originalUrl);
+        }
+
+        if (short) {
+          offer.shortUrl = short;
+        } else {
+          const errorReason = "Link curto meli.la não pôde ser gerado";
+          const nextTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+          await updateDatabase((db) => {
+            const target = db.offers.find((o) => o.id === offer.id);
+            if (target) {
+              target.whatsappStatus = "falhou";
+              target.whatsappError = errorReason;
+              target.statusChangedAt = new Date().toISOString();
+            }
+            if (db.automation) {
+              db.automation.lastError = errorReason;
+              db.automation.nextScheduledAt = nextTime;
+            }
+          });
+
+          return {
+            dispatched: false,
+            status: "failed",
+            message: errorReason,
+            error: errorReason,
+            remainingApprovedCount: Math.max(0, remainingCount - 1),
+            nextScheduledAt: nextTime,
+          };
+        }
+      }
+    }
+
+    // 3. Revalidação de Estoque e Preço
+    if (isShopee) {
+      const { revalidateShopeeItem } = await import("./shopee");
+      const shopeeCheck = await revalidateShopeeItem(offer.externalId);
+      if (!shopeeCheck.available) {
+        const errorReason = shopeeCheck.error || "Produto sem estoque ou indisponível na Shopee";
         const nextTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
         await updateDatabase((db) => {
@@ -178,47 +257,55 @@ export async function dispatchNextApprovedOffer(force = false): Promise<Dispatch
           nextScheduledAt: nextTime,
         };
       }
-    }
 
-    // 3. Revalidação de Estoque e Preço no Mercado Livre
-    const mlCheck = await revalidateMLItem(offer.externalId);
-    if (!mlCheck.valid) {
-      const errorReason = mlCheck.error || "Produto sem estoque ou pausado no Mercado Livre";
-      const nextTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-      await updateDatabase((db) => {
-        const target = db.offers.find((o) => o.id === offer.id);
-        if (target) {
-          target.whatsappStatus = "falhou";
-          target.whatsappError = errorReason;
-          target.statusChangedAt = new Date().toISOString();
+      if (typeof shopeeCheck.currentPrice === "number" && shopeeCheck.currentPrice > 0) {
+        offer.price = shopeeCheck.currentPrice;
+        if (shopeeCheck.originalPrice !== undefined && shopeeCheck.originalPrice !== null) {
+          offer.originalPrice = shopeeCheck.originalPrice;
         }
-        if (db.automation) {
-          db.automation.lastError = errorReason;
-          db.automation.nextScheduledAt = nextTime;
+        offer.discountPercent = calcDiscountPercent(offer.price, offer.originalPrice);
+      }
+    } else {
+      // Mercado Livre
+      const mlCheck = await revalidateMLItem(offer.externalId);
+      if (!mlCheck.valid) {
+        const errorReason = mlCheck.error || "Produto sem estoque ou pausado no Mercado Livre";
+        const nextTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+        await updateDatabase((db) => {
+          const target = db.offers.find((o) => o.id === offer.id);
+          if (target) {
+            target.whatsappStatus = "falhou";
+            target.whatsappError = errorReason;
+            target.statusChangedAt = new Date().toISOString();
+          }
+          if (db.automation) {
+            db.automation.lastError = errorReason;
+            db.automation.nextScheduledAt = nextTime;
+          }
+        });
+
+        return {
+          dispatched: false,
+          status: "failed",
+          message: errorReason,
+          error: errorReason,
+          remainingApprovedCount: Math.max(0, remainingCount - 1),
+          nextScheduledAt: nextTime,
+        };
+      }
+
+      // Atualiza preço e frete se a API retornou valor atualizado
+      if (typeof mlCheck.price === "number" && mlCheck.price > 0) {
+        offer.price = mlCheck.price;
+        if (mlCheck.originalPrice !== undefined) {
+          offer.originalPrice = mlCheck.originalPrice;
         }
-      });
-
-      return {
-        dispatched: false,
-        status: "failed",
-        message: errorReason,
-        error: errorReason,
-        remainingApprovedCount: Math.max(0, remainingCount - 1),
-        nextScheduledAt: nextTime,
-      };
-    }
-
-    // Atualiza preço e frete se a API retornou valor atualizado
-    if (typeof mlCheck.price === "number" && mlCheck.price > 0) {
-      offer.price = mlCheck.price;
-      if (mlCheck.originalPrice !== undefined) {
-        offer.originalPrice = mlCheck.originalPrice;
+        if (mlCheck.freeShipping !== undefined) {
+          offer.freeShipping = mlCheck.freeShipping;
+        }
+        offer.discountPercent = calcDiscountPercent(offer.price, offer.originalPrice);
       }
-      if (mlCheck.freeShipping !== undefined) {
-        offer.freeShipping = mlCheck.freeShipping;
-      }
-      offer.discountPercent = calcDiscountPercent(offer.price, offer.originalPrice);
     }
 
     // 4. Revalidação de Cupom

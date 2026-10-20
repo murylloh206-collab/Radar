@@ -19,5 +19,6 @@ export function formatDateTime(iso: string): string {
  */
 export function largerThumbnail(url: string | null): string | null {
   if (!url) return null;
-  return url.replace(/-I\.(jpg|jpeg|png|webp)$/i, "-O.$1");
+  const secure = url.replace(/^http:\/\//i, "https://");
+  return secure.replace(/-I\.(jpg|jpeg|png|webp)$/i, "-O.$1");
 }

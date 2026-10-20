@@ -50,9 +50,15 @@ export function getSupabaseClient(): SupabaseClient {
 // ---------------------------------------------------------------------------
 
 export function mapDbToOffer(row: Record<string, unknown>): Offer {
+  const isShopee =
+    row.source === "shopee" ||
+    String(row.id || "").startsWith("shopee:") ||
+    String(row.original_url || "").includes("shopee.com") ||
+    String(row.short_url || "").includes("shopee.com");
+
   return {
     id: String(row.id),
-    source: "mercadolivre",
+    source: isShopee ? "shopee" : "mercadolivre",
     externalId: String(row.external_id || ""),
     title: String(row.title || ""),
     thumbnail: (row.thumbnail as string) || null,

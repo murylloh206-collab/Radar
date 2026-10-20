@@ -70,6 +70,8 @@ export function validateAffiliateUrl(
 
   const isAffiliateLink =
     parsed.hostname.includes("meli.la") ||
+    parsed.hostname.includes("shopee.com") ||
+    parsed.hostname.includes("shopee.com.br") ||
     parsed.searchParams.has("matt_tool") ||
     parsed.searchParams.has("matt_word") ||
     parsed.searchParams.has("tracking_id");
@@ -79,7 +81,7 @@ export function validateAffiliateUrl(
     return {
       ok: false,
       error:
-        "Esse é o link comum do produto, sem tags de afiliado. Use o link com parâmetros de afiliado (matt_tool/matt_word) ou encurtado (meli.la).",
+        "Esse é o link comum do produto, sem tags de afiliado. Use o link oficial de afiliado ou encurtado (meli.la ou Shopee).",
     };
   }
 

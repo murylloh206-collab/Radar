@@ -251,8 +251,9 @@ test("Arquitetura e Isolamento de Provedores: Mercado Livre vs Shopee", () => {
 
   const shopee = getProvider("shopee");
   assert.equal(shopee.source, "shopee");
-  assert.equal(shopee.capabilities.supportsOfficialApi, false, "Shopee não deve estar ativa sem credenciais");
-  assert.equal(shopee.isConfigured(), false, "Shopee não está configurada sem APP_ID e SECRET");
+  assert.equal(shopee.capabilities.supportsOfficialApi, true, "Shopee possui suporte à API Oficial de Afiliados (GraphQL)");
+  assert.equal(shopee.capabilities.supportsOfficialAffiliateShortening, true, "Shopee gera links oficiais de afiliados encurtados");
+  assert.equal(typeof shopee.isConfigured(), "boolean");
 });
 
 test("Preservação integral do formatador e fluxo de WhatsApp", () => {

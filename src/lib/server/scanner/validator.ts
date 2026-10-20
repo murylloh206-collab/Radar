@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { OfferSource } from "@/lib/types";
+
 export interface CandidateRawItem {
   externalId: string;
   title: string;
@@ -14,18 +16,28 @@ export interface CandidateRawItem {
   condition?: string;
   rating?: number | null;
   reviewsCount?: number | null;
+  source?: OfferSource;
+  affiliateUrl?: string | null;
+  shortUrl?: string | null;
 }
 
 export interface ValidationResult {
   valid: boolean;
   reason: string;
-  rejectionCode?: "MIN_PRICE" | "NO_ORIGINAL_PRICE" | "LOW_DISCOUNT" | "BLACKLIST_TERM" | "REPLICA_OR_USED";
+  rejectionCode?:
+    | "MIN_PRICE"
+    | "MAX_PRICE"
+    | "NO_ORIGINAL_PRICE"
+    | "LOW_DISCOUNT"
+    | "BLACKLIST_TERM"
+    | "REPLICA_OR_USED";
   discountPercent?: number;
 }
 
 /** Configuração dos filtros de corte do pipeline */
 export const VALIDATION_RULES = {
   MIN_PRICE: 80.0,
+  MAX_PRICE: 450.0, // Teto máximo padrão para evitar itens caros/extrapolados
   MIN_DISCOUNT_PERCENT: 15,
 };
 
@@ -136,20 +148,25 @@ export function checkBlacklist(title: string): string | null {
  * 2. Blacklist de Termos: sem acessórios, capas, usados, etc.
  * 3. Validação Matemática de Desconto Real: original_price > price e desconto >= 15%
  */
-export function validateOfferCandidate(item: CandidateRawItem): ValidationResult {
+export function validateOfferCandidate(
+  item: CandidateRawItem,
+  customPriceRange?: { minPrice: number; maxPrice: number; isLearned?: boolean }
+): ValidationResult {
   const title = item.title?.trim() || "";
   const price = typeof item.price === "number" ? item.price : 0;
   const originalPrice = typeof item.originalPrice === "number" ? item.originalPrice : null;
+  const minPriceLimit = customPriceRange?.minPrice ?? VALIDATION_RULES.MIN_PRICE;
+  const maxPriceLimit = customPriceRange?.maxPrice ?? VALIDATION_RULES.MAX_PRICE;
 
-  // Barreira 1: Piso de Preço (R$ 80,00)
-  if (price < VALIDATION_RULES.MIN_PRICE) {
+  // Barreira 1: Piso de Preço
+  if (price < minPriceLimit) {
     console.log(
-      `[REJEITADO] Preço abaixo do mínimo: R$ ${price.toFixed(2)} < R$ ${VALIDATION_RULES.MIN_PRICE.toFixed(2)} | "${title}"`
+      `[REJEITADO] Preço abaixo do mínimo: R$ ${price.toFixed(2)} < R$ ${minPriceLimit.toFixed(2)} | "${title}"`
     );
     return {
       valid: false,
       rejectionCode: "MIN_PRICE",
-      reason: `Preço R$ ${price.toFixed(2)} abaixo do piso mínimo de R$ ${VALIDATION_RULES.MIN_PRICE.toFixed(2)}.`,
+      reason: `Preço R$ ${price.toFixed(2)} abaixo do piso mínimo de R$ ${minPriceLimit.toFixed(2)}.`,
     };
   }
 
@@ -187,6 +204,18 @@ export function validateOfferCandidate(item: CandidateRawItem): ValidationResult
       rejectionCode: "LOW_DISCOUNT",
       reason: `Desconto real de ${realDiscountPercent}% abaixo do mínimo exigido de ${VALIDATION_RULES.MIN_DISCOUNT_PERCENT}%.`,
       discountPercent: realDiscountPercent,
+    };
+  }
+
+  // Barreira 4: Teto de Preço (dinâmico ou padrão R$ 450,00)
+  if (price > maxPriceLimit) {
+    console.log(
+      `[REJEITADO] Preço acima do teto permitido: R$ ${price.toFixed(2)} > R$ ${maxPriceLimit.toFixed(2)} | "${title}"`
+    );
+    return {
+      valid: false,
+      rejectionCode: "MAX_PRICE",
+      reason: `Preço R$ ${price.toFixed(2)} excede o teto permitido de R$ ${maxPriceLimit.toFixed(2)}.`,
     };
   }
 
