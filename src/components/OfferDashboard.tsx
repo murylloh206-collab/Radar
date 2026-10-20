@@ -65,7 +65,21 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [lastSearch, setLastSearch] = useState<LastSearchInfo | null>(initial.lastSearch);
   const [terms, setTerms] = useState<string[]>(initial.config.defaultTerms);
   const [newTerm, setNewTerm] = useState("");
-  const [filter, setFilter] = useState<Filter>("pendente");
+  const [filter, setFilter] = useState<Filter>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("active_offer_tab") as Filter | null;
+      if (saved && ["pendente", "aprovado", "publicado", "rejeitado"].includes(saved)) {
+        return saved;
+      }
+    }
+    return "pendente";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("active_offer_tab", filter);
+    }
+  }, [filter]);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("oportunidade");
@@ -356,12 +370,11 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       const replica = result.skippedReplica ?? 0;
       const priceLow = result.skippedPrice ?? 0;
 
-      // Abre a aba 'pendente' somente se novas ofertas pendentes foram inseridas
+      // Notifica o usuário preservando a aba atual que ele está navegando
       if (added > 0) {
-        setFilter("pendente");
         notify(
           "ok",
-          `Atualização concluída: ${added} nova(s) oferta(s) inserida(s) em Pendentes, ${updated} atualizada(s)! (${found} analisadas no Mercado Livre)`
+          `Atualização concluída: ${added} nova(s) oferta(s) inserida(s), ${updated} atualizada(s)! (${found} analisadas)`
         );
       } else {
         // Se nenhuma nova foi criada, mantém a aba atual e exibe contagens de descarte
@@ -790,12 +803,14 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
         {/* Status Shopee */}
         <div className="mt-2.5 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-slate-500" />
+            <span className="h-2 w-2 rounded-full bg-orange-400 shadow-sm shadow-orange-400/50 animate-pulse" />
             <span>
-              <strong className="text-slate-300">Shopee:</strong> Aprovado no programa de afiliados · Integração aguarda credenciais da API Open Platform.
+              <strong className="text-white">Shopee:</strong> Conectado via API Oficial (Open Platform · AppID 18303261388)
             </span>
           </div>
-          <span className="text-[10px] text-slate-500">Mecanismo oficial</span>
+          <span className="rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-bold text-orange-300 uppercase tracking-wider">
+            API Oficial Ativa
+          </span>
         </div>
       </section>
 
