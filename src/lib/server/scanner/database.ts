@@ -5,6 +5,7 @@ import { generateProductFingerprint } from "../offer-scoring-engine";
 import { generateMeliShortLinkDetailed } from "../meli-shortener";
 import { buildAffiliateUrl } from "../affiliate";
 import { extractBrand } from "../recommendation-engine";
+import { recordPriceHistoryItem } from "../history-service";
 import type { CandidateRawItem } from "./validator";
 import type { Offer, PriceHistoryItem } from "../../types";
 
@@ -69,8 +70,9 @@ export async function saveApprovedOffers(
   const itemsToUpdate: Array<{ existing: Offer; candidate: CandidateRawItem }> = [];
 
   for (const candidate of approvedCandidates) {
-    const offerInternalId = `mercadolivre:${candidate.externalId}`;
-    const fingerprint = generateProductFingerprint("mercadolivre", candidate.externalId, candidate.title);
+    const source = candidate.source || "mercadolivre";
+    const offerInternalId = `${source}:${candidate.externalId}`;
+    const fingerprint = generateProductFingerprint(source, candidate.externalId, candidate.title);
 
     // 1. Checa se o item já foi excluído definitivamente pelo usuário (tombstone)
     if (tombstoneIds.has(offerInternalId) || tombstoneFingerprints.has(fingerprint)) {
@@ -96,9 +98,10 @@ export async function saveApprovedOffers(
     itemsToInsert.push(candidate);
   }
 
-  // Encurtamento SÍNCRONO via API oficial meli.la para as novas ofertas aprovadas (até 6 por ciclo)
+  // Encurtamento SÍNCRONO via API oficial meli.la para as novas ofertas do Mercado Livre (até 6 por ciclo)
   const shortUrlMap = new Map<string, string>();
-  await mapWithConcurrency(itemsToInsert.slice(0, 6), 3, async (item) => {
+  const mlItemsToShorten = itemsToInsert.filter((i) => (i.source || "mercadolivre") === "mercadolivre");
+  await mapWithConcurrency(mlItemsToShorten.slice(0, 6), 3, async (item) => {
     const cleanId = (item.externalId || "").replace(/^MLB-?/, "");
     const fallbacks = cleanId
       ? [
@@ -142,11 +145,18 @@ export async function saveApprovedOffers(
 
     // Insere os novos produtos aprovados
     for (const candidate of itemsToInsert) {
-      const id = `mercadolivre:${candidate.externalId}`;
-      const shortUrl = shortUrlMap.get(candidate.externalId) || null;
-      const officialAffiliateUrl = shortUrl || buildAffiliateUrl(candidate.originalUrl);
+      const source = candidate.source || "mercadolivre";
+      const id = `${source}:${candidate.externalId}`;
+      const shortUrl =
+        candidate.shortUrl ||
+        shortUrlMap.get(candidate.externalId) ||
+        null;
+      const officialAffiliateUrl =
+        shortUrl ||
+        candidate.affiliateUrl ||
+        buildAffiliateUrl(candidate.originalUrl);
       const brand = extractBrand(candidate.title);
-      const fingerprint = generateProductFingerprint("mercadolivre", candidate.externalId, candidate.title);
+      const fingerprint = generateProductFingerprint(source, candidate.externalId, candidate.title);
 
       const discountPercent =
         candidate.originalPrice && candidate.originalPrice > candidate.price
@@ -155,7 +165,7 @@ export async function saveApprovedOffers(
 
       const newOffer: Offer = {
         id,
-        source: "mercadolivre",
+        source,
         externalId: candidate.externalId,
         title: candidate.title,
         thumbnail: candidate.thumbnail,
@@ -192,11 +202,40 @@ export async function saveApprovedOffers(
       localDb.offers.unshift(newOffer);
       newlySaved.push(newOffer);
       added++;
-      console.log(`[database] Nova oferta aprovada inserida no banco: "${newOffer.title}" (R$ ${newOffer.price.toFixed(2)})`);
+      console.log(`[database] Nova oferta aprovada inserida no banco [${source}]: "${newOffer.title}" (R$ ${newOffer.price.toFixed(2)})`);
     }
 
     return { offers: localDb.offers, lastSearch: localDb.lastSearch };
   });
+
+  // Grava histórico relacional de preços de forma assíncrona sem travar o retorno
+  for (const offer of newlySaved) {
+    recordPriceHistoryItem({
+      offerId: offer.id,
+      externalId: offer.externalId,
+      source: offer.source,
+      price: offer.price,
+      originalPrice: offer.originalPrice,
+      discountPercent: offer.discountPercent,
+      recordedAt: now,
+    }).catch((err) => console.warn("[database] Falha ao gravar histórico relacional:", err));
+  }
+
+  for (const { existing, candidate } of itemsToUpdate) {
+    if (candidate.price !== existing.price) {
+      recordPriceHistoryItem({
+        offerId: existing.id,
+        externalId: existing.externalId,
+        source: existing.source,
+        price: candidate.price,
+        originalPrice: candidate.originalPrice ?? existing.originalPrice,
+        discountPercent: candidate.originalPrice && candidate.originalPrice > candidate.price
+          ? Math.round(((candidate.originalPrice - candidate.price) / candidate.originalPrice) * 100)
+          : existing.discountPercent,
+        recordedAt: now,
+      }).catch((err) => console.warn("[database] Falha ao gravar histórico relacional:", err));
+    }
+  }
 
   return {
     added,

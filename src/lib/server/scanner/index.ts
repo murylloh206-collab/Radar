@@ -7,6 +7,7 @@ import { saveApprovedOffers, type SaveApprovedResult } from "./database";
 import { readDatabase } from "../storage";
 import { rankOffersWithExploration } from "../recommendation-engine";
 import { getLearnedPreferences, getAllFeedbacks } from "../feedback-service";
+import { recordScanRun } from "../history-service";
 import type { Offer, LastSearchInfo } from "../../types";
 
 export * from "./terms";
@@ -23,6 +24,7 @@ export interface ScannerPipelineResult {
   found: number;
   rejected: {
     minPrice: number;
+    maxPrice?: number;
     noOriginalPrice: number;
     lowDiscount: number;
     blacklistTerm: number;
@@ -51,6 +53,9 @@ export interface ScannerPipelineResult {
  *  4. Persistência sem Duplicatas no Banco e Encurtamento meli.la
  */
 export async function runOffersScanner(): Promise<ScannerPipelineResult> {
+  const startTime = Date.now();
+  const startedAt = new Date().toISOString();
+
   console.log("\n=======================================================");
   console.log("🚀 [SCANNER] INICIANDO MOTOR DE ESCANEAMENTO RIGOROSO");
   console.log("=======================================================");
@@ -80,6 +85,7 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   const rejectedCounts = {
     minPrice: 0,
+    maxPrice: 0,
     noOriginalPrice: 0,
     lowDiscount: 0,
     blacklistTerm: 0,
@@ -95,6 +101,7 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
     if (!validation.valid) {
       rejectedCounts.total++;
       if (validation.rejectionCode === "MIN_PRICE") rejectedCounts.minPrice++;
+      else if (validation.rejectionCode === "MAX_PRICE") rejectedCounts.maxPrice++;
       else if (validation.rejectionCode === "NO_ORIGINAL_PRICE") rejectedCounts.noOriginalPrice++;
       else if (validation.rejectionCode === "LOW_DISCOUNT") rejectedCounts.lowDiscount++;
       else if (validation.rejectionCode === "BLACKLIST_TERM") rejectedCounts.blacklistTerm++;
@@ -142,6 +149,22 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
   console.log("=======================================================");
   console.log(`🏁 [SCANNER] FINALIZADO: ${saveResult.added} novas ofertas salvas, ${saveResult.updated} atualizadas.`);
   console.log("=======================================================\n");
+
+  const durationMs = Date.now() - startTime;
+  await recordScanRun({
+    source: "ambos",
+    startedAt,
+    finishedAt: now,
+    durationMs,
+    itemsFound: rawItems.length,
+    itemsInserted: saveResult.added,
+    itemsUpdated: saveResult.updated,
+    itemsRejectedPrice: rejectedCounts.minPrice + (rejectedCounts.maxPrice || 0),
+    itemsRejectedDiscount: rejectedCounts.noOriginalPrice + rejectedCounts.lowDiscount,
+    itemsRejectedBlacklist: rejectedCounts.blacklistTerm,
+    status: fetchResult.apiErrors.length > 0 && saveResult.added === 0 ? "parcial" : "sucesso",
+    errorsLog: fetchResult.apiErrors,
+  }).catch((err) => console.warn("[scanner] Falha ao registrar scan run:", err));
 
   return {
     ok: true,
