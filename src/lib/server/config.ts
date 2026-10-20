@@ -35,9 +35,21 @@ export const config = {
     affiliateMattWord: process.env.ML_AFFILIATE_MATT_WORD?.trim() || "michelhenrique1",
     sessionCookie: process.env.ML_SESSION_COOKIE?.trim() || "",
   },
+  shopee: {
+    appId: process.env.SHOPEE_AFFILIATE_APP_ID?.trim() || "",
+    secret: process.env.SHOPEE_AFFILIATE_SECRET?.trim() || "",
+    graphqlUrl:
+      process.env.SHOPEE_AFFILIATE_GRAPHQL_URL?.trim() ||
+      "https://open-api.affiliate.shopee.com.br/graphql",
+  },
 };
 
 export function isMercadoLivreConfigured(): boolean {
   const ml = config.mercadoLivre;
   return Boolean(ml.accessToken || (ml.clientId && ml.clientSecret));
+}
+
+export function isShopeeConfigured(): boolean {
+  const shp = config.shopee;
+  return Boolean(shp.appId && shp.secret);
 }

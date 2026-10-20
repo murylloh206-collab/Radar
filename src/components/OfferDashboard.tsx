@@ -189,6 +189,8 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
 
   useEffect(() => {
     reloadSessionDiagnostics();
+    const interval = setInterval(reloadSessionDiagnostics, 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -703,6 +705,53 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-3 pb-24 pt-4 sm:px-6 lg:px-8">
+      {/* ================= Alerta Visível de Sessão do ML Expirada ================= */}
+      {sessionDiagnostic?.mercadolivre &&
+        (sessionDiagnostic.mercadolivre.status === "expirado" ||
+          sessionDiagnostic.mercadolivre.status === "bloqueado") && (
+          <aside
+            role="alert"
+            aria-live="assertive"
+            className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-2xl border-2 border-rose-500/70 bg-gradient-to-r from-rose-950/90 via-red-900/60 to-slate-900/95 p-4 shadow-xl shadow-rose-950/40 backdrop-blur-md"
+          >
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500/30 text-rose-300 border border-rose-400/50 shadow-inner">
+                <IconAlert width={24} height={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-400 animate-ping" />
+                  <h2 className="text-sm sm:text-base font-extrabold text-white tracking-wide">
+                    ⚠️ Atenção: A sessão do Mercado Livre expirou!
+                  </h2>
+                  <span className="rounded-full bg-rose-500/30 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-200 border border-rose-400/40">
+                    {sessionDiagnostic.mercadolivre.status}
+                  </span>
+                </div>
+                <p className="text-xs text-rose-200/90 mt-1">
+                  {sessionDiagnostic.mercadolivre.lastErrorSanitized ||
+                    "A sessão de afiliados expirou. As requisições de encurtamento meli.la e consultas de afiliados estão inativas até a renovação."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => setShowSecureSessionModal(true)}
+                className="rounded-xl border border-rose-400/50 bg-rose-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-rose-500 shadow-md transition"
+              >
+                🔒 Renovar Sessão meli.la
+              </button>
+              <a
+                href="/api/auth/mercadolivre"
+                className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20 transition"
+              >
+                OAuth
+              </a>
+            </div>
+          </aside>
+        )}
+
       {/* ================= Cabeçalho ================= */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-center gap-3">

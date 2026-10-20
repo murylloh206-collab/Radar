@@ -35,6 +35,7 @@ export interface RecordFeedbackInput {
   offerData?: Partial<Offer>;
   customBrand?: string;
   customSeller?: string;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -184,6 +185,7 @@ export async function recordOfferFeedback(input: RecordFeedbackInput): Promise<{
     metadata: {
       url: targetOffer?.originalUrl,
       source: targetOffer?.source || "mercadolivre",
+      ...(input.metadata || {}),
     },
   };
 
@@ -308,6 +310,30 @@ export async function recordOfferFeedback(input: RecordFeedbackInput): Promise<{
         value: allFeedbacks.slice(0, 100),
         updated_at: now,
       });
+
+      // Atualiza o status da oferta diretamente na tabela `offers` do Supabase
+      if (input.action === "rejeitar" || input.action === "bloquear_marca" || input.action === "bloquear_vendedor") {
+        await supabase
+          .from("offers")
+          .update({
+            status: "rejeitado",
+            rejection_detail: {
+              reason: typeof input.reason === "string" ? input.reason : input.action,
+              failedFilters: ["user_explicit_feedback"],
+              rejectedAt: now,
+            },
+            updated_at: now,
+          })
+          .or(`id.eq.${input.offerId},external_id.eq.${input.externalId}`);
+      } else if (input.action === "aprovar") {
+        await supabase
+          .from("offers")
+          .update({
+            status: "aprovado",
+            updated_at: now,
+          })
+          .or(`id.eq.${input.offerId},external_id.eq.${input.externalId}`);
+      }
     } catch (dbErr) {
       console.warn("[feedback-service] Falha ao persistir no Supabase:", dbErr);
     }

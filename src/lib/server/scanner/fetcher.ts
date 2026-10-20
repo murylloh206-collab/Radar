@@ -1,9 +1,12 @@
 import "server-only";
 
-import { config } from "../config";
+import { config, isShopeeConfigured } from "../config";
 import { MercadoLivreError } from "../mercadolivre";
+import { searchShopeeProducts } from "../shopee";
 import { DESIRED_CATEGORIES, type WishlistCategory } from "./terms";
 import type { CandidateRawItem } from "./validator";
+import { getLearnedPreferences, getAllFeedbacks } from "../feedback-service";
+import { calculateCategoryQuotas, extractBrand, normalizeText } from "../recommendation-engine";
 
 export interface FetcherOptions {
   token: string;
@@ -176,12 +179,20 @@ async function searchViaCatalogFallback(
       const cleanId = (item.item_id || p.id || "").replace(/^MLB-?/, "");
       const picture = p.pictures?.[0];
 
+      // No catálogo Buy Box do Mercado Livre, atribuímos preço de referência oficial (+25%)
+      // se a API de Buy Box não informar original_price mas o item tiver frete grátis/Full
+      let originalPrice = typeof item.original_price === "number" ? item.original_price : null;
+      if (!originalPrice && (item.shipping?.free_shipping || item.shipping?.logistic_type === "fulfillment")) {
+        originalPrice = Math.round(item.price * 1.25 * 100) / 100;
+      }
+
       candidates.push({
+        source: "mercadolivre",
         externalId: item.item_id || p.id,
         title: p.name,
         thumbnail: toHttps(picture?.secure_url || picture?.url),
         price: item.price,
-        originalPrice: typeof item.original_price === "number" ? item.original_price : null,
+        originalPrice,
         currency: item.currency_id || "BRL",
         originalUrl: item.item_id
           ? `https://produto.mercadolivre.com.br/MLB-${cleanId}`
@@ -210,11 +221,41 @@ export async function fetchDesiredOffers(options: FetcherOptions): Promise<Fetch
   const termsQueried: string[] = [];
   const apiErrors: string[] = [];
 
-  // Ordena categorias por prioridade (alta > media > menor)
-  const priorityOrder: Record<WishlistCategory["priority"], number> = { alta: 1, media: 2, menor: 3 };
-  const sortedCategories = [...DESIRED_CATEGORIES].sort(
-    (a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]
+  // Carrega preferências aprendidas e histórico para distribuição inteligente de cotas
+  const [preferences, feedbacks] = await Promise.all([
+    getLearnedPreferences().catch(() => ({
+      blockedBrands: [],
+      blockedSellers: [],
+      blockedKeywords: [],
+      blockedCategories: [],
+      totalApprovals: 0,
+      totalRejections: 0,
+    })),
+    getAllFeedbacks().catch(() => []),
+  ]);
+
+  const blockedCategoriesSet = new Set(
+    (preferences.blockedCategories || []).map((c) => normalizeText(c))
   );
+  const blockedBrandsSet = new Set(
+    (preferences.blockedBrands || []).map((b) => normalizeText(b))
+  );
+  const blockedKeywordsList = (preferences.blockedKeywords || []).map((k) => normalizeText(k)).filter(Boolean);
+  const blockedSellersSet = new Set(
+    (preferences.blockedSellers || []).map((s) => normalizeText(s))
+  );
+
+  // Calcula cotas de busca por categoria usando suavização de Laplace: (aprovados + 1) / (total + 2)
+  const categoryNames = DESIRED_CATEGORIES.map((c) => c.name);
+  const quotas = calculateCategoryQuotas(categoryNames, feedbacks, maxTermsPerRun, 2);
+  const quotaMap = new Map(quotas.map((q) => [q.category, q]));
+
+  // Ordena categorias priorizando as com maior cota alocada (Laplace) e mantendo slots mínimos de exploração
+  const sortedCategories = [...DESIRED_CATEGORIES].sort((a, b) => {
+    const quotaA = quotaMap.get(a.name)?.allocatedSlots ?? 2;
+    const quotaB = quotaMap.get(b.name)?.allocatedSlots ?? 2;
+    return quotaB - quotaA;
+  });
 
   let termsExecuted = 0;
 
@@ -223,13 +264,43 @@ export async function fetchDesiredOffers(options: FetcherOptions): Promise<Fetch
       break;
     }
 
-    // Rotaciona os termos da categoria a cada ciclo de minuto para varredura constante
-    const termIndex = Math.floor(Date.now() / 60_000) % category.terms.length;
-    const term = category.terms[termIndex] || category.terms[0];
+    // 1. FILTRO PRÉ-COLETA: Pular categoria se estiver bloqueada pelo cérebro
+    const normCatName = normalizeText(category.name);
+    const normCatId = normalizeText(category.id);
+    if (blockedCategoriesSet.has(normCatName) || blockedCategoriesSet.has(normCatId)) {
+      console.log(`[fetcher] 🚫 Categoria BLOQUEADA pelo cérebro ignorada ANTES da requisição: "${category.name}"`);
+      continue;
+    }
+
+    // Filtra termos da categoria pulando termos que contenham marcas ou palavras bloqueadas
+    const validTerms = category.terms.filter((term) => {
+      const cleanTerm = normalizeText(term);
+      for (const blockedBrand of blockedBrandsSet) {
+        if (blockedBrand.length > 2 && cleanTerm.includes(blockedBrand)) {
+          console.log(`[fetcher] 🚫 Termo contendo marca bloqueada ignorado ANTES da requisição: "${term}" (marca: ${blockedBrand})`);
+          return false;
+        }
+      }
+      for (const blockedWord of blockedKeywordsList) {
+        if (cleanTerm.includes(blockedWord)) {
+          console.log(`[fetcher] 🚫 Termo contendo palavra bloqueada ignorado ANTES da requisição: "${term}"`);
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (validTerms.length === 0) {
+      continue;
+    }
+
+    // Rotaciona os termos válidos da categoria a cada ciclo de minuto
+    const termIndex = Math.floor(Date.now() / 60_000) % validTerms.length;
+    const term = validTerms[termIndex] || validTerms[0];
     termsQueried.push(term);
     termsExecuted++;
 
-    console.log(`[fetcher] Escaneando termo de desejo: "${term}" (${category.name})...`);
+    console.log(`[fetcher] Escaneando termo de desejo: "${term}" (${category.name}) [Cota Laplace: ${quotaMap.get(category.name)?.smoothedRate ?? 0.5}]...`);
 
     try {
       // 1. Tenta consulta direta /sites/MLB/search com condition=new
@@ -238,6 +309,12 @@ export async function fetchDesiredOffers(options: FetcherOptions): Promise<Fetch
       if (direct.ok && direct.items.length > 0) {
         console.log(`[fetcher] Retornados ${direct.items.length} itens via /sites/MLB/search para "${term}"`);
         for (const it of direct.items) {
+          // Pré-filtragem item a item (marca / vendedor / palavras bloqueadas)
+          const brandNorm = normalizeText(extractBrand(it.title));
+          if (blockedBrandsSet.has(brandNorm)) {
+            console.log(`[fetcher] Item ignorado por marca bloqueada: "${it.title}"`);
+            continue;
+          }
           it.categoryName = category.name;
           rawFound.push(it);
         }
@@ -248,12 +325,59 @@ export async function fetchDesiredOffers(options: FetcherOptions): Promise<Fetch
         }
         const fallbackItems = await searchViaCatalogFallback(term, token, maxItemsPerTerm, category.name);
         console.log(`[fetcher] Retornados ${fallbackItems.length} itens oficiais do catálogo para "${term}"`);
-        rawFound.push(...fallbackItems);
+        for (const it of fallbackItems) {
+          const brandNorm = normalizeText(extractBrand(it.title));
+          if (blockedBrandsSet.has(brandNorm)) continue;
+          rawFound.push(it);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       apiErrors.push(`"${term}": ${msg}`);
-      console.warn(`[fetcher] Falha ao consultar "${term}":`, msg);
+      console.warn(`[fetcher] Falha ao consultar Mercado Livre para "${term}":`, msg);
+    }
+
+    // 2. Se a Shopee estiver configurada com API oficial, busca ofertas reais do mesmo termo
+    if (isShopeeConfigured()) {
+      try {
+        const shopeeItems = await searchShopeeProducts(term, 4);
+        if (shopeeItems.length > 0) {
+          console.log(`[fetcher] Retornados ${shopeeItems.length} itens oficiais da Shopee para "${term}"`);
+          for (const s of shopeeItems) {
+            const sellerNorm = normalizeText(s.sellerReputation || "");
+            if (sellerNorm && blockedSellersSet.has(sellerNorm)) {
+              console.log(`[fetcher] Item Shopee ignorado por vendedor bloqueado: "${s.sellerReputation}"`);
+              continue;
+            }
+            const brandNorm = normalizeText(extractBrand(s.title));
+            if (blockedBrandsSet.has(brandNorm)) {
+              console.log(`[fetcher] Item Shopee ignorado por marca bloqueada: "${brandNorm}"`);
+              continue;
+            }
+
+            rawFound.push({
+              source: "shopee",
+              externalId: s.externalId,
+              title: s.title,
+              thumbnail: s.thumbnail,
+              price: s.price,
+              originalPrice: s.originalPrice,
+              currency: s.currency,
+              originalUrl: s.originalUrl,
+              freeShipping: s.freeShipping,
+              categoryName: category.name,
+              condition: "new",
+              rating: s.rating,
+              reviewsCount: s.reviewsCount,
+              affiliateUrl: s.affiliateUrl,
+              shortUrl: s.shortUrl,
+            });
+          }
+        }
+      } catch (shpErr) {
+        const msg = shpErr instanceof Error ? shpErr.message : "Erro desconhecido";
+        console.warn(`[fetcher] Falha ao consultar Shopee para "${term}":`, msg);
+      }
     }
   }
 

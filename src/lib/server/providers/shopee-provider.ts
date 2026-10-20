@@ -1,5 +1,11 @@
 import "server-only";
 
+import { isShopeeConfigured } from "../config";
+import {
+  searchShopeeProducts,
+  generateShopeeShortLink,
+  revalidateShopeeItem,
+} from "../shopee";
 import type {
   MarketplaceProvider,
   NormalizedCandidateProduct,
@@ -8,67 +14,57 @@ import type {
 } from "./provider-interface";
 
 /**
- * PROVEDOR OFICIAL SHOPEE (PREPARADO PARA INTEGRAÇÃO OFICIAL)
+ * PROVEDOR OFICIAL SHOPEE (API GRAPHQL OPEN PLATFORM)
  * -------------------------------------------------------------
- * Status: Aprovado no programa de afiliados da Shopee.
- * 
- * Requisitos para Ativação Completa:
- * 1. SHOPEE_AFFILIATE_APP_ID (App ID da Open Platform da Shopee)
- * 2. SHOPEE_AFFILIATE_SECRET (Chave Secreta da API de Afiliados)
- * 3. SHOPEE_AFFILIATE_ACCESS_TOKEN (Token oficial gerado no portal de desenvolvedores)
- * 4. Endpoints oficiais da Shopee Affiliate Open API:
- *    - GraphQL / REST endpoint: https://open-api.affiliate.shopee.com.br/graphql
- *    - Query: generateShortLink(input: { originUrl: $url })
- * 
- * REGRA ESTRITA DE COMPLIANCE:
- * Não realiza web scraping não autorizado nem contorna proteções da Shopee.
- * Permanece desativado de forma transparente até o fornecimento das credenciais oficiais.
+ * Status: Conectado e ativo via Shopee Affiliate Open API oficial.
+ * - Busca ofertas ativas de afiliados (productOfferV2)
+ * - Coleta avaliações reais e volume de vendas
+ * - Gera links de afiliados encurtados oficiais (https://s.shopee.com.br/...)
+ * - Revalidação oficial de preços e disponibilidade por itemId
  */
-
 export class ShopeeProvider implements MarketplaceProvider {
   readonly source = "shopee" as const;
   readonly name = "Shopee";
 
   readonly capabilities: ProviderCapabilities = {
-    supportsOfficialApi: false, // Inativo até confirmação de chaves
-    supportsRealSalesVolume: false,
-    supportsRealRatings: false,
+    supportsOfficialApi: true,
+    supportsRealSalesVolume: true,
+    supportsRealRatings: true,
     supportsReviewsCount: false,
-    supportsOfficialAffiliateShortening: false,
-    supportsSellerReputation: false,
-    supportsStockVerification: false,
+    supportsOfficialAffiliateShortening: true,
+    supportsSellerReputation: true,
+    supportsStockVerification: true,
     supportsCouponsDetection: false,
   };
 
   isConfigured(): boolean {
-    const appId = process.env.SHOPEE_AFFILIATE_APP_ID;
-    const secret = process.env.SHOPEE_AFFILIATE_SECRET;
-    return Boolean(appId && secret);
+    return isShopeeConfigured();
   }
 
   async hasActiveConnection(): Promise<boolean> {
     return this.isConfigured();
   }
 
-  async searchProducts(): Promise<NormalizedCandidateProduct[]> {
+  async searchProducts(query: string, limit = 12): Promise<NormalizedCandidateProduct[]> {
     if (!this.isConfigured()) {
       return [];
     }
-    // Stub preparado para quando as credenciais da Open Platform da Shopee forem fornecidas
-    return [];
+    return searchShopeeProducts(query, limit);
   }
 
   async revalidateItem(externalId: string) {
-    return {
-      available: false,
-      currentPrice: 0,
-      originalPrice: null,
-      error: `Provedor Shopee inativo. Configure SHOPEE_AFFILIATE_APP_ID e SHOPEE_AFFILIATE_SECRET para validar o item ${externalId}.`,
-    };
+    if (!this.isConfigured()) {
+      return {
+        available: false,
+        currentPrice: 0,
+        originalPrice: null,
+        error: `Provedor Shopee inativo. Configure SHOPEE_AFFILIATE_APP_ID e SHOPEE_AFFILIATE_SECRET.`,
+      };
+    }
+    return revalidateShopeeItem(externalId);
   }
 
   buildAffiliateUrl(originalUrl: string): string {
-    // Quando a tag de afiliado da Shopee for informada via variável SHOPEE_AFFILIATE_SUB_ID
     const subId = process.env.SHOPEE_AFFILIATE_SUB_ID || "";
     if (!subId) return originalUrl;
     try {
@@ -80,11 +76,14 @@ export class ShopeeProvider implements MarketplaceProvider {
     }
   }
 
-  async generateShortLink(): Promise<ShortenLinkResult> {
-    return {
-      shortUrl: null,
-      error: "Shopee Open API ainda não ativada. Credenciais da API de Afiliados pendentes.",
-    };
+  async generateShortLink(productUrl: string): Promise<ShortenLinkResult> {
+    if (!this.isConfigured()) {
+      return {
+        shortUrl: null,
+        error: "Shopee Open API não configurada.",
+      };
+    }
+    return generateShopeeShortLink(productUrl);
   }
 }
 

@@ -341,10 +341,19 @@ export function trainLinearClassifier(
   const learningRate = 0.05;
   const l2Penalty = 0.001;
 
-  // Itera sobre os feedbacks para atualizar os pesos com gradiente estocástico
+  // Itera sobre os feedbacks para atualizar os pesos com gradiente estocástico balanceado
   for (let epoch = 0; epoch < 5; epoch++) {
     for (const fb of feedbacks) {
-      const target = fb.action === "aprovar" ? 1.0 : 0.0;
+      const isApproved = fb.action === "aprovar";
+      const target = isApproved ? 1.0 : 0.0;
+      
+      // Ponderação de classes: aprovações próprias = 5.0, favoritos irmão = 2.5, rejeições = 1.0
+      let sampleWeight = 1.0;
+      if (isApproved) {
+        const isBrotherSeed = (fb.metadata as Record<string, unknown>)?.source === "seed_favoritos_irmao";
+        sampleWeight = isBrotherSeed ? 2.5 : 5.0;
+      }
+
       const features = extractStructuredFeatures({
         title: fb.title,
         price: fb.price,
@@ -363,9 +372,9 @@ export function trainLinearClassifier(
         score += (weights[key] || 0) * val;
       }
       const pred = 1 / (1 + Math.exp(-Math.max(-10, Math.min(10, score))));
-      const error = target - pred;
+      const error = (target - pred) * sampleWeight;
 
-      // Atualiza pesos com regularização L2
+      // Atualiza pesos com regularização L2 e peso de classe
       for (const [key, val] of features.embedding.entries()) {
         const currentW = weights[key] || 0;
         weights[key] = currentW + learningRate * (error * val - l2Penalty * currentW);
@@ -465,9 +474,23 @@ export function calculatePreferenceScore(
     if (reason === "produto_tipo_errado" && sim >= 0.35) {
       rejectionPenalty = Math.max(rejectionPenalty, sim * 0.85);
     }
-    // Regra: "não é promoção" ou "preço alto" -> reduzir anúncios da mesma faixa de preço e categoria, sem bloquear a categoria inteira
-    else if (reason === "nao_e_promocao" || reason === "preco_alto") {
-      if (features.category.toLowerCase() === rejFeatures.category.toLowerCase() && features.priceRange === rejFeatures.priceRange) {
+    // Regra: "preço alto" -> penalizar com rigor itens com valor igual ou superior ao rejeitado
+    else if (reason === "preco_alto") {
+      const isPriceHigherOrEqual = features.price >= rejFeatures.price * 0.85;
+      const isRelated =
+        sim >= 0.15 ||
+        (features.brand && features.brand !== "Genérica" && features.brand.toLowerCase() === rejFeatures.brand.toLowerCase()) ||
+        features.category.toLowerCase() === rejFeatures.category.toLowerCase();
+
+      if (isPriceHigherOrEqual && isRelated) {
+        rejectionPenalty = Math.max(rejectionPenalty, 0.80);
+      } else if (features.priceRange === rejFeatures.priceRange) {
+        rejectionPenalty = Math.max(rejectionPenalty, 0.50);
+      }
+    }
+    // Regra: "não é promoção"
+    else if (reason === "nao_e_promocao") {
+      if (sim >= 0.25 || (features.category.toLowerCase() === rejFeatures.category.toLowerCase() && features.priceRange === rejFeatures.priceRange)) {
         rejectionPenalty = Math.max(rejectionPenalty, 0.45);
       }
     }
@@ -489,6 +512,12 @@ export function calculatePreferenceScore(
     else if (sim >= 0.5) {
       rejectionPenalty = Math.max(rejectionPenalty, sim * 0.5);
     }
+  }
+
+  // Atenuação preventiva de itens que extrapolam o valor desejado (acima de R$ 350)
+  if (features.price > 350) {
+    const highPriceDampening = Math.min(0.35, ((features.price - 350) / 300) * 0.35);
+    rejectionPenalty = Math.max(rejectionPenalty, highPriceDampening);
   }
 
   // 3. Aprendizado Gradual: Classificador Linear quando total de decisões >= 50
@@ -612,4 +641,116 @@ export function rankOffersWithExploration(
   }
 
   return finalRanked;
+}
+
+export interface CategorySearchQuota {
+  category: string;
+  smoothedRate: number;
+  allocatedSlots: number;
+  isExplorationOnly: boolean;
+}
+
+/**
+ * Calcula a cota de busca por categoria usando suavização de Laplace:
+ * Rate = (Aprovações + 1) / (Total + 2)
+ * Garante um mínimo fixo de slots de exploração para que nenhuma categoria morra.
+ */
+export function calculateCategoryQuotas(
+  categories: string[],
+  feedbacks: OfferFeedback[],
+  totalDesiredSlots = 15,
+  minExplorationSlots = 2
+): CategorySearchQuota[] {
+  const catStats: Record<string, { approvals: number; total: number }> = {};
+  for (const c of categories) {
+    catStats[c] = { approvals: 0, total: 0 };
+  }
+
+  for (const fb of feedbacks) {
+    const cat = fb.category || "Geral";
+    if (!catStats[cat]) {
+      catStats[cat] = { approvals: 0, total: 0 };
+    }
+    catStats[cat].total++;
+    if (fb.action === "aprovar") {
+      catStats[cat].approvals++;
+    }
+  }
+
+  const smoothedRates: Record<string, number> = {};
+  let sumRates = 0;
+  for (const c of categories) {
+    const stats = catStats[c] || { approvals: 0, total: 0 };
+    const rate = (stats.approvals + 1) / (stats.total + 2);
+    smoothedRates[c] = rate;
+    sumRates += rate;
+  }
+
+  const quotas: CategorySearchQuota[] = [];
+  for (const c of categories) {
+    const rate = smoothedRates[c];
+    const proportionalSlots = sumRates > 0 ? Math.round((rate / sumRates) * totalDesiredSlots) : minExplorationSlots;
+    const allocatedSlots = Math.max(minExplorationSlots, proportionalSlots);
+    const stats = catStats[c] || { approvals: 0, total: 0 };
+    const isExplorationOnly = stats.approvals === 0 && stats.total >= 5;
+
+    quotas.push({
+      category: c,
+      smoothedRate: Number(rate.toFixed(3)),
+      allocatedSlots,
+      isExplorationOnly,
+    });
+  }
+
+  return quotas;
+}
+
+export interface CategoryPriceRange {
+  minPrice: number;
+  maxPrice: number;
+  isLearned: boolean;
+  sampleCount: number;
+}
+
+/**
+ * Calcula faixas de preço por categoria aprendidas a partir das aprovações.
+ * Se houver menos de 3 aprovações na categoria, recorre ao teto padrão (R$ 450).
+ */
+export function getCategoryPriceRange(
+  category: string,
+  feedbacks: OfferFeedback[],
+  defaultMin = 80.0,
+  defaultMax = 450.0
+): CategoryPriceRange {
+  const approvedPrices = feedbacks
+    .filter(
+      (f) =>
+        f.action === "aprovar" &&
+        (category === "Geral" || !f.category || f.category.toLowerCase() === category.toLowerCase())
+    )
+    .map((f) => f.price)
+    .filter((p) => p > 0)
+    .sort((a, b) => a - b);
+
+  if (approvedPrices.length < 3) {
+    return {
+      minPrice: defaultMin,
+      maxPrice: defaultMax,
+      isLearned: false,
+      sampleCount: approvedPrices.length,
+    };
+  }
+
+  const minApproved = approvedPrices[0];
+  const maxApproved = approvedPrices[approvedPrices.length - 1];
+
+  const learnedMin = Math.max(defaultMin, Math.round(minApproved * 0.8 * 100) / 100);
+  const learnedMax = Math.max(learnedMin + 50, Math.round(maxApproved * 1.2 * 100) / 100);
+
+  return {
+    minPrice: learnedMin,
+    maxPrice: learnedMax,
+    isLearned: true,
+    sampleCount: approvedPrices.length,
+  };
 }

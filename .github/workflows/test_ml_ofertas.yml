@@ -1,0 +1,48 @@
+name: Teste de Viabilidade - Mercado Livre Ofertas
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-ofertas-get:
+    name: Testar GET mercadolivre.com.br/ofertas
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Executar GET em mercadolivre.com.br/ofertas
+        run: |
+          echo "======================================================="
+          echo "Testando requisição pública a mercadolivre.com.br/ofertas"
+          echo "Origem: Runner GitHub Actions (Ubuntu Datacenter IP)"
+          echo "======================================================="
+          
+          HTTP_STATUS=$(curl -s -L -o ofertas.html -w "%{http_code}" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" \
+            -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+            -H "Accept-Language: pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7" \
+            "https://www.mercadolivre.com.br/ofertas")
+
+          echo "HTTP Status Retornado: $HTTP_STATUS"
+          FILE_SIZE=$(wc -c < ofertas.html)
+          echo "Tamanho do HTML retornado: $FILE_SIZE bytes"
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "Status 200 OK!"
+          else
+            echo "Aviso: Retornou status HTTP $HTTP_STATUS"
+          fi
+
+          echo "--- Verificação de Conteúdo dos Cards ---"
+          HAS_DEALS=$(grep -c "deal" ofertas.html || true)
+          HAS_MLB_LINKS=$(grep -o "https://www.mercadolivre.com.br/[^\"']*/p/MLB" ofertas.html | wc -l || true)
+          HAS_DISCOUNTS=$(grep -o "[0-9]\+% OFF" ofertas.html | wc -l || true)
+
+          echo "Ocorrências de 'deal': $HAS_DEALS"
+          echo "Links para produtos /p/MLB encontrados: $HAS_MLB_LINKS"
+          echo "Tags de '% OFF' encontradas: $HAS_DISCOUNTS"
+
+          if [ "$HAS_MLB_LINKS" -gt 0 ] || [ "$HAS_DISCOUNTS" -gt 0 ]; then
+            echo "RESULTADO: SUCESSO! O HTML contém os cards de ofertas publicamente sem bloqueio."
+          else
+            echo "RESULTADO: ALERTA! Cards não localizados no HTML retornado."
+          fi

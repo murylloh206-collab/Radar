@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "node:crypto";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
+import { isShopeeConfigured } from "./config";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -34,7 +35,7 @@ export interface SessionStatusDiagnostic {
   lastValidationAt: string | null;
   lastErrorSanitized: string | null;
   actionRequired: string | null;
-  environment: "supabase_postgresql" | "local_encrypted_storage";
+  environment: "supabase_postgresql" | "local_encrypted_storage" | "shopee_open_api";
 }
 
 export interface StoredSessionData {
@@ -215,6 +216,32 @@ export async function clearSession(provider: "mercadolivre" | "shopee"): Promise
 export async function getSessionDiagnostic(
   provider: "mercadolivre" | "shopee"
 ): Promise<SessionStatusDiagnostic> {
+  // Provedor Shopee utiliza autenticação nativa Open API (App ID e Secret)
+  if (provider === "shopee") {
+    if (isShopeeConfigured()) {
+      return {
+        provider: "shopee",
+        status: "conectado",
+        updatedAt: new Date().toISOString(),
+        expiresAt: null,
+        lastValidationAt: new Date().toISOString(),
+        lastErrorSanitized: null,
+        actionRequired: null,
+        environment: "shopee_open_api",
+      };
+    }
+    return {
+      provider: "shopee",
+      status: "inexistente",
+      updatedAt: null,
+      expiresAt: null,
+      lastValidationAt: null,
+      lastErrorSanitized: null,
+      actionRequired: "Configurar variáveis SHOPEE_AFFILIATE_APP_ID e SHOPEE_AFFILIATE_SECRET.",
+      environment: "shopee_open_api",
+    };
+  }
+
   const masterKey = getMasterKey();
   const environment = isSupabaseConfigured() ? "supabase_postgresql" : "local_encrypted_storage";
 

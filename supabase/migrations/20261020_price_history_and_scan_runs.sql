@@ -43,11 +43,19 @@ create table if not exists public.scan_runs (
   items_rejected_blacklist integer not null default 0,
   items_rejected_sales integer not null default 0,
   items_rejected_rating integer not null default 0,
+  approval_rate_brain numeric,
+  approval_rate_exploration numeric,
   status text not null default 'sucesso' check (status in ('sucesso', 'falha', 'parcial', 'em_execucao')),
   error_message text,
   errors_log jsonb not null default '[]'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+-- Garantia de idempotência se a tabela já existir previamente:
+alter table public.scan_runs add column if not exists approval_rate_brain numeric;
+alter table public.scan_runs add column if not exists approval_rate_exploration numeric;
+alter table public.scan_runs add column if not exists metadata jsonb not null default '{}'::jsonb;
 
 create index if not exists idx_scan_runs_started_at
   on public.scan_runs (started_at desc);

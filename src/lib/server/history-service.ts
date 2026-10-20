@@ -27,9 +27,14 @@ export interface ScanRunInput {
   itemsRejectedBlacklist?: number;
   itemsRejectedSales?: number;
   itemsRejectedRating?: number;
+  approvalRateBrain?: number;
+  approvalRateExploration?: number;
+  itemsBrain?: number;
+  itemsExploration?: number;
   status: "sucesso" | "falha" | "parcial" | "em_execucao";
   errorMessage?: string | null;
   errorsLog?: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface ScanRunRecord extends ScanRunInput {
@@ -99,9 +104,16 @@ export async function recordScanRun(run: ScanRunInput): Promise<ScanRunRecord> {
         items_rejected_blacklist: record.itemsRejectedBlacklist ?? 0,
         items_rejected_sales: record.itemsRejectedSales ?? 0,
         items_rejected_rating: record.itemsRejectedRating ?? 0,
+        approval_rate_brain: record.approvalRateBrain ?? null,
+        approval_rate_exploration: record.approvalRateExploration ?? null,
         status: record.status,
         error_message: record.errorMessage || null,
         errors_log: record.errorsLog || [],
+        metadata: {
+          itemsBrain: record.itemsBrain ?? 0,
+          itemsExploration: record.itemsExploration ?? 0,
+          ...(record.metadata || {}),
+        },
       });
 
       if (error) {
