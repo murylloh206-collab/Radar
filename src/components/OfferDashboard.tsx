@@ -108,6 +108,12 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [secureCookieInput, setSecureCookieInput] = useState("");
   const [savingSecureCookie, setSavingSecureCookie] = useState(false);
   const [syncingFavorites, setSyncingFavorites] = useState(false);
+  const [syncingShopeeFavorites, setSyncingShopeeFavorites] = useState(false);
+  const [showShopeeSessionModal, setShowShopeeSessionModal] = useState(false);
+  const [shopeeCookieInput, setShopeeCookieInput] = useState("");
+  const [shopeeUrlsInput, setShopeeUrlsInput] = useState("");
+  const [shopeeModalTab, setShopeeModalTab] = useState<"cookie" | "links">("cookie");
+  const [savingShopeeSession, setSavingShopeeSession] = useState(false);
 
   const [isConnected, setIsConnected] = useState(() => {
     if (typeof window !== "undefined") {
@@ -384,6 +390,87 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       notify("erro", msg);
     } finally {
       setSyncingFavorites(false);
+    }
+  }
+
+  // ---------- Puxar Favoritos da Conta da Shopee ----------
+  async function handleSyncShopeeFavorites(override?: { cookie?: string; urls?: string[] }) {
+    if (syncingShopeeFavorites) return;
+    setSyncingShopeeFavorites(true);
+    try {
+      const res = await fetch("/api/preferences/sync-shopee-bookmarks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-requested-with": "XMLHttpRequest",
+        },
+        body: JSON.stringify({
+          cookie: override?.cookie,
+          urls: override?.urls,
+          createOffers: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // Se acusar que não há cookie ou sessão configurada, abre o modal de configuração da Shopee
+        if (data.error && data.error.includes("Nenhuma sessão ou cookie da Shopee")) {
+          setShowShopeeSessionModal(true);
+          notify("info", "Configure seus cookies ou links da Shopee para sincronizar.");
+          return;
+        }
+        throw new Error(data.error || "Erro ao puxar favoritos da Shopee.");
+      }
+
+      if (data.offers && Array.isArray(data.offers)) {
+        setOffers(data.offers);
+        if (data.lastSearch) setLastSearch(data.lastSearch);
+      }
+      await reloadOffersAndScheduler();
+
+      // Limpa filtros e direciona o usuário para a aba de pendentes para visualização imediata
+      setFilter("pendente");
+      setQuickFilter("todos");
+      setQuery("");
+
+      const savedCount = data.offersSaved ?? data.imported ?? 0;
+      notify(
+        "ok",
+        `🧡 ${data.imported || 0} produto(s) favorito(s) da Shopee puxado(s) com sucesso! (${savedCount} na fila de Pendentes)`
+      );
+      setShowShopeeSessionModal(false);
+      setShopeeCookieInput("");
+      setShopeeUrlsInput("");
+      await reloadSessionDiagnostics();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao puxar favoritos da Shopee.";
+      notify("erro", msg);
+    } finally {
+      setSyncingShopeeFavorites(false);
+      setSavingShopeeSession(false);
+    }
+  }
+
+  async function handleSubmitShopeeModal(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingShopeeSession(true);
+    if (shopeeModalTab === "cookie") {
+      if (!shopeeCookieInput.trim()) {
+        notify("erro", "Por favor, cole os cookies da sua conta Shopee.");
+        setSavingShopeeSession(false);
+        return;
+      }
+      await handleSyncShopeeFavorites({ cookie: shopeeCookieInput.trim() });
+    } else {
+      const lines = shopeeUrlsInput
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+      if (lines.length === 0) {
+        notify("erro", "Por favor, cole pelo menos um link de produto da Shopee.");
+        setSavingShopeeSession(false);
+        return;
+      }
+      await handleSyncShopeeFavorites({ urls: lines });
     }
   }
 
@@ -893,16 +980,25 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
         )}
 
         {/* Status Shopee */}
-        <div className="mt-2.5 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+        <div className="mt-2.5 pt-2.5 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-orange-400 shadow-sm shadow-orange-400/50 animate-pulse" />
             <span>
               <strong className="text-white">Shopee:</strong> Conectado via API Oficial (Open Platform · AppID 18303261388)
             </span>
           </div>
-          <span className="rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-bold text-orange-300 uppercase tracking-wider">
-            API Oficial Ativa
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowShopeeSessionModal(true)}
+              className="rounded-xl border border-orange-400/30 bg-orange-500/10 px-3 py-1.5 text-xs font-semibold text-orange-200 hover:bg-orange-500/20 transition inline-flex items-center gap-1"
+            >
+              🔒 Sessão Shopee
+            </button>
+            <span className="rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-bold text-orange-300 uppercase tracking-wider">
+              API Oficial Ativa
+            </span>
+          </div>
         </div>
       </section>
 
@@ -963,6 +1059,18 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
             >
               {syncingFavorites ? <IconSpinner width={15} height={15} /> : <span className="text-sm">⭐</span>}
               {syncingFavorites ? "Puxando favoritos…" : "Puxar Meus Favoritos"}
+            </button>
+
+            <button
+              type="button"
+              id="btn-puxar-favoritos-shopee"
+              onClick={() => handleSyncShopeeFavorites()}
+              disabled={syncingShopeeFavorites}
+              title="Puxar produtos favoritados (curtidos) da sua conta da Shopee e inserir como ofertas pendentes na fila"
+              className="inline-flex items-center gap-2 rounded-2xl border border-orange-500/50 bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-600/20 px-4 py-3.5 text-xs sm:text-sm font-bold text-orange-200 hover:brightness-125 hover:border-orange-400 active:scale-95 transition shadow-lg shadow-orange-950/20 shrink-0 disabled:opacity-50"
+            >
+              {syncingShopeeFavorites ? <IconSpinner width={15} height={15} /> : <span className="text-sm">🧡</span>}
+              {syncingShopeeFavorites ? "Puxando Shopee…" : "Puxar Favoritos Shopee"}
             </button>
 
             <button
@@ -1370,6 +1478,116 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
             await reloadOffersAndScheduler();
           }}
         />
+      )}
+
+      {/* ================= Modal Seguro de Favoritos e Sessão da Shopee ================= */}
+      {showShopeeSessionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-lg rounded-3xl border border-orange-500/30 bg-ink-950/95 p-6 shadow-2xl ring-1 ring-white/10">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  <span className="text-2xl">🧡</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Sincronizar Favoritos da Shopee</h3>
+                  <p className="text-xs text-slate-400">Importe itens curtidos e adicione à fila de Pendentes</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShopeeSessionModal(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Alternador de Modo: Cookies de Sessão vs Links Diretos */}
+            <div className="mt-5 flex gap-1 rounded-xl bg-white/[0.04] p-1 ring-1 ring-white/5">
+              <button
+                type="button"
+                onClick={() => setShopeeModalTab("cookie")}
+                className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
+                  shopeeModalTab === "cookie"
+                    ? "bg-orange-500/20 text-orange-300 border border-orange-500/30 shadow"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                🔑 Sessão / Cookie (Automático)
+              </button>
+              <button
+                type="button"
+                onClick={() => setShopeeModalTab("links")}
+                className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
+                  shopeeModalTab === "links"
+                    ? "bg-orange-500/20 text-orange-300 border border-orange-500/30 shadow"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                🔗 Colar Links Diretos
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitShopeeModal} className="mt-4 space-y-4">
+              {shopeeModalTab === "cookie" ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Cookies da Conta Shopee (shopee.com.br):
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={shopeeCookieInput}
+                    onChange={(e) => setShopeeCookieInput(e.target.value)}
+                    placeholder="Cole os cookies da sua conta Shopee (ex: SPC_EC=...; SPC_ST=...)"
+                    className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+                    🔒 Criptografado com <strong>AES-256-GCM</strong> no cofre seguro. Permite puxar seus itens curtidos com 1 clique sempre que quiser.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Links de Produtos da Shopee (um por linha):
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={shopeeUrlsInput}
+                    onChange={(e) => setShopeeUrlsInput(e.target.value)}
+                    placeholder={"https://shopee.com.br/product/123/456\nhttps://shp.ee/xyz\nhttps://shopee.com.br/produto-i.123.456"}
+                    className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+                    Suporta links diretos, encurtados (<code>shp.ee</code>) e links de afiliados da Shopee.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowShopeeSessionModal(false)}
+                  className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingShopeeSession || syncingShopeeFavorites}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-2.5 text-xs font-bold text-white hover:brightness-110 active:scale-95 transition shadow-lg shadow-orange-950/40 disabled:opacity-50"
+                >
+                  {savingShopeeSession || syncingShopeeFavorites ? <IconSpinner width={14} height={14} /> : "🧡"}
+                  {savingShopeeSession || syncingShopeeFavorites
+                    ? "Sincronizando…"
+                    : shopeeModalTab === "cookie"
+                    ? "Salvar Sessão e Puxar Favoritos"
+                    : "Puxar Links da Shopee"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ================= Notificações ================= */}

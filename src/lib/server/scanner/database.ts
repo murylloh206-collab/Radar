@@ -6,6 +6,7 @@ import { generateMeliShortLinkDetailed } from "../meli-shortener";
 import { buildAffiliateUrl } from "../affiliate";
 import { extractBrand } from "../recommendation-engine";
 import { recordPriceHistoryItem } from "../history-service";
+import { generateShopeeShortLink } from "../shopee";
 import type { CandidateRawItem } from "./validator";
 import type { Offer, PriceHistoryItem } from "../../types";
 
@@ -22,6 +23,7 @@ async function mapWithConcurrency<T, R>(
   concurrency: number,
   fn: (item: T) => Promise<R>
 ): Promise<R[]> {
+  if (items.length === 0) return [];
   const output: R[] = new Array(items.length);
   let index = 0;
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
@@ -98,9 +100,9 @@ export async function saveApprovedOffers(
     itemsToInsert.push(candidate);
   }
 
-  // Encurtamento SÍNCRONO via API oficial meli.la para as novas ofertas do Mercado Livre (até 6 por ciclo)
+  // Encurtamento SÍNCRONO via API oficial (meli.la para ML e generateShopeeShortLink para Shopee)
   const shortUrlMap = new Map<string, string>();
-  const mlItemsToShorten = itemsToInsert.filter((i) => (i.source || "mercadolivre") === "mercadolivre");
+  const mlItemsToShorten = itemsToInsert.filter((i) => (i.source || "mercadolivre") === "mercadolivre" && !i.shortUrl);
   await mapWithConcurrency(mlItemsToShorten.slice(0, 6), 3, async (item) => {
     const cleanId = (item.externalId || "").replace(/^MLB-?/, "");
     const fallbacks = cleanId
@@ -117,6 +119,19 @@ export async function saveApprovedOffers(
       }
     } catch {
       // prossegue com o link oficial longo
+    }
+  });
+
+  const shopeeItemsToShorten = itemsToInsert.filter((i) => i.source === "shopee" && !i.shortUrl);
+  await mapWithConcurrency(shopeeItemsToShorten.slice(0, 6), 3, async (item) => {
+    try {
+      const direct = await generateShopeeShortLink(item.originalUrl);
+      if (direct.shortUrl) {
+        shortUrlMap.set(item.externalId, direct.shortUrl);
+        console.log(`[database] Link Shopee gerado para ${item.externalId}: ${direct.shortUrl}`);
+      }
+    } catch {
+      // prossegue
     }
   });
 

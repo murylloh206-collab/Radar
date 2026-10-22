@@ -216,17 +216,23 @@ export async function clearSession(provider: "mercadolivre" | "shopee"): Promise
 export async function getSessionDiagnostic(
   provider: "mercadolivre" | "shopee"
 ): Promise<SessionStatusDiagnostic> {
-  // Provedor Shopee utiliza autenticação nativa Open API (App ID e Secret)
+  // Provedor Shopee utiliza autenticação nativa Open API (App ID e Secret) + Cofre de Favoritos
   if (provider === "shopee") {
-    if (isShopeeConfigured()) {
+    const hasOpenApi = isShopeeConfigured();
+    const shopeeSession = await loadDecryptedSession("shopee").catch(() => null);
+    const hasSessionCookie = Boolean(shopeeSession?.rawCookie);
+
+    if (hasOpenApi) {
       return {
         provider: "shopee",
         status: "conectado",
-        updatedAt: new Date().toISOString(),
-        expiresAt: null,
+        updatedAt: shopeeSession?.savedAt || new Date().toISOString(),
+        expiresAt: shopeeSession?.expiresAt || null,
         lastValidationAt: new Date().toISOString(),
         lastErrorSanitized: null,
-        actionRequired: null,
+        actionRequired: hasSessionCookie
+          ? null
+          : "Sessão de favoritos opcional. Cole o cookie ou links para puxar favoritos 1-click.",
         environment: "shopee_open_api",
       };
     }

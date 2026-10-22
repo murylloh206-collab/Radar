@@ -1,7 +1,8 @@
 import "server-only";
 
 import { recordOfferFeedback } from "./feedback-service";
-import { executeShopeeGraphQL, type ShopeeProductOfferV2Response } from "./shopee";
+import { executeShopeeGraphQL, generateShopeeShortLink, type ShopeeProductOfferV2Response } from "./shopee";
+import { isShopeeConfigured } from "./config";
 import { extractBrand } from "./recommendation-engine";
 import { loadDecryptedSession } from "./session-vault";
 import { saveApprovedOffers } from "./scanner/database";
@@ -32,12 +33,57 @@ export interface ImportFavoritesSummary {
 }
 
 /**
+ * Expande links curtos da Shopee (shp.ee ou s.shopee.com.br)
+ */
+async function expandShopeeUrl(url: string): Promise<string> {
+  if (!url.includes("shp.ee") && !url.includes("s.shopee.com.br")) {
+    return url;
+  }
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(6000),
+    });
+    return res.url || url;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Extrai itemId e shopId de qualquer URL da Shopee
+ */
+export function extractShopeeIds(url: string): { itemId: string | null; shopId: string | null } {
+  const matchI = url.match(/-?i\.(\d+)\.(\d+)/);
+  if (matchI) {
+    return { shopId: matchI[1], itemId: matchI[2] };
+  }
+  const matchProduct = url.match(/\/product\/(\d+)\/(\d+)/);
+  if (matchProduct) {
+    return { shopId: matchProduct[1], itemId: matchProduct[2] };
+  }
+  const matchSp = url.match(/\/sp\.(\d+)\/(\d+)/);
+  if (matchSp) {
+    return { shopId: matchSp[1], itemId: matchSp[2] };
+  }
+  const matchParam = url.match(/[?&]itemid=(\d+)/i);
+  if (matchParam) {
+    const shopParam = url.match(/[?&]shopid=(\d+)/i);
+    return { itemId: matchParam[1], shopId: shopParam ? shopParam[1] : null };
+  }
+  return { itemId: null, shopId: null };
+}
+
+/**
  * Resolve metadados de uma URL da Shopee via Open API
  */
 async function resolveShopeeUrl(url: string): Promise<Partial<ImportFavoriteResult>> {
-  // Extrai o itemId numérico (ex: i.12345.67890 ou sp.12345/67890 ou -i.12345.67890)
-  const match = url.match(/-i\.(\d+)\.(\d+)/) || url.match(/\/(\d+)\/(\d+)/) || url.match(/i\.(\d+)\.(\d+)/) || url.match(/itemId=(\d+)/i);
-  const itemId = match ? match[2] || match[1] : null;
+  const expanded = await expandShopeeUrl(url);
+  const { itemId, shopId } = extractShopeeIds(expanded);
 
   if (!itemId) {
     return { status: "nao_resolvido", reason: "Não foi possível extrair o ID do produto da URL da Shopee." };
@@ -58,6 +104,7 @@ async function resolveShopeeUrl(url: string): Promise<Partial<ImportFavoriteResu
           priceDiscountRate
           imageUrl
           shopName
+          offerLink
         }
       }
     }
@@ -86,7 +133,7 @@ async function resolveShopeeUrl(url: string): Promise<Partial<ImportFavoriteResu
       thumbnail,
       freeShipping: false,
       brand,
-      category: "Shopee",
+      category: "⭐ Favorito Shopee",
       source: "shopee",
     };
   } catch (err) {
@@ -536,6 +583,325 @@ export async function syncMercadoLivreBookmarksFromSession(
   return {
     ...fallbackRes,
     debugSnippet: cardSnippet,
+  };
+}
+
+export interface SyncShopeeBookmarksOptions {
+  customCookie?: string;
+  urls?: string[];
+  createOffers?: boolean;
+}
+
+/**
+ * Extrai e importa automaticamente toda a lista de favoritos (itens curtidos) da conta da Shopee
+ * utilizando os cookies salvos no Session Vault Server-Side ou fornecidos diretamente.
+ * Também aceita uma lista de URLs diretas de produtos favoritos da Shopee.
+ * As ofertas entram na fila em status 'pendente' com source 'shopee' e treinam o cérebro!
+ */
+export async function syncShopeeBookmarksFromSession(
+  optionsOrCookie?: string | SyncShopeeBookmarksOptions,
+  createOffersParam: boolean = true
+): Promise<ImportFavoritesSummary> {
+  let customCookie: string | undefined;
+  let inputUrls: string[] = [];
+  let createOffers = createOffersParam;
+
+  if (typeof optionsOrCookie === "string") {
+    customCookie = optionsOrCookie;
+  } else if (optionsOrCookie && typeof optionsOrCookie === "object") {
+    customCookie = optionsOrCookie.customCookie;
+    inputUrls = optionsOrCookie.urls || [];
+    createOffers = optionsOrCookie.createOffers ?? true;
+  }
+
+  let cookieToUse = customCookie?.trim();
+  if (!cookieToUse) {
+    const session = await loadDecryptedSession("shopee");
+    cookieToUse = session?.rawCookie?.trim();
+  }
+
+  interface ShopeeRawItem {
+    itemId: string;
+    shopId?: string;
+    title?: string;
+    price?: number;
+    originalPrice?: number | null;
+    image?: string;
+    productUrl?: string;
+  }
+
+  const collectedItems: ShopeeRawItem[] = [];
+
+  // 1. Coleta itens a partir dos cookies de sessão (API de itens curtidos da Shopee Web)
+  if (cookieToUse) {
+    try {
+      const likedUrl = "https://shopee.com.br/api/v4/pages/get_liked_items?limit=50&offset=0";
+      const res = await fetch(likedUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "Accept": "application/json, text/plain, */*",
+          "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Cookie": cookieToUse,
+          "x-api-source": "rweb",
+          "x-shopee-language": "pt-BR",
+          "Referer": "https://shopee.com.br/buyer/likes",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
+        const rawItems = json?.data?.items || json?.items || json?.data?.liked_items || [];
+        if (Array.isArray(rawItems) && rawItems.length > 0) {
+          for (const item of rawItems) {
+            const rawId = item.itemid || item.itemId || item.id;
+            if (!rawId) continue;
+            const itemId = String(rawId);
+            const shopId = item.shopid ? String(item.shopid) : undefined;
+            const title = item.name || item.product_name || item.title || "";
+            const rawPrice = Number(item.price);
+            const price = rawPrice > 10000 ? rawPrice / 100000 : rawPrice;
+            const rawOrig = Number(item.price_before_discount || item.priceBeforeDiscount || 0);
+            const originalPrice = rawOrig > 10000 ? rawOrig / 100000 : rawOrig > 0 ? rawOrig : null;
+            let image = item.image || item.imageUrl || null;
+            if (image && typeof image === "string" && !image.startsWith("http")) {
+              image = `https://down-br.img.susercontent.com/file/${image}`;
+            }
+
+            collectedItems.push({
+              itemId,
+              shopId,
+              title,
+              price: price > 0 ? price : undefined,
+              originalPrice,
+              image: image || undefined,
+              productUrl: shopId ? `https://shopee.com.br/product/${shopId}/${itemId}` : undefined,
+            });
+          }
+          console.log(`[syncShopeeBookmarks] Extraídos ${collectedItems.length} itens favoritados via API get_liked_items da Shopee!`);
+        }
+      }
+    } catch (fetchErr) {
+      console.warn("[syncShopeeBookmarks] Aviso ao consultar get_liked_items da Shopee:", fetchErr);
+    }
+  }
+
+  // 2. Coleta itens a partir das URLs manuais fornecidas
+  if (inputUrls.length > 0) {
+    for (const url of inputUrls) {
+      const trimmed = url.trim();
+      if (!trimmed) continue;
+      const expanded = await expandShopeeUrl(trimmed);
+      const { itemId, shopId } = extractShopeeIds(expanded);
+      if (itemId) {
+        // Evita duplicatas se já foi coletado pelo cookie
+        if (!collectedItems.some((ci) => ci.itemId === itemId)) {
+          collectedItems.push({
+            itemId,
+            shopId: shopId || undefined,
+            productUrl: expanded,
+          });
+        }
+      }
+    }
+  }
+
+  if (collectedItems.length === 0) {
+    if (!cookieToUse && inputUrls.length === 0) {
+      throw new Error(
+        "Nenhuma sessão ou cookie da Shopee encontrado no cofre. Cole o cookie de sessão da Shopee ou uma lista de links para puxar os favoritos."
+      );
+    }
+    return {
+      total: 0,
+      imported: 0,
+      unresolved: 0,
+      offersSaved: 0,
+      results: [],
+    };
+  }
+
+  // 3. Resolve metadados completos de cada item (priorizando Open API oficial para comissões e links oficiais)
+  const candidatesToSave: CandidateRawItem[] = [];
+  const results: ImportFavoriteResult[] = [];
+  let importedCount = 0;
+  let unresolvedCount = 0;
+
+  const resolvedShopeeItems = await mapWithConcurrency(collectedItems, 5, async (item) => {
+    const numericId = Number.parseInt(item.itemId, 10);
+    const productUrl =
+      item.productUrl ||
+      (item.shopId ? `https://shopee.com.br/product/${item.shopId}/${item.itemId}` : `https://shopee.com.br/product/0/${item.itemId}`);
+
+    // Tenta primeiro via GraphQL Open API oficial
+    if (numericId && isShopeeConfigured()) {
+      try {
+        const query = `
+          query ResolveShopeeItem($itemId: Int64) {
+            productOfferV2(itemId: $itemId) {
+              nodes {
+                itemId
+                productName
+                price
+                priceDiscountRate
+                imageUrl
+                shopName
+                offerLink
+                ratingStar
+                sales
+              }
+            }
+          }
+        `;
+        const res = await executeShopeeGraphQL<ShopeeProductOfferV2Response>(query, { itemId: numericId }, 6000);
+        const node = res.data?.productOfferV2?.nodes?.[0];
+        if (node && node.productName && node.price) {
+          const currentPrice = Number.parseFloat(node.price);
+          const discountRate = node.priceDiscountRate ? Number(node.priceDiscountRate) : 0;
+          const originalPrice = discountRate > 0 ? currentPrice / (1 - discountRate / 100) : null;
+          const rating = node.ratingStar ? Number.parseFloat(node.ratingStar) : null;
+          const sales = typeof node.sales === "number" ? node.sales : null;
+
+          return {
+            status: "importado" as const,
+            itemId: item.itemId,
+            title: node.productName,
+            price: currentPrice,
+            originalPrice,
+            thumbnail: node.imageUrl || item.image || null,
+            affiliateUrl: node.offerLink || null,
+            originalUrl: productUrl,
+            brand: extractBrand(node.productName),
+            rating: rating && !Number.isNaN(rating) ? rating : null,
+            salesVolume: sales,
+          };
+        }
+      } catch {
+        // Fallback para dados locais do item
+      }
+    }
+
+    // Fallback: se os dados já vieram da lista de likes da Shopee
+    if (item.title && item.price && item.price > 0) {
+      let shortUrl: string | null = null;
+      try {
+        const directShort = await generateShopeeShortLink(productUrl);
+        shortUrl = directShort.shortUrl || null;
+      } catch {
+        // sem encurtador
+      }
+
+      return {
+        status: "importado" as const,
+        itemId: item.itemId,
+        title: item.title,
+        price: item.price,
+        originalPrice: item.originalPrice || null,
+        thumbnail: item.image || null,
+        affiliateUrl: shortUrl || productUrl,
+        originalUrl: productUrl,
+        brand: extractBrand(item.title),
+        rating: null,
+        salesVolume: null,
+      };
+    }
+
+    return {
+      status: "nao_resolvido" as const,
+      itemId: item.itemId,
+      originalUrl: productUrl,
+      reason: "Não foi possível recuperar os dados de preço e título do produto na Shopee.",
+    };
+  });
+
+  // 4. Salva itens aprovados na fila como 'pendente' e grava aprendizado para o cérebro
+  for (const resolved of resolvedShopeeItems) {
+    if (resolved.status === "importado" && resolved.title && resolved.price) {
+      const externalId = resolved.itemId;
+      const offerId = `shopee:${externalId}`;
+
+      await recordOfferFeedback({
+        offerId,
+        externalId,
+        action: "aprovar",
+        customBrand: resolved.brand,
+        metadata: {
+          source: "seed_favoritos_irmao",
+          originalSource: "shopee",
+          url: resolved.originalUrl,
+        },
+        offerData: {
+          id: offerId,
+          externalId,
+          title: resolved.title,
+          price: resolved.price,
+          brand: resolved.brand,
+          searchTerm: "⭐ Favorito Shopee",
+          source: "shopee",
+          originalUrl: resolved.originalUrl,
+        },
+      });
+
+      if (createOffers) {
+        candidatesToSave.push({
+          externalId,
+          title: resolved.title,
+          thumbnail: resolved.thumbnail || null,
+          price: resolved.price,
+          originalPrice: resolved.originalPrice || resolved.price,
+          currency: "BRL",
+          originalUrl: resolved.originalUrl,
+          freeShipping: false,
+          categoryName: "⭐ Favorito Shopee",
+          condition: "new",
+          source: "shopee",
+          affiliateUrl: resolved.affiliateUrl || undefined,
+          shortUrl: resolved.affiliateUrl || undefined,
+          rating: resolved.rating ?? undefined,
+          salesCount: resolved.salesVolume ?? undefined,
+        });
+      }
+
+      importedCount++;
+      results.push({
+        url: resolved.originalUrl,
+        status: "importado",
+        title: resolved.title,
+        price: resolved.price,
+        originalPrice: resolved.originalPrice,
+        thumbnail: resolved.thumbnail,
+        brand: resolved.brand,
+        category: "⭐ Favorito Shopee",
+        source: "shopee",
+      });
+      console.log(`[syncShopeeBookmarks] Favorito Shopee importado: "${resolved.title}" (R$ ${resolved.price.toFixed(2)})`);
+    } else {
+      unresolvedCount++;
+      results.push({
+        url: resolved.originalUrl,
+        status: "nao_resolvido",
+        reason: resolved.reason || "Erro ao resolver item da Shopee.",
+      });
+    }
+  }
+
+  let offersSaved = 0;
+  if (createOffers && candidatesToSave.length > 0) {
+    try {
+      const saveResult = await saveApprovedOffers(candidatesToSave);
+      offersSaved = saveResult.added + saveResult.updated;
+      console.log(`[syncShopeeBookmarks] ${saveResult.added} nova(s) oferta(s) Shopee inserida(s) no painel, ${saveResult.updated} atualizada(s)!`);
+    } catch (saveErr) {
+      console.error("[syncShopeeBookmarks] Erro ao salvar ofertas Shopee no banco:", saveErr);
+    }
+  }
+
+  return {
+    total: collectedItems.length,
+    imported: importedCount,
+    unresolved: unresolvedCount,
+    offersSaved,
+    results,
   };
 }
 

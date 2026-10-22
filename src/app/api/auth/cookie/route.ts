@@ -13,11 +13,18 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as { cookie?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      cookie?: string;
+      provider?: "mercadolivre" | "shopee";
+    };
     const rawCookie = (body.cookie || "").trim();
+    const provider = body.provider || "mercadolivre";
 
     if (!rawCookie) {
-      return NextResponse.json({ error: "Informe os dados de sessão do Mercado Livre." }, { status: 400 });
+      return NextResponse.json(
+        { error: `Informe os dados de sessão para ${provider === "shopee" ? "a Shopee" : "o Mercado Livre"}.` },
+        { status: 400 }
+      );
     }
 
     const now = new Date().toISOString();
@@ -25,7 +32,7 @@ export async function POST(request: Request) {
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
     // 1. Salva de forma criptografada no Session Vault Server-Side (PostgreSQL app_metadata / cofre)
-    await saveEncryptedSession("mercadolivre", {
+    await saveEncryptedSession(provider, {
       rawCookie,
       savedAt: now,
       expiresAt,
@@ -33,28 +40,35 @@ export async function POST(request: Request) {
       isValid: true,
     });
 
-    // 2. Atualiza em tempo de execução somente na memória protegida do servidor
-    config.mercadoLivre.sessionCookie = rawCookie;
+    if (provider === "mercadolivre") {
+      // 2. Atualiza em tempo de execução somente na memória protegida do servidor
+      config.mercadoLivre.sessionCookie = rawCookie;
 
-    // 3. Reseta ofertas pendentes de meli.la que estavam com falha anterior
-    let resetCount = 0;
-    await updateDatabase((db) => {
-      for (const o of db.offers) {
-        if (!o.shortUrl && (o.shortUrlStatus === "falhou" || (o.shortUrlAttempts ?? 0) >= 2)) {
-          o.shortUrlStatus = "pendente";
-          o.shortUrlAttempts = 0;
-          o.shortUrlError = null;
-          resetCount++;
+      // 3. Reseta ofertas pendentes de meli.la que estavam com falha anterior
+      let resetCount = 0;
+      await updateDatabase((db) => {
+        for (const o of db.offers) {
+          if (!o.shortUrl && (o.shortUrlStatus === "falhou" || (o.shortUrlAttempts ?? 0) >= 2)) {
+            o.shortUrlStatus = "pendente";
+            o.shortUrlAttempts = 0;
+            o.shortUrlError = null;
+            resetCount++;
+          }
         }
-      }
-    });
+      });
 
-    // 4. Aciona a fila segura em background
-    enqueueMeliShorten();
+      // 4. Aciona a fila segura em background
+      enqueueMeliShorten();
+
+      return NextResponse.json({
+        ok: true,
+        message: `Sessão do Mercado Livre criptografada e ativada com sucesso! ${resetCount} oferta(s) reencaminhada(s) para encurtamento meli.la.`,
+      });
+    }
 
     return NextResponse.json({
       ok: true,
-      message: `Sessão criptografada e ativada com sucesso! ${resetCount} oferta(s) reencaminhada(s) para encurtamento meli.la.`,
+      message: "Sessão da Shopee criptografada e ativada com sucesso no cofre do servidor!",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro ao processar sessão.";
