@@ -140,9 +140,9 @@ export async function saveApprovedOffers(
         itemInDb.freeShipping = candidate.freeShipping;
         itemInDb.updatedAt = now;
 
-        // Se for um produto dos favoritos puxado pelo usuário, garante que volte para a fila de Pendentes
+        // Se for um produto dos favoritos puxado pelo usuário, garante que fique na fila de Pendentes para aprovação
         if (candidate.categoryName?.includes("Favorito")) {
-          if (itemInDb.status === "rejeitado") {
+          if (itemInDb.status !== "publicado") {
             itemInDb.status = "pendente";
             itemInDb.statusChangedAt = now;
           }
