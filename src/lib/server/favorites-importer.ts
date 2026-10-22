@@ -407,44 +407,47 @@ export async function syncMercadoLivreBookmarksFromSession(
   const firstLinkIdx = html.indexOf("/p/MLB");
   const cardSnippet = firstLinkIdx !== -1 ? html.substring(Math.max(0, firstLinkIdx - 300), firstLinkIdx + 2000) : "";
 
-  // Tenta extrair itens diretamente do HTML do bookmarks/list
+  // Extrai itens diretamente do HTML da página de favoritos (sem bloqueio de bot e instantâneo!)
   const parsedDirectly: CandidateRawItem[] = [];
-  const cardBlocks = html.split(/href="https:\/\/www\.mercadolivre\.com\.br\/[^"']*\/p\/MLB/i);
 
-  for (let i = 1; i < cardBlocks.length; i++) {
-    const block = cardBlocks[i];
-    const prevBlock = cardBlocks[i - 1];
+  // Encontra todas as âncoras de título de produto (classe poly-component__title)
+  const titleRegex = /<a[^>]+href="(https:\/\/www\.mercadolivre\.com\.br\/[^\s"'<>]*\/p\/(MLB\d+)[^"']*)"[^>]*class="[^"]*poly-component__title[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
 
-    // MLB ID
-    const mlbIdMatch = block.match(/^(\d+)/);
-    if (!mlbIdMatch) continue;
-    const externalId = `MLB${mlbIdMatch[1]}`;
+  while ((match = titleRegex.exec(html)) !== null) {
+    const rawUrl = match[1].replace(/&amp;/g, "&").split("?")[0];
+    const externalId = match[2];
+    const title = match[3].replace(/<[^>]+>/g, "").trim();
+    const matchIndex = match.index;
 
-    // Link original
-    const linkMatch = (prevBlock + 'href="https://www.mercadolivre.com.br/').match(/https:\/\/www\.mercadolivre\.com\.br\/([^\s"'<>]+)\/p\/MLB\d+/i);
-    const originalUrl = linkMatch ? linkMatch[0].split("?")[0] : `https://www.mercadolivre.com.br/p/${externalId}`;
+    // Busca o bloco logo após o título (até 1200 caracteres à frente) para extrair preços
+    const forwardHtml = html.substring(matchIndex, matchIndex + 1200);
 
-    // Título a partir do slug ou texto do bloco
-    let title = "";
-    if (linkMatch?.[1]) {
-      title = linkMatch[1].replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-
-    // Preço no bloco do card
-    const priceMatch =
-      block.match(/class="[^"]*andes-money-amount__fraction[^"]*"[^>]*>([\d.]+)<\/span>/i) ||
-      block.match(/R\$\s*([\d.]+,\d{2})/i) ||
-      block.match(/R\$\s*([\d.]+)/i);
-
+    // Preço Atual
     let price = 0;
-    if (priceMatch?.[1]) {
-      price = Number.parseFloat(priceMatch[1].replace(/\./g, "").replace(",", "."));
+    const currentAria = forwardHtml.match(/aria-label="Agora:\s*([\d.]+)\s*reais(?:\s*com\s*(\d+)\s*centavos)?"/i);
+    if (currentAria?.[1]) {
+      price = Number.parseFloat(currentAria[1].replace(/\./g, "")) + (currentAria[2] ? Number.parseInt(currentAria[2], 10) / 100 : 0);
+    } else {
+      const fracMatch = forwardHtml.match(/class="[^"]*andes-money-amount__fraction[^"]*"[^>]*>([\d.]+)<\/span>/i);
+      const centsMatch = forwardHtml.match(/class="[^"]*andes-money-amount__cents[^"]*"[^>]*>(\d+)<\/span>/i);
+      if (fracMatch?.[1]) {
+        price = Number.parseFloat(fracMatch[1].replace(/\./g, "")) + (centsMatch?.[1] ? Number.parseInt(centsMatch[1], 10) / 100 : 0);
+      }
     }
 
-    // Thumbnail no bloco
+    // Preço Anterior / Original
+    let originalPrice: number | null = null;
+    const origAria = forwardHtml.match(/aria-label="Antes:\s*([\d.]+)\s*reais(?:\s*com\s*(\d+)\s*centavos)?"/i);
+    if (origAria?.[1]) {
+      originalPrice = Number.parseFloat(origAria[1].replace(/\./g, "")) + (origAria[2] ? Number.parseInt(origAria[2], 10) / 100 : 0);
+    }
+
+    // Imagem (busca até 800 caracteres antes da âncora do título)
+    const backwardHtml = html.substring(Math.max(0, matchIndex - 800), matchIndex);
     const imgMatch =
-      block.match(/src="([^"]*mlstatic\.com\/[^"]+)"/i) ||
-      prevBlock.match(/src="([^"]*mlstatic\.com\/[^"]+)"/i);
+      backwardHtml.match(/(?:data-src|src)="([^"]*(?:mlstatic\.com|http2\.mlstatic\.com)[^"]+)"/i) ||
+      forwardHtml.match(/(?:data-src|src)="([^"]*(?:mlstatic\.com|http2\.mlstatic\.com)[^"]+)"/i);
     const thumbnail = imgMatch?.[1] || null;
 
     if (title && price > 0) {
@@ -453,9 +456,9 @@ export async function syncMercadoLivreBookmarksFromSession(
         title,
         thumbnail,
         price,
-        originalPrice: price,
+        originalPrice: originalPrice && originalPrice > price ? originalPrice : price,
         currency: "BRL",
-        originalUrl,
+        originalUrl: rawUrl,
         freeShipping: true,
         categoryName: "⭐ Favorito do Usuário",
         condition: "new",
