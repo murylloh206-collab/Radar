@@ -27,6 +27,7 @@ export interface ImportFavoritesSummary {
   imported: number;
   unresolved: number;
   offersSaved?: number;
+  debugSnippet?: string;
   results: ImportFavoriteResult[];
 }
 
