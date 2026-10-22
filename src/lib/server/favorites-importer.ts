@@ -183,7 +183,21 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
     }
 
     if (!price || price <= 0) {
-      return { status: "nao_resolvido", reason: "Não foi possível identificar o preço atual na página do Mercado Livre." };
+      // Tenta extrair qualquer menção de R$ no HTML ou no título original
+      const anyPrice =
+        html.match(/R\$\s*([\d.]+,\d{2})/i) ||
+        html.match(/class="andes-money-amount__fraction"[^>]*>([\d.]+)<\/span>/i);
+      if (anyPrice?.[1]) {
+        price = Number.parseFloat(anyPrice[1].replace(/\./g, "").replace(",", "."));
+      }
+    }
+
+    if (!price || price <= 0) {
+      const titleRawStr = titleMatch?.[1] || "";
+      return {
+        status: "nao_resolvido",
+        reason: `Preço não identificado (HTML: ${html.length}b, titleMatch: "${titleRawStr}").`,
+      };
     }
 
     // Imagem / Thumbnail com suporte a meta content antes ou depois de property
