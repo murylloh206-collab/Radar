@@ -403,6 +403,120 @@ export async function syncMercadoLivreBookmarksFromSession(
     html.matchAll(/href="(https:\/\/www\.mercadolivre\.com\.br\/[^"']*\/p\/MLB\d+[^"']*)"/gi)
   ).map((m) => m[1].replace(/&amp;/g, "&").split("?")[0]);
 
+  const firstLinkIdx = html.indexOf("/p/MLB");
+  const cardSnippet = firstLinkIdx !== -1 ? html.substring(Math.max(0, firstLinkIdx - 300), firstLinkIdx + 600) : "";
+
+  // Tenta extrair itens diretamente do HTML do bookmarks/list
+  const parsedDirectly: CandidateRawItem[] = [];
+  const cardBlocks = html.split(/href="https:\/\/www\.mercadolivre\.com\.br\/[^"']*\/p\/MLB/i);
+
+  for (let i = 1; i < cardBlocks.length; i++) {
+    const block = cardBlocks[i];
+    const prevBlock = cardBlocks[i - 1];
+
+    // MLB ID
+    const mlbIdMatch = block.match(/^(\d+)/);
+    if (!mlbIdMatch) continue;
+    const externalId = `MLB${mlbIdMatch[1]}`;
+
+    // Link original
+    const linkMatch = (prevBlock + 'href="https://www.mercadolivre.com.br/').match(/https:\/\/www\.mercadolivre\.com\.br\/([^\s"'<>]+)\/p\/MLB\d+/i);
+    const originalUrl = linkMatch ? linkMatch[0].split("?")[0] : `https://www.mercadolivre.com.br/p/${externalId}`;
+
+    // Título a partir do slug ou texto do bloco
+    let title = "";
+    if (linkMatch?.[1]) {
+      title = linkMatch[1].replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+
+    // Preço no bloco do card
+    const priceMatch =
+      block.match(/class="[^"]*andes-money-amount__fraction[^"]*"[^>]*>([\d.]+)<\/span>/i) ||
+      block.match(/R\$\s*([\d.]+,\d{2})/i) ||
+      block.match(/R\$\s*([\d.]+)/i);
+
+    let price = 0;
+    if (priceMatch?.[1]) {
+      price = Number.parseFloat(priceMatch[1].replace(/\./g, "").replace(",", "."));
+    }
+
+    // Thumbnail no bloco
+    const imgMatch =
+      block.match(/src="([^"]*mlstatic\.com\/[^"]+)"/i) ||
+      prevBlock.match(/src="([^"]*mlstatic\.com\/[^"]+)"/i);
+    const thumbnail = imgMatch?.[1] || null;
+
+    if (title && price > 0) {
+      parsedDirectly.push({
+        externalId,
+        title,
+        thumbnail,
+        price,
+        originalPrice: price,
+        currency: "BRL",
+        originalUrl,
+        freeShipping: true,
+        categoryName: "⭐ Favorito do Usuário",
+        condition: "new",
+        source: "mercadolivre",
+      });
+    }
+  }
+
+  // Se conseguimos extrair diretamente da página de favoritos (sem bloqueio de bot!)
+  if (parsedDirectly.length > 0) {
+    console.log(`[syncMercadoLivreBookmarks] Extraídos ${parsedDirectly.length} itens DIRETAMENTE da página de favoritos!`);
+    let offersSaved = 0;
+    if (createOffers) {
+      const saveResult = await saveApprovedOffers(parsedDirectly);
+      offersSaved = saveResult.added + saveResult.updated;
+    }
+
+    // Grava feedbacks para o cérebro
+    for (const p of parsedDirectly) {
+      const offerId = `mercadolivre:${p.externalId}`;
+      const brand = extractBrand(p.title);
+      await recordOfferFeedback({
+        offerId,
+        externalId: p.externalId,
+        action: "aprovar",
+        customBrand: brand,
+        metadata: {
+          source: "seed_favoritos_irmao",
+          originalSource: "mercadolivre",
+          url: p.originalUrl,
+        },
+        offerData: {
+          id: offerId,
+          externalId: p.externalId,
+          title: p.title,
+          price: p.price,
+          brand,
+          searchTerm: "⭐ Favorito do Usuário",
+          source: "mercadolivre",
+          originalUrl: p.originalUrl,
+        },
+      });
+    }
+
+    return {
+      total: parsedDirectly.length,
+      imported: parsedDirectly.length,
+      unresolved: 0,
+      offersSaved,
+      results: parsedDirectly.map((p) => ({
+        url: p.originalUrl,
+        status: "importado" as const,
+        title: p.title,
+        price: p.price,
+        thumbnail: p.thumbnail,
+        category: "⭐ Favorito do Usuário",
+        source: "mercadolivre",
+      })),
+      debugSnippet: cardSnippet,
+    } as ImportFavoritesSummary & { debugSnippet?: string };
+  }
+
   const uniqueLinks = [...new Set(links)];
   if (uniqueLinks.length === 0) {
     return {
