@@ -120,13 +120,14 @@ async function mapWithConcurrency<T, R>(
 /**
  * Resolve metadados de uma URL do Mercado Livre via página pública de produto
  */
-async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavoriteResult>> {
+async function resolveMercadoLivreUrl(url: string, cookie?: string): Promise<Partial<ImportFavoriteResult>> {
   try {
     const res = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9",
+        "Cookie": cookie || "cp=13780103; inferredZipcode=true; orgnickp=MICHELHENRIQUE1; orguseridp=353946553;",
       },
       signal: AbortSignal.timeout(7000),
     });
@@ -250,7 +251,8 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
  */
 export async function importBrotherFavorites(
   urls: string[],
-  createOffers: boolean = false
+  createOffers: boolean = false,
+  cookie?: string
 ): Promise<ImportFavoritesSummary> {
   const cleanUrls = urls.map((u) => u.trim()).filter(Boolean);
   const candidatesToSave: CandidateRawItem[] = [];
@@ -265,7 +267,7 @@ export async function importBrotherFavorites(
     if (trimmed.includes("shopee.com") || trimmed.includes("shp.ee")) {
       resolved = await resolveShopeeUrl(trimmed);
     } else if (trimmed.includes("mercadolivre.com") || trimmed.includes("produto.mercadolivre.com")) {
-      resolved = await resolveMercadoLivreUrl(trimmed);
+      resolved = await resolveMercadoLivreUrl(trimmed, cookie);
     }
 
     return { url: trimmed, resolved };
@@ -412,6 +414,6 @@ export async function syncMercadoLivreBookmarksFromSession(
     };
   }
 
-  return importBrotherFavorites(uniqueLinks, createOffers);
+  return importBrotherFavorites(uniqueLinks, createOffers, cookieToUse);
 }
 
