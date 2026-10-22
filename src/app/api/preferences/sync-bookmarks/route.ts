@@ -51,10 +51,17 @@ export async function POST(request: Request) {
       });
     }
 
-    const summary = await syncMercadoLivreBookmarksFromSession(rawCookie);
+    const summary = await syncMercadoLivreBookmarksFromSession(rawCookie, true);
+    
+    // Retorna a lista atualizada de ofertas para recarregar o painel sem refresh
+    const { readDatabase } = await import("@/lib/server/storage");
+    const freshDb = await readDatabase();
+
     return NextResponse.json({
       ok: true,
       ...summary,
+      offers: freshDb.offers,
+      lastSearch: freshDb.lastSearch,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido ao sincronizar favoritos.";

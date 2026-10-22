@@ -4,15 +4,21 @@ import { recordOfferFeedback } from "./feedback-service";
 import { executeShopeeGraphQL, type ShopeeProductOfferV2Response } from "./shopee";
 import { extractBrand } from "./recommendation-engine";
 import { loadDecryptedSession } from "./session-vault";
+import { saveApprovedOffers } from "./scanner/database";
+import type { CandidateRawItem } from "./scanner/validator";
 
 export interface ImportFavoriteResult {
   url: string;
   status: "importado" | "nao_resolvido";
   title?: string;
   price?: number;
+  originalPrice?: number | null;
+  thumbnail?: string | null;
   brand?: string;
   category?: string;
   source?: "shopee" | "mercadolivre";
+  freeShipping?: boolean;
+  externalId?: string;
   reason?: string;
 }
 
@@ -20,6 +26,7 @@ export interface ImportFavoritesSummary {
   total: number;
   imported: number;
   unresolved: number;
+  offersSaved?: number;
   results: ImportFavoriteResult[];
 }
 
@@ -48,6 +55,7 @@ async function resolveShopeeUrl(url: string): Promise<Partial<ImportFavoriteResu
           productName
           price
           priceDiscountRate
+          imageUrl
           shopName
         }
       }
@@ -64,11 +72,18 @@ async function resolveShopeeUrl(url: string): Promise<Partial<ImportFavoriteResu
 
     const price = Number.parseFloat(node.price);
     const brand = extractBrand(node.productName);
+    const thumbnail = node.imageUrl || null;
+    const discountRate = node.priceDiscountRate ? Number(node.priceDiscountRate) : 0;
+    const originalPrice = discountRate > 0 ? price / (1 - discountRate / 100) : null;
 
     return {
       status: "importado",
+      externalId: String(node.itemId),
       title: node.productName,
       price,
+      originalPrice,
+      thumbnail,
+      freeShipping: false,
       brand,
       category: "Shopee",
       source: "shopee",
@@ -123,12 +138,39 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
       return { status: "nao_resolvido", reason: "Não foi possível identificar o preço atual na página do Mercado Livre." };
     }
 
+    // Imagem / Thumbnail
+    const imgMatch =
+      html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i) ||
+      html.match(/<img[^>]*class="[^"]*ui-pdp-image[^"]*"[^>]*src="([^"]+)"/i);
+    const thumbnail = imgMatch?.[1] || null;
+
+    // ID MLB
+    const mlbMatch = url.match(/\/p\/(MLB\d+)/i) || url.match(/\/(MLB-?\d+)/i);
+    const externalId = mlbMatch ? mlbMatch[1].replace("-", "") : `MLB${Date.now()}`;
+    const freeShipping = /frete\s+gr[aá]tis/i.test(html);
+
+    // Preço original anterior
+    let originalPrice: number | null = null;
+    const origMatch = html.match(
+      /class="[^"]*(?:andes-money-amount--previous|ui-pdp-price__original-value)[^"]*"[\s\S]*?class="andes-money-amount__fraction"[^>]*>([\d.]+)<\/span>/i
+    );
+    if (origMatch?.[1]) {
+      const parsedOrig = Number.parseFloat(origMatch[1].replace(/\./g, "").replace(",", "."));
+      if (!Number.isNaN(parsedOrig) && parsedOrig > price) {
+        originalPrice = parsedOrig;
+      }
+    }
+
     const brand = extractBrand(rawTitle);
 
     return {
       status: "importado",
+      externalId,
       title: rawTitle,
       price,
+      originalPrice,
+      thumbnail,
+      freeShipping,
       brand,
       category: "Mercado Livre",
       source: "mercadolivre",
@@ -140,10 +182,14 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
 
 /**
  * Importa uma lista de links de favoritos (Shopee ou Mercado Livre) como aprovações ponderadas (peso 2.5).
- * Se não conseguir resolver metadados reais, registra como "não resolvido" em vez de inventar dados.
+ * Se createOffers for true, também insere cada produto como oferta pendente na fila do painel!
  */
-export async function importBrotherFavorites(urls: string[]): Promise<ImportFavoritesSummary> {
+export async function importBrotherFavorites(
+  urls: string[],
+  createOffers: boolean = false
+): Promise<ImportFavoritesSummary> {
   const results: ImportFavoriteResult[] = [];
+  const candidatesToSave: CandidateRawItem[] = [];
   let importedCount = 0;
   let unresolvedCount = 0;
 
@@ -160,7 +206,7 @@ export async function importBrotherFavorites(urls: string[]): Promise<ImportFavo
     }
 
     if (resolved.status === "importado" && resolved.title && typeof resolved.price === "number") {
-      const externalId = `seed_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const externalId = resolved.externalId || `seed_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const offerId = `${resolved.source || "seed"}:${externalId}`;
 
       await recordOfferFeedback({
@@ -179,11 +225,27 @@ export async function importBrotherFavorites(urls: string[]): Promise<ImportFavo
           title: resolved.title,
           price: resolved.price,
           brand: resolved.brand,
-          searchTerm: resolved.category || "Favoritos Irmão",
-          source: resolved.source || "shopee",
+          searchTerm: resolved.category || "Favoritos",
+          source: resolved.source || "mercadolivre",
           originalUrl: trimmed,
         },
       });
+
+      if (createOffers) {
+        candidatesToSave.push({
+          externalId,
+          title: resolved.title,
+          thumbnail: resolved.thumbnail || null,
+          price: resolved.price,
+          originalPrice: resolved.originalPrice || resolved.price,
+          currency: "BRL",
+          originalUrl: trimmed,
+          freeShipping: resolved.freeShipping ?? true,
+          categoryName: resolved.category || "Favoritos",
+          condition: "new",
+          source: resolved.source || "mercadolivre",
+        });
+      }
 
       importedCount++;
       results.push({
@@ -191,6 +253,9 @@ export async function importBrotherFavorites(urls: string[]): Promise<ImportFavo
         status: "importado",
         title: resolved.title,
         price: resolved.price,
+        originalPrice: resolved.originalPrice,
+        thumbnail: resolved.thumbnail,
+        freeShipping: resolved.freeShipping,
         brand: resolved.brand,
         category: resolved.category,
         source: resolved.source,
@@ -207,10 +272,22 @@ export async function importBrotherFavorites(urls: string[]): Promise<ImportFavo
     }
   }
 
+  let offersSaved = 0;
+  if (createOffers && candidatesToSave.length > 0) {
+    try {
+      const saveResult = await saveApprovedOffers(candidatesToSave);
+      offersSaved = saveResult.added + saveResult.updated;
+      console.log(`[favorites-importer] ${saveResult.added} nova(s) oferta(s) inserida(s) no painel, ${saveResult.updated} atualizada(s)!`);
+    } catch (saveErr) {
+      console.error("[favorites-importer] Erro ao salvar ofertas no banco:", saveErr);
+    }
+  }
+
   return {
     total: urls.length,
     imported: importedCount,
     unresolved: unresolvedCount,
+    offersSaved,
     results,
   };
 }
@@ -218,8 +295,12 @@ export async function importBrotherFavorites(urls: string[]): Promise<ImportFavo
 /**
  * Extrai e importa automaticamente toda a lista de favoritos da conta do Mercado Livre
  * utilizando os cookies salvos no Session Vault Server-Side ou fornecidos diretamente.
+ * Se createOffers for true (padrão), também gera os cards reais na fila de ofertas!
  */
-export async function syncMercadoLivreBookmarksFromSession(customCookie?: string): Promise<ImportFavoritesSummary> {
+export async function syncMercadoLivreBookmarksFromSession(
+  customCookie?: string,
+  createOffers: boolean = true
+): Promise<ImportFavoritesSummary> {
   let cookieToUse = customCookie;
   if (!cookieToUse) {
     const session = await loadDecryptedSession("mercadolivre");
@@ -255,9 +336,11 @@ export async function syncMercadoLivreBookmarksFromSession(customCookie?: string
       total: 0,
       imported: 0,
       unresolved: 0,
+      offersSaved: 0,
       results: [],
     };
   }
 
-  return importBrotherFavorites(uniqueLinks);
+  return importBrotherFavorites(uniqueLinks, createOffers);
 }
+

@@ -107,6 +107,7 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
   const [showSecureSessionModal, setShowSecureSessionModal] = useState(false);
   const [secureCookieInput, setSecureCookieInput] = useState("");
   const [savingSecureCookie, setSavingSecureCookie] = useState(false);
+  const [syncingFavorites, setSyncingFavorites] = useState(false);
 
   const [isConnected, setIsConnected] = useState(() => {
     if (typeof window !== "undefined") {
@@ -343,6 +344,44 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     }
     return list;
   }, [offers, filter, quickFilter, query, sort]);
+
+  // ---------- Puxar Favoritos da Conta do Mercado Livre ----------
+  async function handleSyncFavorites() {
+    if (syncingFavorites) return;
+    setSyncingFavorites(true);
+    try {
+      const res = await fetch("/api/preferences/sync-bookmarks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createOffers: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Erro ao puxar favoritos da sua conta.");
+      }
+
+      if (data.offers && Array.isArray(data.offers)) {
+        setOffers(data.offers);
+        if (data.lastSearch) setLastSearch(data.lastSearch);
+      } else {
+        await reloadOffersAndScheduler();
+      }
+
+      // Direciona o usuário para a aba de pendentes para visualizar as ofertas puxadas
+      setFilter("pendente");
+
+      const savedCount = data.offersSaved ?? data.imported ?? 0;
+      notify(
+        "ok",
+        `⭐ ${data.imported || 0} produto(s) favorito(s) puxado(s) com sucesso! (${savedCount} adicionado(s)/atualizado(s) na fila de Pendentes)`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao puxar favoritos.";
+      notify("erro", msg);
+    } finally {
+      setSyncingFavorites(false);
+    }
+  }
 
   // ---------- Atualização de Ofertas pelo Mercado Livre Brasil (MLB) ----------
   async function handleUpdateOffers() {
@@ -910,6 +949,18 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              id="btn-puxar-favoritos"
+              onClick={handleSyncFavorites}
+              disabled={syncingFavorites}
+              title="Puxar produtos favoritados da sua conta do Mercado Livre e inserir como ofertas pendentes na sua fila"
+              className="inline-flex items-center gap-2 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-amber-600/15 px-4 py-3.5 text-xs sm:text-sm font-bold text-amber-200 hover:brightness-125 hover:border-amber-400 active:scale-95 transition shadow-lg shadow-amber-950/20 shrink-0 disabled:opacity-50"
+            >
+              {syncingFavorites ? <IconSpinner width={15} height={15} /> : <span className="text-sm">⭐</span>}
+              {syncingFavorites ? "Puxando favoritos…" : "Puxar Meus Favoritos"}
+            </button>
+
             <button
               type="button"
               onClick={() => setShowPreferencesModal(true)}
