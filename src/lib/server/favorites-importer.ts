@@ -3,6 +3,7 @@ import "server-only";
 import { recordOfferFeedback } from "./feedback-service";
 import { executeShopeeGraphQL, type ShopeeProductOfferV2Response } from "./shopee";
 import { extractBrand } from "./recommendation-engine";
+import { loadDecryptedSession } from "./session-vault";
 
 export interface ImportFavoriteResult {
   url: string;
@@ -212,4 +213,51 @@ export async function importBrotherFavorites(urls: string[]): Promise<ImportFavo
     unresolved: unresolvedCount,
     results,
   };
+}
+
+/**
+ * Extrai e importa automaticamente toda a lista de favoritos da conta do Mercado Livre
+ * utilizando os cookies salvos no Session Vault Server-Side ou fornecidos diretamente.
+ */
+export async function syncMercadoLivreBookmarksFromSession(customCookie?: string): Promise<ImportFavoritesSummary> {
+  let cookieToUse = customCookie;
+  if (!cookieToUse) {
+    const session = await loadDecryptedSession("mercadolivre");
+    cookieToUse = session?.rawCookie;
+  }
+
+  if (!cookieToUse || !cookieToUse.trim()) {
+    throw new Error("Nenhuma sessão ou cookie do Mercado Livre encontrado no cofre.");
+  }
+
+  const res = await fetch("https://myaccount.mercadolivre.com.br/bookmarks/list", {
+    headers: {
+      "cookie": cookieToUse,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "pt-BR,pt;q=0.9",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Falha ao acessar lista de favoritos do Mercado Livre (HTTP ${res.status}). A sessão pode ter expirado.`);
+  }
+
+  const html = await res.text();
+  const links = Array.from(
+    html.matchAll(/href="(https:\/\/www\.mercadolivre\.com\.br\/[^"']*\/p\/MLB\d+[^"']*)"/gi)
+  ).map((m) => m[1].replace(/&amp;/g, "&").split("?")[0]);
+
+  const uniqueLinks = [...new Set(links)];
+  if (uniqueLinks.length === 0) {
+    return {
+      total: 0,
+      imported: 0,
+      unresolved: 0,
+      results: [],
+    };
+  }
+
+  return importBrotherFavorites(uniqueLinks);
 }
