@@ -139,6 +139,18 @@ export async function saveApprovedOffers(
         }
         itemInDb.freeShipping = candidate.freeShipping;
         itemInDb.updatedAt = now;
+
+        // Se for um produto dos favoritos puxado pelo usuário, garante que volte para a fila de Pendentes
+        if (candidate.categoryName?.includes("Favorito")) {
+          if (itemInDb.status === "rejeitado") {
+            itemInDb.status = "pendente";
+            itemInDb.statusChangedAt = now;
+          }
+          itemInDb.opportunityScore = Math.max(itemInDb.opportunityScore || 0, 85);
+          itemInDb.searchTerm = "⭐ Favorito do Usuário";
+          itemInDb.opportunityReason = "Favorito do usuário importado da conta do Mercado Livre";
+        }
+
         updated++;
       }
     }

@@ -96,6 +96,30 @@ async function resolveShopeeUrl(url: string): Promise<Partial<ImportFavoriteResu
 /**
  * Resolve metadados de uma URL do Mercado Livre via página pública de produto
  */
+/**
+ * Concorrência controlada para resolução rápida de múltiplos links
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const output: R[] = new Array(items.length);
+  let index = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const current = index++;
+      output[current] = await fn(items[current]);
+    }
+  });
+  await Promise.all(workers);
+  return output;
+}
+
+/**
+ * Resolve metadados de uma URL do Mercado Livre via página pública de produto
+ */
 async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavoriteResult>> {
   try {
     const res = await fetch(url, {
@@ -104,7 +128,7 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9",
       },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(7000),
     });
 
     if (!res.ok) {
@@ -113,21 +137,45 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
 
     const html = await res.text();
 
-    // Extrai título da tag <title> ou meta og:title
+    // Extrai título com suporte a múltiplas estruturas do Mercado Livre
     const titleMatch =
-      html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) ||
-      html.match(/<title>([^<]+)<\/title>/i);
-    const rawTitle = titleMatch?.[1]?.replace(/\s*\|\s*Mercado\s*Livre.*$/i, "").trim();
+      html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i) ||
+      html.match(/<h1[^>]*class="[^"]*ui-pdp-title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) ||
+      html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) ||
+      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+
+    let rawTitle = titleMatch?.[1]
+      ?.replace(/<[^>]+>/g, "")
+      ?.replace(/\s*\|\s*Mercado\s*Livre.*$/i, "")
+      ?.replace(/\s*\|\s*Parcelamento.*$/i, "")
+      ?.trim();
+
+    if (rawTitle) {
+      rawTitle = rawTitle.replace(/\s*[-|]\s*R\$\s*[\d.,]+.*$/i, "").trim();
+    }
+
+    // Fallback inteligente: slug da URL
+    if (!rawTitle) {
+      const slugMatch = url.match(/mercadolivre\.com\.br\/([^\/]+)\/p\//i);
+      if (slugMatch?.[1]) {
+        rawTitle = slugMatch[1].replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      }
+    }
 
     if (!rawTitle) {
       return { status: "nao_resolvido", reason: "Não foi possível extrair o título do anúncio do Mercado Livre." };
     }
 
-    // Extrai preço numérico
+    // Extrai preço numérico com múltiplos seletores de fallback
     const priceMatch =
       html.match(/class="[^"]*ui-pdp-price__second-line[^"]*"[\s\S]*?class="andes-money-amount__fraction"[^>]*>([\d.]+)<\/span>/i) ||
-      html.match(/itemprop="price"\s+content="([\d.]+)"/i) ||
-      html.match(/"price"\s*:\s*([\d.]+)/i);
+      html.match(/<meta[^>]+property=["']product:price:amount["'][^>]+content=["']([\d.]+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([\d.]+)["'][^>]+property=["']product:price:amount["']/i) ||
+      html.match(/itemprop=["']price["'][^>]+content=["']([\d.]+)["']/i) ||
+      html.match(/content=["']([\d.]+)["'][^>]+itemprop=["']price["']/i) ||
+      html.match(/"price"\s*:\s*([\d.]+)/i) ||
+      titleMatch?.[1]?.match(/[-|]\s*R\$\s*([\d.,]+)/i);
 
     let price = 0;
     if (priceMatch?.[1]) {
@@ -138,9 +186,10 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
       return { status: "nao_resolvido", reason: "Não foi possível identificar o preço atual na página do Mercado Livre." };
     }
 
-    // Imagem / Thumbnail
+    // Imagem / Thumbnail com suporte a meta content antes ou depois de property
     const imgMatch =
-      html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i) ||
+      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ||
       html.match(/<img[^>]*class="[^"]*ui-pdp-image[^"]*"[^>]*src="([^"]+)"/i);
     const thumbnail = imgMatch?.[1] || null;
 
@@ -151,9 +200,10 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
 
     // Preço original anterior
     let originalPrice: number | null = null;
-    const origMatch = html.match(
-      /class="[^"]*(?:andes-money-amount--previous|ui-pdp-price__original-value)[^"]*"[\s\S]*?class="andes-money-amount__fraction"[^>]*>([\d.]+)<\/span>/i
-    );
+    const origMatch =
+      html.match(
+        /class="[^"]*(?:andes-money-amount--previous|ui-pdp-price__original-value)[^"]*"[\s\S]*?class="andes-money-amount__fraction"[^>]*>([\d.]+)<\/span>/i
+      ) || html.match(/"original_price"\s*:\s*([\d.]+)/i);
     if (origMatch?.[1]) {
       const parsedOrig = Number.parseFloat(origMatch[1].replace(/\./g, "").replace(",", "."));
       if (!Number.isNaN(parsedOrig) && parsedOrig > price) {
@@ -172,7 +222,7 @@ async function resolveMercadoLivreUrl(url: string): Promise<Partial<ImportFavori
       thumbnail,
       freeShipping,
       brand,
-      category: "Mercado Livre",
+      category: "⭐ Favorito do Usuário",
       source: "mercadolivre",
     };
   } catch (err) {
@@ -188,16 +238,15 @@ export async function importBrotherFavorites(
   urls: string[],
   createOffers: boolean = false
 ): Promise<ImportFavoritesSummary> {
-  const results: ImportFavoriteResult[] = [];
+  const cleanUrls = urls.map((u) => u.trim()).filter(Boolean);
   const candidatesToSave: CandidateRawItem[] = [];
-  let importedCount = 0;
-  let unresolvedCount = 0;
 
-  for (const rawUrl of urls) {
-    const trimmed = rawUrl.trim();
-    if (!trimmed) continue;
-
-    let resolved: Partial<ImportFavoriteResult> = { status: "nao_resolvido", reason: "URL não reconhecida como Shopee ou Mercado Livre." };
+  // Resolução rápida com concorrência de 5 requisições paralelas
+  const resolvedItems = await mapWithConcurrency(cleanUrls, 5, async (trimmed) => {
+    let resolved: Partial<ImportFavoriteResult> = {
+      status: "nao_resolvido",
+      reason: "URL não reconhecida como Shopee ou Mercado Livre.",
+    };
 
     if (trimmed.includes("shopee.com") || trimmed.includes("shp.ee")) {
       resolved = await resolveShopeeUrl(trimmed);
@@ -205,6 +254,14 @@ export async function importBrotherFavorites(
       resolved = await resolveMercadoLivreUrl(trimmed);
     }
 
+    return { url: trimmed, resolved };
+  });
+
+  const results: ImportFavoriteResult[] = [];
+  let importedCount = 0;
+  let unresolvedCount = 0;
+
+  for (const { url: trimmed, resolved } of resolvedItems) {
     if (resolved.status === "importado" && resolved.title && typeof resolved.price === "number") {
       const externalId = resolved.externalId || `seed_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const offerId = `${resolved.source || "seed"}:${externalId}`;
@@ -225,7 +282,7 @@ export async function importBrotherFavorites(
           title: resolved.title,
           price: resolved.price,
           brand: resolved.brand,
-          searchTerm: resolved.category || "Favoritos",
+          searchTerm: resolved.category || "⭐ Favorito do Usuário",
           source: resolved.source || "mercadolivre",
           originalUrl: trimmed,
         },
@@ -241,7 +298,7 @@ export async function importBrotherFavorites(
           currency: "BRL",
           originalUrl: trimmed,
           freeShipping: resolved.freeShipping ?? true,
-          categoryName: resolved.category || "Favoritos",
+          categoryName: "⭐ Favorito do Usuário",
           condition: "new",
           source: resolved.source || "mercadolivre",
         });

@@ -4,6 +4,7 @@ import { saveEncryptedSession } from "@/lib/server/session-vault";
 import type { ApiError } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function verifyAdminAuth(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET;

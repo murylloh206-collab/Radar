@@ -352,7 +352,10 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
     try {
       const res = await fetch("/api/preferences/sync-bookmarks", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-requested-with": "XMLHttpRequest",
+        },
         body: JSON.stringify({ createOffers: true }),
       });
       const data = await res.json();
@@ -363,17 +366,18 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
       if (data.offers && Array.isArray(data.offers)) {
         setOffers(data.offers);
         if (data.lastSearch) setLastSearch(data.lastSearch);
-      } else {
-        await reloadOffersAndScheduler();
       }
+      await reloadOffersAndScheduler();
 
-      // Direciona o usuário para a aba de pendentes para visualizar as ofertas puxadas
+      // Limpa filtros e direciona o usuário para a aba de pendentes para visualização imediata
       setFilter("pendente");
+      setQuickFilter("todos");
+      setQuery("");
 
       const savedCount = data.offersSaved ?? data.imported ?? 0;
       notify(
         "ok",
-        `⭐ ${data.imported || 0} produto(s) favorito(s) puxado(s) com sucesso! (${savedCount} adicionado(s)/atualizado(s) na fila de Pendentes)`
+        `⭐ ${data.imported || 0} produto(s) favorito(s) puxado(s) com sucesso! (${savedCount} na fila de Pendentes)`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao puxar favoritos.";
