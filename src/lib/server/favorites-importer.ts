@@ -528,6 +528,10 @@ export async function syncMercadoLivreBookmarksFromSession(
     };
   }
 
-  return importBrotherFavorites(uniqueLinks, createOffers, cookieToUse);
+  const fallbackRes = await importBrotherFavorites(uniqueLinks, createOffers, cookieToUse);
+  return {
+    ...fallbackRes,
+    debugSnippet: cardSnippet,
+  };
 }
 
