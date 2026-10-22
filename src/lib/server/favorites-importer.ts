@@ -405,7 +405,7 @@ export async function syncMercadoLivreBookmarksFromSession(
   ).map((m) => m[1].replace(/&amp;/g, "&").split("?")[0]);
 
   const firstLinkIdx = html.indexOf("/p/MLB");
-  const cardSnippet = firstLinkIdx !== -1 ? html.substring(Math.max(0, firstLinkIdx - 300), firstLinkIdx + 600) : "";
+  const cardSnippet = firstLinkIdx !== -1 ? html.substring(Math.max(0, firstLinkIdx - 300), firstLinkIdx + 2000) : "";
 
   // Tenta extrair itens diretamente do HTML do bookmarks/list
   const parsedDirectly: CandidateRawItem[] = [];
