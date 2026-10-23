@@ -42,10 +42,12 @@ function ProductImage({ offer }: { offer: Offer }) {
   const rawSrc = offer.thumbnail;
   const optimizedSrc = largerThumbnail(rawSrc);
   const [currentSrc, setCurrentSrc] = useState(optimizedSrc || rawSrc);
+  const [triedProxy, setTriedProxy] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     setCurrentSrc(largerThumbnail(offer.thumbnail) || offer.thumbnail);
+    setTriedProxy(false);
     setFailed(false);
   }, [offer.thumbnail]);
 
@@ -66,10 +68,15 @@ function ProductImage({ offer }: { offer: Offer }) {
       referrerPolicy="no-referrer"
       className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
       onError={() => {
-        // Se a versão ampliada falhou, tenta a imagem bruta original
-        if (rawSrc && currentSrc !== rawSrc) {
+        // 1. Se a versão ampliada falhou, tenta a imagem original bruta
+        if (rawSrc && currentSrc !== rawSrc && !triedProxy) {
           setCurrentSrc(rawSrc);
+        } else if (rawSrc && !triedProxy) {
+          // 2. Se a imagem direta foi bloqueada por CDN/ISP/AdBlock, usa o proxy server-side do Radar
+          setTriedProxy(true);
+          setCurrentSrc(`/api/image-proxy?url=${encodeURIComponent(rawSrc)}`);
         } else {
+          // 3. Imagem realmente inexistente
           setFailed(true);
         }
       }}
@@ -111,7 +118,13 @@ export function OfferCard({
 
   // Marca e Vendedor da oferta
   const brandDisplay = offer.brand || "Marca";
-  const sellerDisplay = offer.sellerName || "Mercado Livre";
+  const defaultSeller =
+    offer.source === "shopee"
+      ? "Shopee Oficial"
+      : offer.source === "netshoes"
+      ? "Netshoes Oficial"
+      : "Mercado Livre";
+  const sellerDisplay = offer.sellerName || defaultSeller;
 
   // Link ativo preferencial: link curto se pronto, senão affiliateUrl
   const activeLink = offer.shortUrl || affiliateUrl.trim() || offer.originalUrl;
