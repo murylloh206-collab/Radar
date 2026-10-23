@@ -83,9 +83,9 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   const MAX_CYCLE_PENDING = 50;
   // Cotas por plataforma garantindo PRIORIDADE MÁXIMA AO MERCADO LIVRE
-  const ML_QUOTA = 28;
+  const ML_QUOTA = 35;
   const NETSHOES_QUOTA = 10;
-  const SHOPEE_QUOTA = 12;
+  const SHOPEE_QUOTA = 15;
 
   const rawCandidates: CandidateRawItem[] = [];
 

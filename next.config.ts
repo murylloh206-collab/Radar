@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
       { protocol: "http", hostname: "**.susercontent.com" },
       { protocol: "https", hostname: "**.shopeesz.com" },
       { protocol: "https", hostname: "**.akamaized.net" },
+      { protocol: "https", hostname: "**.netshoes.com.br" },
+      { protocol: "https", hostname: "static.netshoes.com.br" },
+      { protocol: "https", hostname: "**.nsstatic.com" },
     ],
   },
   turbopack: {

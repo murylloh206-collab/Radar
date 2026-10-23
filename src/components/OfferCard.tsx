@@ -72,7 +72,13 @@ function ProductImage({ offer }: { offer: Offer }) {
       src={src}
       alt={offer.title}
       fill
-      unoptimized={offer.source === "shopee" || src.includes("shopee") || src.includes("susercontent")}
+      unoptimized={
+        offer.source === "shopee" ||
+        offer.source === "netshoes" ||
+        src.includes("shopee") ||
+        src.includes("netshoes") ||
+        src.includes("susercontent")
+      }
       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
       className="object-contain p-3 transition-transform duration-300 group-hover:scale-105"
       onError={() => {

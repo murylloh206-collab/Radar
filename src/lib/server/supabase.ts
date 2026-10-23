@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Offer, SchedulerSettings } from "../types";
+import type { Offer, OfferSource, SchedulerSettings } from "../types";
 
 /**
  * CLIENTE OFICIAL DO SUPABASE (POSTGRESQL)
@@ -56,9 +56,18 @@ export function mapDbToOffer(row: Record<string, unknown>): Offer {
     String(row.original_url || "").includes("shopee.com") ||
     String(row.short_url || "").includes("shopee.com");
 
+  const isNetshoes =
+    row.source === "netshoes" ||
+    String(row.id || "").startsWith("netshoes:") ||
+    String(row.original_url || "").includes("netshoes.com") ||
+    String(row.short_url || "").includes("netshoes.com") ||
+    String(row.affiliate_url || "").includes("netshoes.com");
+
+  const source: OfferSource = isShopee ? "shopee" : isNetshoes ? "netshoes" : "mercadolivre";
+
   return {
     id: String(row.id),
-    source: isShopee ? "shopee" : "mercadolivre",
+    source,
     externalId: String(row.external_id || ""),
     title: String(row.title || ""),
     thumbnail: (row.thumbnail as string) || null,
