@@ -82,6 +82,11 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
   const priceRangeByCat = (category: string) => getCategoryPriceRange(category, feedbacks);
 
   const MAX_CYCLE_PENDING = 50;
+  // Cotas por plataforma garantindo PRIORIDADE MÁXIMA AO MERCADO LIVRE
+  const ML_QUOTA = 28;
+  const NETSHOES_QUOTA = 10;
+  const SHOPEE_QUOTA = 12;
+
   const rawCandidates: CandidateRawItem[] = [];
 
   let totalRejectedSales = 0;
@@ -93,35 +98,73 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
   const queriedTermsOrCategories: string[] = [];
 
   // =========================================================================
-  // ETAPA 1: FONTE PRIMÁRIA — SHOPEE (Top Sales sortType: 2 por productCatId)
+  // ETAPA 1: FONTE PRIORITÁRIA #1 — MERCADO LIVRE (API Oficial + Vitrine Web)
   // =========================================================================
-  console.log("\n🛍️ [SCANNER] Executando Fonte Primária: Shopee Open API...");
+  console.log(`\n🟡 [SCANNER] Executando Fonte Prioritária #1: Mercado Livre (cota: ${ML_QUOTA})...`);
+  
+  // 1.1 Tenta busca por termos de desejo via API oficial do Mercado Livre
   try {
-    const shopeeResult = await runShopeeCategoryScan({
-      preferences,
-      feedbacks,
-      priceRangeByCat,
-      maxPendingQuota: MAX_CYCLE_PENDING,
-    });
+    const mlToken = await getAccessToken().catch(() => null);
+    if (mlToken) {
+      console.log("[SCANNER] Buscando Mercado Livre via API oficial (fetchDesiredOffers)...");
+      const desiredResult = await fetchDesiredOffers({
+        token: mlToken,
+        maxTermsPerRun: 8,
+        maxItemsPerTerm: 8,
+        deadlineMs: 8000,
+      });
 
-    rawCandidates.push(...shopeeResult.candidates);
-    totalRejectedSales += shopeeResult.stats.rejectedSales;
-    totalRejectedRating += shopeeResult.stats.rejectedRating;
-    totalRejectedDiscount += shopeeResult.stats.rejectedDiscount;
-    totalRejectedPrice += shopeeResult.stats.rejectedPrice;
-    totalRejectedBlacklist += shopeeResult.stats.rejectedBlacklist;
-    queriedTermsOrCategories.push(...shopeeResult.stats.categoriesQueried.map((id) => `Shopee Cat:${id}`));
-  } catch (shopeeErr) {
-    const msg = shopeeErr instanceof Error ? shopeeErr.message : "Erro na Shopee";
-    console.error("[SCANNER] Erro na coleta Shopee:", msg);
-    errorsLog.push(`Shopee: ${msg}`);
+      for (const it of desiredResult.items) {
+        if (rawCandidates.length >= ML_QUOTA) break;
+        const validation = validateOfferCandidate(it, priceRangeByCat(it.categoryName || "Geral"));
+        if (validation.valid) {
+          it.source = "mercadolivre";
+          rawCandidates.push(it);
+        }
+      }
+      queriedTermsOrCategories.push(...desiredResult.termsQueried.map((t) => `ML Termo: ${t}`));
+    }
+  } catch (mlApiErr) {
+    console.warn("[SCANNER] Falha na API do Mercado Livre, prosseguindo com vitrine Web:", mlApiErr);
   }
 
+  // 1.2 Complementa com a vitrine pública de ofertas do Mercado Livre (/ofertas)
+  if (rawCandidates.length < ML_QUOTA) {
+    try {
+      console.log(`[SCANNER] Complementando Mercado Livre via vitrine pública /ofertas...`);
+      const mlResult = await runMercadoLivreWebScan({
+        preferences,
+        feedbacks,
+        priceRangeByCat,
+        maxPagesPerCycle: 20,
+      });
+
+      for (const cand of mlResult.candidates) {
+        if (rawCandidates.length >= ML_QUOTA) break;
+        cand.source = "mercadolivre";
+        rawCandidates.push(cand);
+      }
+      totalRejectedSales += mlResult.stats.rejectedSalesUnder100;
+      totalRejectedRating += mlResult.stats.rejectedLowRating;
+      totalRejectedPrice += mlResult.stats.rejectedPrice;
+      totalRejectedBlacklist += mlResult.stats.rejectedBlacklist;
+      errorsLog.push(...mlResult.stats.errors);
+      queriedTermsOrCategories.push("ML: /ofertas vitrine pública");
+    } catch (mlWebErr) {
+      const msg = mlWebErr instanceof Error ? mlWebErr.message : "Erro no ML";
+      console.error("[SCANNER] Erro na coleta Web do Mercado Livre:", msg);
+      errorsLog.push(`ML Web: ${msg}`);
+    }
+  }
+
+  console.log(`[SCANNER] Mercado Livre coletou: ${rawCandidates.length} produto(s) qualificado(s).`);
+
   // =========================================================================
-  // ETAPA 2: FONTE SECUNDÁRIA — NETSHOES (Rakuten Product Search API)
+  // ETAPA 2: FONTE SECUNDÁRIA #2 — NETSHOES (Esportes & Calçados)
   // =========================================================================
-  const netshoesSlots = Math.max(0, MAX_CYCLE_PENDING - rawCandidates.length);
+  const netshoesSlots = Math.min(NETSHOES_QUOTA, MAX_CYCLE_PENDING - rawCandidates.length);
   if (netshoesSlots > 0) {
+    console.log(`\n👟 [SCANNER] Executando Fonte #2: Netshoes (cota: ${netshoesSlots})...`);
     try {
       const netshoesResult = await runNetshoesCategoryScan({
         preferences,
@@ -134,8 +177,9 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
         totalRejectedDiscount += netshoesResult.stats.rejectedDiscount;
         totalRejectedBlacklist += netshoesResult.stats.rejectedBlacklist;
         errorsLog.push(...netshoesResult.stats.errors);
-        queriedTermsOrCategories.push("Netshoes (Rakuten API)");
+        queriedTermsOrCategories.push("Netshoes (Ofertas Verificadas)");
       }
+      console.log(`[SCANNER] Netshoes coletou: ${netshoesResult.candidates.length} produto(s).`);
     } catch (netshoesErr) {
       const msg = netshoesErr instanceof Error ? netshoesErr.message : "Erro Netshoes";
       console.error("[SCANNER] Erro na coleta Netshoes:", msg);
@@ -144,30 +188,34 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
   }
 
   // =========================================================================
-  // ETAPA 3: MERCADO LIVRE WEB — (/ofertas + Páginas Individuais >100 vendidos/avaliações)
+  // ETAPA 3: FONTE COMPLEMENTAR #3 — SHOPEE (Open API)
   // =========================================================================
-  const remainingSlots = Math.max(0, MAX_CYCLE_PENDING - rawCandidates.length);
-  if (remainingSlots > 0) {
-    console.log(`\n🟡 [SCANNER] Executando Coletor Web do Mercado Livre (/ofertas, até ${Math.min(30, remainingSlots * 2)} páginas)...`);
+  const shopeeSlots = Math.min(
+    Math.max(SHOPEE_QUOTA, MAX_CYCLE_PENDING - rawCandidates.length),
+    MAX_CYCLE_PENDING - rawCandidates.length
+  );
+  if (shopeeSlots > 0) {
+    console.log(`\n🛍️ [SCANNER] Executando Fonte #3: Shopee Open API (cota: ${shopeeSlots})...`);
     try {
-      const mlResult = await runMercadoLivreWebScan({
+      const shopeeResult = await runShopeeCategoryScan({
         preferences,
         feedbacks,
         priceRangeByCat,
-        maxPagesPerCycle: 30,
+        maxPendingQuota: shopeeSlots,
       });
 
-      rawCandidates.push(...mlResult.candidates);
-      totalRejectedSales += mlResult.stats.rejectedSalesUnder100;
-      totalRejectedRating += mlResult.stats.rejectedLowRating;
-      totalRejectedPrice += mlResult.stats.rejectedPrice;
-      totalRejectedBlacklist += mlResult.stats.rejectedBlacklist;
-      errorsLog.push(...mlResult.stats.errors);
-      queriedTermsOrCategories.push("ML: /ofertas vitrine pública");
-    } catch (mlErr) {
-      const msg = mlErr instanceof Error ? mlErr.message : "Erro no ML";
-      console.error("[SCANNER] Erro na coleta Web do Mercado Livre:", msg);
-      errorsLog.push(`ML Web: ${msg}`);
+      rawCandidates.push(...shopeeResult.candidates);
+      totalRejectedSales += shopeeResult.stats.rejectedSales;
+      totalRejectedRating += shopeeResult.stats.rejectedRating;
+      totalRejectedDiscount += shopeeResult.stats.rejectedDiscount;
+      totalRejectedPrice += shopeeResult.stats.rejectedPrice;
+      totalRejectedBlacklist += shopeeResult.stats.rejectedBlacklist;
+      queriedTermsOrCategories.push(...shopeeResult.stats.categoriesQueried.map((id) => `Shopee Cat:${id}`));
+      console.log(`[SCANNER] Shopee coletou: ${shopeeResult.candidates.length} produto(s).`);
+    } catch (shopeeErr) {
+      const msg = shopeeErr instanceof Error ? shopeeErr.message : "Erro na Shopee";
+      console.error("[SCANNER] Erro na coleta Shopee:", msg);
+      errorsLog.push(`Shopee: ${msg}`);
     }
   }
 
