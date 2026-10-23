@@ -479,6 +479,10 @@ export function OfferCard({
               <span className="rounded bg-orange-500/20 text-orange-300 border border-orange-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
                 Shopee
               </span>
+            ) : offer.source === "netshoes" ? (
+              <span className="rounded bg-purple-600/25 text-purple-200 border border-purple-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                Netshoes
+              </span>
             ) : (
               <span className="rounded bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
                 Mercado Livre

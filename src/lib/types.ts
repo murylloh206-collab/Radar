@@ -21,7 +21,7 @@ export interface EstimatedCommission {
   source: string;
 }
 
-export type OfferSource = "mercadolivre" | "shopee";
+export type OfferSource = "mercadolivre" | "shopee" | "netshoes";
 
 export type FieldDataSource = "confirmado" | "indisponivel" | "estimado" | "nao_aplicavel";
 

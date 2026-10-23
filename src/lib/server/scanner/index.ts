@@ -10,6 +10,7 @@ import { getLearnedPreferences, getAllFeedbacks } from "../feedback-service";
 import { recordScanRun } from "../history-service";
 import { runShopeeCategoryScan } from "./shopee-scanner";
 import { runMercadoLivreWebScan } from "./ml-web-scanner";
+import { runNetshoesCategoryScan } from "../netshoes";
 import type { Offer, LastSearchInfo } from "../../types";
 
 export * from "./terms";
@@ -80,7 +81,7 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   const priceRangeByCat = (category: string) => getCategoryPriceRange(category, feedbacks);
 
-  const MAX_CYCLE_PENDING = 15;
+  const MAX_CYCLE_PENDING = 50;
   const rawCandidates: CandidateRawItem[] = [];
 
   let totalRejectedSales = 0;
@@ -117,17 +118,43 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
   }
 
   // =========================================================================
-  // ETAPA 2: MERCADO LIVRE WEB — (/ofertas + Páginas Individuais >100 vendidos/avaliações)
+  // ETAPA 2: FONTE SECUNDÁRIA — NETSHOES (Rakuten Product Search API)
+  // =========================================================================
+  const netshoesSlots = Math.max(0, MAX_CYCLE_PENDING - rawCandidates.length);
+  if (netshoesSlots > 0) {
+    try {
+      const netshoesResult = await runNetshoesCategoryScan({
+        preferences,
+        feedbacks,
+        maxQuota: netshoesSlots,
+      });
+      if (netshoesResult.candidates.length > 0) {
+        rawCandidates.push(...netshoesResult.candidates);
+        totalRejectedPrice += netshoesResult.stats.rejectedPrice;
+        totalRejectedDiscount += netshoesResult.stats.rejectedDiscount;
+        totalRejectedBlacklist += netshoesResult.stats.rejectedBlacklist;
+        errorsLog.push(...netshoesResult.stats.errors);
+        queriedTermsOrCategories.push("Netshoes (Rakuten API)");
+      }
+    } catch (netshoesErr) {
+      const msg = netshoesErr instanceof Error ? netshoesErr.message : "Erro Netshoes";
+      console.error("[SCANNER] Erro na coleta Netshoes:", msg);
+      errorsLog.push(`Netshoes: ${msg}`);
+    }
+  }
+
+  // =========================================================================
+  // ETAPA 3: MERCADO LIVRE WEB — (/ofertas + Páginas Individuais >100 vendidos/avaliações)
   // =========================================================================
   const remainingSlots = Math.max(0, MAX_CYCLE_PENDING - rawCandidates.length);
   if (remainingSlots > 0) {
-    console.log(`\n🟡 [SCANNER] Executando Coletor Web do Mercado Livre (/ofertas, até ${Math.min(20, remainingSlots * 3)} páginas)...`);
+    console.log(`\n🟡 [SCANNER] Executando Coletor Web do Mercado Livre (/ofertas, até ${Math.min(30, remainingSlots * 2)} páginas)...`);
     try {
       const mlResult = await runMercadoLivreWebScan({
         preferences,
         feedbacks,
         priceRangeByCat,
-        maxPagesPerCycle: 20,
+        maxPagesPerCycle: 30,
       });
 
       rawCandidates.push(...mlResult.candidates);
@@ -146,7 +173,7 @@ export async function runOffersScanner(): Promise<ScannerPipelineResult> {
 
   console.log(`\n📦 [SCANNER] Total bruto de candidatos qualificados pré-banco: ${rawCandidates.length}`);
 
-  // Teto rígido de 15 novas ofertas por ciclo
+  // Teto de até 50 novas ofertas por ciclo
   const finalCandidatesToSave = rawCandidates.slice(0, MAX_CYCLE_PENDING);
 
   // 3. Database: Salva os produtos aprovados no banco sem duplicatas

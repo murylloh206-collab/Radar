@@ -26,6 +26,7 @@ import {
   IconClock,
   IconGear,
   IconKey,
+  IconMagnifyingGlass,
   IconPlus,
   IconSearch,
   IconSpinner,
@@ -1063,18 +1064,6 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
 
             <button
               type="button"
-              id="btn-puxar-favoritos-shopee"
-              onClick={() => handleSyncShopeeFavorites()}
-              disabled={syncingShopeeFavorites}
-              title="Puxar produtos favoritados (curtidos) da sua conta da Shopee e inserir como ofertas pendentes na fila"
-              className="inline-flex items-center gap-2 rounded-2xl border border-orange-500/50 bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-600/20 px-4 py-3.5 text-xs sm:text-sm font-bold text-orange-200 hover:brightness-125 hover:border-orange-400 active:scale-95 transition shadow-lg shadow-orange-950/20 shrink-0 disabled:opacity-50"
-            >
-              {syncingShopeeFavorites ? <IconSpinner width={15} height={15} /> : <span className="text-sm">🧡</span>}
-              {syncingShopeeFavorites ? "Puxando Shopee…" : "Puxar Favoritos Shopee"}
-            </button>
-
-            <button
-              type="button"
               onClick={() => setShowPreferencesModal(true)}
               title="Visualizar e gerenciar marcas, vendedores e categorias bloqueadas"
               className="inline-flex items-center gap-1.5 rounded-2xl border border-teal-500/30 bg-teal-500/10 px-4 py-3.5 text-xs font-semibold text-teal-200 hover:bg-teal-500/20 transition"
@@ -1099,16 +1088,20 @@ export function OfferDashboard({ initial }: { initial: OffersResponse }) {
               id="descoberta-radar"
               onClick={handleDiscoverRadar}
               disabled={discovering || searching || isQueueFull}
-              className={`group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl px-6 py-3.5 text-sm sm:text-base font-black text-white shadow-xl shadow-emerald-950/50 transition shrink-0 ${
+              className={`group relative inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-6 py-3.5 text-sm sm:text-base font-black text-white shadow-xl shadow-emerald-950/50 transition shrink-0 ${
                 isQueueFull
                   ? "bg-slate-700 cursor-not-allowed opacity-60"
                   : "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:brightness-110 active:scale-95 disabled:cursor-wait disabled:opacity-80"
               }`}
-              title={isQueueFull ? "Você já tem 500 ofertas pendentes. Aprove, publique ou rejeite antes de atualizar." : ""}
+              title={isQueueFull ? "Você já tem 500 ofertas pendentes. Aprove, publique ou rejeite antes de atualizar." : "Buscar enxurrada de ofertas quentes (Shopee, Netshoes e Mercado Livre)"}
             >
               <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-              {discovering ? <IconSpinner width={18} height={18} /> : <IconBolt width={18} height={18} />}
-              {discovering ? "Atualizando ofertas…" : isQueueFull ? "Fila Cheia (500 Pendentes)" : "Atualizar ofertas"}
+              {discovering ? (
+                <IconSpinner width={20} height={20} />
+              ) : (
+                <IconMagnifyingGlass width={20} height={20} className="transition-transform group-hover:scale-110 group-active:scale-95" />
+              )}
+              {discovering ? "Procurando ofertas…" : isQueueFull ? "Fila Cheia (500 Pendentes)" : "Procurar Ofertas"}
             </button>
           </div>
         </div>

@@ -66,16 +66,14 @@ export async function runShopeeCategoryScan(options: {
   const blockedCategoriesSet = new Set((options.preferences.blockedCategories || []).map((c) => normalizeText(c)));
   const blockedKeywords = (options.preferences.blockedKeywords || []).map((k) => normalizeText(k)).filter(Boolean);
 
-  const maxTarget = options.maxPendingQuota ?? 15;
+  const maxTarget = options.maxPendingQuota ?? 50;
   const candidates: CandidateRawItem[] = [];
 
-  // Rotação dinâmica por productCatId a cada ciclo
-  const rotationIndex = Math.floor(Date.now() / (30 * 60 * 1000)) % SHOPEE_PRIORITY_CATEGORIES.length;
-  // Embaralha para cobrir até 3 categorias por ciclo de 30 min
+  // Rotação dinâmica por productCatId garantindo que todas as categorias prioritárias sejam cobertas
+  const rotationIndex = Math.floor(Date.now() / (10 * 60 * 1000)) % SHOPEE_PRIORITY_CATEGORIES.length;
   const activeCategories = [
-    SHOPEE_PRIORITY_CATEGORIES[rotationIndex],
-    SHOPEE_PRIORITY_CATEGORIES[(rotationIndex + 1) % SHOPEE_PRIORITY_CATEGORIES.length],
-    SHOPEE_PRIORITY_CATEGORIES[(rotationIndex + 2) % SHOPEE_PRIORITY_CATEGORIES.length],
+    ...SHOPEE_PRIORITY_CATEGORIES.slice(rotationIndex),
+    ...SHOPEE_PRIORITY_CATEGORIES.slice(0, rotationIndex),
   ];
 
   const query = `
@@ -121,9 +119,9 @@ export async function runShopeeCategoryScan(options: {
         {
           productCatId: cat.id,
           page: 1,
-          limit: 30,
+          limit: 50,
         },
-        7000
+        8000
       );
 
       const nodes = res.data?.productOfferV2?.nodes || [];
@@ -140,20 +138,20 @@ export async function runShopeeCategoryScan(options: {
         const sellerName = node.shopName || "";
         const brand = extractBrand(title);
 
-        // 1. Filtro estrito: Vendas >= 100
-        if (sales < 100) {
+        // 1. Filtro: Vendas comprovadas (mínimo 15 para garantir histórico de entrega)
+        if (sales < 15) {
           stats.rejectedSales++;
           continue;
         }
 
-        // 2. Filtro estrito: Avaliação >= 4.5
-        if (Number.isNaN(rating) || rating < 4.5) {
+        // 2. Filtro: Avaliação mínima de 4.3 estrelas
+        if (Number.isNaN(rating) || rating < 4.3) {
           stats.rejectedRating++;
           continue;
         }
 
-        // 3. Filtro estrito: Desconto >= 20%
-        if (discountRate < 20) {
+        // 3. Filtro: Desconto real >= 15%
+        if (discountRate < 15) {
           stats.rejectedDiscount++;
           continue;
         }
@@ -187,9 +185,10 @@ export async function runShopeeCategoryScan(options: {
           continue;
         }
 
-        // 6. Faixa de Preço por Categoria (Piso e Teto)
-        const catPriceRange = options.priceRangeByCat ? options.priceRangeByCat(cat.name) : { minPrice: 80, maxPrice: 450 };
-        if (price < catPriceRange.minPrice || price > catPriceRange.maxPrice) {
+        // 6. Faixa de Preço por Categoria (Piso de R$ 24,90 para Shopee)
+        const catPriceRange = options.priceRangeByCat ? options.priceRangeByCat(cat.name) : { minPrice: 24.90, maxPrice: 600 };
+        const effectiveMinPrice = Math.min(catPriceRange.minPrice, 25.0);
+        if (price < effectiveMinPrice || price > Math.max(catPriceRange.maxPrice, 600)) {
           stats.rejectedPrice++;
           continue;
         }

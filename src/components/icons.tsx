@@ -25,6 +25,15 @@ export const IconSearch = (p: IconProps) => (
   </svg>
 );
 
+export const IconMagnifyingGlass = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="11" cy="11" r="7.5" strokeWidth={2.2} />
+    <path d="M7.5 8.5a4 4 0 0 1 3.5-1.5" strokeWidth={1.8} strokeLinecap="round" opacity={0.8} />
+    <path d="m16.5 16.5 4.5 4.5" strokeWidth={2.4} strokeLinecap="round" />
+    <path d="M19 19l2 2" strokeWidth={3.2} strokeLinecap="round" />
+  </svg>
+);
+
 export const IconBolt = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />

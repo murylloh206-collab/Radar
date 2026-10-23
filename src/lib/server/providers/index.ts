@@ -3,15 +3,18 @@ import "server-only";
 import type { OfferSource } from "@/lib/types";
 import { mercadoLivreProvider, MercadoLivreProvider } from "./mercadolivre-provider";
 import { shopeeProvider, ShopeeProvider } from "./shopee-provider";
+import { netshoesProvider, NetshoesProvider } from "./netshoes-provider";
 import type { MarketplaceProvider } from "./provider-interface";
 
 export * from "./provider-interface";
 export * from "./mercadolivre-provider";
 export * from "./shopee-provider";
+export * from "./netshoes-provider";
 
 const registry: Record<OfferSource, MarketplaceProvider> = {
   mercadolivre: mercadoLivreProvider,
   shopee: shopeeProvider,
+  netshoes: netshoesProvider,
 };
 
 export function getProvider(source: OfferSource): MarketplaceProvider {
@@ -23,7 +26,7 @@ export function getProvider(source: OfferSource): MarketplaceProvider {
 }
 
 export function getAllProviders(): MarketplaceProvider[] {
-  return [mercadoLivreProvider, shopeeProvider];
+  return [mercadoLivreProvider, shopeeProvider, netshoesProvider];
 }
 
 export function getActiveProviders(): MarketplaceProvider[] {
