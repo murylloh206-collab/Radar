@@ -39,50 +39,39 @@ interface OfferCardProps {
 }
 
 function ProductImage({ offer }: { offer: Offer }) {
-  const [src, setSrc] = useState(largerThumbnail(offer.thumbnail));
-  const [useNativeImg, setUseNativeImg] = useState(false);
+  const rawSrc = offer.thumbnail;
+  const optimizedSrc = largerThumbnail(rawSrc);
+  const [currentSrc, setCurrentSrc] = useState(optimizedSrc || rawSrc);
+  const [failed, setFailed] = useState(false);
 
-  if (!src) {
+  useEffect(() => {
+    setCurrentSrc(largerThumbnail(offer.thumbnail) || offer.thumbnail);
+    setFailed(false);
+  }, [offer.thumbnail]);
+
+  if (!currentSrc || failed) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-slate-400">
+      <div className="flex h-full w-full items-center justify-center text-slate-400 bg-slate-50">
         <IconImage width={40} height={40} />
       </div>
     );
   }
 
-  if (useNativeImg) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={offer.title}
-        loading="lazy"
-        className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
-        onError={() => {
-          if (offer.thumbnail && src !== offer.thumbnail) {
-            setSrc(offer.thumbnail);
-          }
-        }}
-      />
-    );
-  }
-
   return (
-    <Image
-      src={src}
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={currentSrc}
       alt={offer.title}
-      fill
-      unoptimized={
-        offer.source === "shopee" ||
-        offer.source === "netshoes" ||
-        src.includes("shopee") ||
-        src.includes("netshoes") ||
-        src.includes("susercontent")
-      }
-      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-      className="object-contain p-3 transition-transform duration-300 group-hover:scale-105"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
       onError={() => {
-        setUseNativeImg(true);
+        // Se a versão ampliada falhou, tenta a imagem bruta original
+        if (rawSrc && currentSrc !== rawSrc) {
+          setCurrentSrc(rawSrc);
+        } else {
+          setFailed(true);
+        }
       }}
     />
   );
