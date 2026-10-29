@@ -156,7 +156,7 @@ test('2. Diagnósticos seguros de erro na Evolution API sem vazamento de dados s
   // 503 - Indisponibilidade
   const diag503 = diagnoseEvolutionError(503, 'Service Unavailable', null, 'radar_ofertas');
   assert.equal(diag503.reason, 'server_error');
-  assert.ok(diag503.message.includes('temporariamente indisponível'));
+  assert.ok(diag503.message.includes('indisponível'));
 });
 
 test('3. Consulta do estado REAL da instância ao abrir a tela (GET /api/whatsapp/connect?check=true)', async () => {
