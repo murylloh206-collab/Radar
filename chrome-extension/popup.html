@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radar de Ofertas — Conector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="brand">
+        <div class="logo-radar">
+          <div class="radar-dot"></div>
+        </div>
+        <div class="brand-text">
+          <h1>Radar de Ofertas</h1>
+          <span class="subtext">Conector Mercado Livre</span>
+        </div>
+      </div>
+      <div id="statusPill" class="status-pill disconnected">
+        <span class="dot"></span>
+        <span id="statusText">Desconectado</span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="popup-body">
+      <!-- 1. Seção de Pareamento com Painel Radar de Ofertas -->
+      <section id="pairingSection" class="card-section">
+        <div class="section-title">1. Pareamento com o Painel Radar</div>
+        <div id="pairingInfo" class="pairing-info">
+          <span class="label">Status do Painel:</span>
+          <span id="panelPairStatus" class="value text-warning">Não Pareado</span>
+        </div>
+
+        <div id="pairingForm" class="pairing-form">
+          <p class="help-text">
+            Obtenha o código de pareamento na tela <strong>Conectar Lojas</strong> do seu painel e informe abaixo:
+          </p>
+          <div class="input-group">
+            <input type="text" id="inputPairCode" placeholder="Ex: RDR-8392" class="code-input">
+            <button id="btnPairPanel" class="btn btn-secondary">Parear</button>
+          </div>
+          <button id="btnPairCookie" class="btn-link">Ou parear com sessão ativa do navegador</button>
+        </div>
+      </section>
+
+      <!-- 2. Seção de Consentimento e Conexão Mercado Livre -->
+      <section id="consentSection" class="consent-box hidden">
+        <div class="section-title">2. Conexão do Mercado Livre</div>
+        <p>
+          Abra uma aba no <strong>Mercado Livre</strong> logado na sua conta ou informe abaixo a sua <strong>Tag de Afiliado (<code>matt_word</code>)</strong> ou um <strong>link gerado pela sua barra de afiliado</strong>:
+        </p>
+
+        <div class="pairing-form" style="margin: 10px 0;">
+          <input
+            type="text"
+            id="inputManualTag"
+            placeholder="Sua tag (matt_word) ou cole link /sec/ ou meli.la"
+            class="code-input"
+            style="width: 100%; margin-bottom: 6px; box-sizing: border-box;"
+          >
+          <input
+            type="text"
+            id="inputManualTool"
+            placeholder="ID Ferramenta (matt_tool - opcional, ex: 12345678)"
+            class="code-input"
+            style="width: 100%; box-sizing: border-box;"
+          >
+        </div>
+
+        <button id="btnConsent" class="btn btn-primary">
+          Verificar e Conectar Mercado Livre
+        </button>
+      </section>
+
+      <!-- 3. Seção Conectada com Detalhes da Conta -->
+      <section id="connectedSection" class="connected-box hidden">
+        <div class="account-card">
+          <div class="card-row">
+            <span class="label">Conta Mercado Livre:</span>
+            <span id="accountUser" class="value">—</span>
+          </div>
+          <div class="card-row">
+            <span class="label">Tag Identificada:</span>
+            <span id="accountTag" class="value tag-badge">—</span>
+          </div>
+          <div class="card-row">
+            <span class="label">Última Verificação:</span>
+            <span id="lastSync" class="value">—</span>
+          </div>
+        </div>
+
+        <div class="actions-group">
+          <button id="btnGenerateCurrent" class="btn btn-accent">
+            ⚡ Capturar Link Oficial da Página Atual
+          </button>
+        </div>
+
+        <!-- Result Box -->
+        <div id="resultBox" class="result-box hidden">
+          <div class="result-header">
+            <span id="resultBadge" class="status-badge">Link Confirmado</span>
+            <span id="resultSource" class="result-source-text">Mercado Livre /sec/</span>
+          </div>
+          <input type="text" id="resultUrl" readonly class="result-input">
+          <div class="result-actions">
+            <button id="btnCopyResult" class="btn btn-small">Copiar Link</button>
+            <span id="copyFeedback" class="copy-feedback hidden">Copiado!</span>
+          </div>
+          <p id="resultNotice" class="result-notice"></p>
+        </div>
+
+        <div class="footer-actions">
+          <button id="btnDisconnect" class="btn-link text-danger">
+            Desconectar e Revogar Acesso
+          </button>
+        </div>
+      </section>
+
+      <!-- Feedback message -->
+      <div id="statusMessage" class="status-message hidden"></div>
+    </main>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

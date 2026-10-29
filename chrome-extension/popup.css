@@ -1,0 +1,362 @@
+/* ==============================================================================
+   RADAR DE OFERTAS — ESTILOS DO CONECTOR MERCADO LIVRE (CHROME EXTENSION)
+   Cores: Fundo #061225 | Cartões #0D1B31 | Acentos #1CCAF2, #0879DF | Texto #F8FBFF
+   ============================================================================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  width: 360px;
+  background-color: #061225;
+  color: #F8FBFF;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-x: hidden;
+}
+
+.popup-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background-color: #09172e;
+  border-bottom: 1px solid #18334D;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-radar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0879DF 0%, #1CCAF2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(28, 202, 242, 0.3);
+}
+
+.radar-dot {
+  width: 10px;
+  height: 10px;
+  background-color: #061225;
+  border-radius: 50%;
+  border: 2px solid #F8FBFF;
+}
+
+.brand-text h1 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #F8FBFF;
+  letter-spacing: -0.2px;
+}
+
+.brand-text .subtext {
+  font-size: 11px;
+  color: #8EADC7;
+}
+
+/* Status Pill */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-pill.connected {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.status-pill.connected .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
+}
+
+.status-pill.disconnected {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-pill.disconnected .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #f87171;
+}
+
+.status-pill.expired {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-pill.expired .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #fbbf24;
+}
+
+/* Body */
+.popup-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Consent Box */
+.consent-box {
+  background-color: #0D1B31;
+  border: 1px solid #18334D;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.consent-box h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1CCAF2;
+}
+
+.consent-box p {
+  font-size: 12px;
+  color: #C1D5E8;
+}
+
+.consent-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  color: #8EADC7;
+}
+
+.consent-list li {
+  line-height: 1.35;
+}
+
+/* Connected Box */
+.connected-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-card {
+  background-color: #0D1B31;
+  border: 1px solid #18334D;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.card-row .label {
+  color: #8EADC7;
+}
+
+.card-row .value {
+  color: #F8FBFF;
+  font-weight: 600;
+}
+
+.tag-badge {
+  background-color: #18334D;
+  color: #1CCAF2;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+/* Actions Group */
+.actions-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Buttons */
+.btn {
+  width: 100%;
+  min-height: 40px;
+  border-radius: 10px;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0879DF 0%, #1CCAF2 100%);
+  color: #061225;
+}
+
+.btn-primary:hover {
+  opacity: 0.95;
+  box-shadow: 0 0 12px rgba(28, 202, 242, 0.4);
+}
+
+.btn-accent {
+  background-color: #1CCAF2;
+  color: #061225;
+}
+
+.btn-accent:hover {
+  background-color: #38d5f7;
+}
+
+.btn-secondary {
+  background-color: #18334D;
+  color: #F8FBFF;
+  border: 1px solid #234768;
+}
+
+.btn-secondary:hover {
+  background-color: #234768;
+}
+
+.btn-small {
+  width: auto;
+  min-height: 28px;
+  padding: 4px 12px;
+  font-size: 11px;
+  background-color: #0879DF;
+  color: #fff;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 4px;
+}
+
+.text-danger {
+  color: #f87171;
+}
+
+.text-danger:hover {
+  color: #ef4444;
+}
+
+/* Result Box */
+.result-box {
+  background-color: #09172e;
+  border: 1px solid #1CCAF2;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.result-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1CCAF2;
+}
+
+.result-input {
+  width: 100%;
+  background-color: #061225;
+  border: 1px solid #18334D;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #F8FBFF;
+  font-family: monospace;
+}
+
+.result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.copy-feedback {
+  font-size: 11px;
+  color: #4ade80;
+  font-weight: 600;
+}
+
+/* Status Message */
+.status-message {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.status-message.info {
+  background-color: rgba(8, 121, 223, 0.15);
+  border: 1px solid rgba(8, 121, 223, 0.4);
+  color: #93c5fd;
+}
+
+.status-message.success {
+  background-color: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #86efac;
+}
+
+.status-message.error {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.footer-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.hidden {
+  display: none !important;
+}
