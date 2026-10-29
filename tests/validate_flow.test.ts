@@ -23,9 +23,57 @@ const tempDbPath = path.join(
   `radar_flow_test_${Date.now()}_${Math.random().toString(36).slice(2)}.json`
 );
 process.env.RADAR_DB_PATH = tempDbPath;
-writeDatabase(getInitialDatabase());
+const initialDb = getInitialDatabase();
+initialDb.whatsapp.instanceName = 'radar_ofertas';
+initialDb.whatsapp.baseUrl = 'https://evolution-api-radar.onrender.com';
+initialDb.whatsapp.apiKey = 'test_api_key_isolated';
+writeDatabase(initialDb);
+
+const originalFetch = global.fetch;
+test.before(() => {
+  process.env.RADAR_DB_PATH = tempDbPath;
+  const db = getInitialDatabase();
+  db.whatsapp.instanceName = 'radar_ofertas';
+  db.whatsapp.baseUrl = 'https://evolution-api-radar.onrender.com';
+  db.whatsapp.apiKey = 'test_api_key_isolated';
+  writeDatabase(db);
+
+  global.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/instance/connectionState/radar_ofertas')) {
+      return new Response(JSON.stringify({ instance: { state: 'open' } }), { status: 200 });
+    }
+    if (url.includes('/instance/fetchInstances')) {
+      return new Response(
+        JSON.stringify([
+          {
+            name: 'radar_ofertas',
+            connectionStatus: 'open',
+            ownerJid: '556282582400@s.whatsapp.net',
+            profileName: 'Radar de Ofertas',
+          },
+        ]),
+        { status: 200 }
+      );
+    }
+    if (url.includes('/group/fetchAllGroups/radar_ofertas')) {
+      return new Response(
+        JSON.stringify([
+          { id: '120363001@g.us', subject: 'Grupo Real 1', size: 100, announce: false, participants: [] },
+          { id: '120363002@g.us', subject: 'Grupo Real 2', size: 80, announce: false, participants: [] },
+          { id: '120363003@g.us', subject: 'Grupo Real 3', size: 60, announce: false, participants: [] },
+          { id: '120363004@g.us', subject: 'Grupo Real 4', size: 50, announce: false, participants: [] },
+          { id: '120363005@g.us', subject: 'Grupo Real 5', size: 40, announce: false, participants: [] },
+        ]),
+        { status: 200 }
+      );
+    }
+    return originalFetch(input, init);
+  };
+});
 
 test.after(() => {
+  global.fetch = originalFetch;
   try {
     if (fs.existsSync(tempDbPath)) {
       fs.unlinkSync(tempDbPath);
@@ -103,7 +151,7 @@ test('2. Diagnósticos seguros de erro na Evolution API sem vazamento de dados s
   // Timeout / Abort
   const diagTimeout = diagnoseEvolutionError(null, '', new Error('The operation was aborted due to timeout'), 'radar_ofertas');
   assert.equal(diagTimeout.reason, 'timeout');
-  assert.ok(diagTimeout.message.includes('cold start'));
+  assert.ok(diagTimeout.message.includes('demorou'));
 
   // 503 - Indisponibilidade
   const diag503 = diagnoseEvolutionError(503, 'Service Unavailable', null, 'radar_ofertas');
