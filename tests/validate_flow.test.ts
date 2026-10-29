@@ -151,7 +151,7 @@ test('2. Diagnósticos seguros de erro na Evolution API sem vazamento de dados s
   // Timeout / Abort
   const diagTimeout = diagnoseEvolutionError(null, '', new Error('The operation was aborted due to timeout'), 'radar_ofertas');
   assert.equal(diagTimeout.reason, 'timeout');
-  assert.ok(diagTimeout.message.includes('demorou'));
+  assert.ok(diagTimeout.message.includes('tempo limite'));
 
   // 503 - Indisponibilidade
   const diag503 = diagnoseEvolutionError(503, 'Service Unavailable', null, 'radar_ofertas');
