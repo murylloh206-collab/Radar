@@ -51,6 +51,17 @@ export function sanitizeStoreUrl(urlStr: string, store: StoreName): string {
       'af_click_lookback',
       'aff_platform',
       'af_dp',
+      'mmp_pid',
+      'uls_trackid',
+      'utm_campaign',
+      'utm_content',
+      'utm_medium',
+      'utm_source',
+      'utm_term',
+      'sub_id',
+      'd_id',
+      'sp_atk',
+      'xptdk',
     ];
 
     thirdPartyParams.forEach((param) => {
@@ -61,6 +72,10 @@ export function sanitizeStoreUrl(urlStr: string, store: StoreName): string {
       url.searchParams.delete('variation');
       url.searchParams.delete('pdp_filters');
       url.searchParams.delete('searchVariation');
+    }
+
+    if (store === 'shopee') {
+      url.search = '';
     }
 
     if (store === 'amazon') {
@@ -88,6 +103,10 @@ export function extractProductId(urlStr: string, store: StoreName): string | nul
     if (store === 'mercadolivre') {
       const mlbMatch = pathname.match(/MLB-?(\d+)/i) || urlStr.match(/MLB-?(\d+)/i);
       if (mlbMatch) return `MLB${mlbMatch[1]}`;
+    }
+
+    if (store === 'shopee') {
+      url.search = '';
     }
 
     if (store === 'amazon') {

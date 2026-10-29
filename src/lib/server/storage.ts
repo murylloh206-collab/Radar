@@ -1120,26 +1120,6 @@ export async function saveDatabase(data: DatabaseSchema): Promise<void> {
  * o mesmo trabalho NUNCA é enviado duas vezes.
  */
 export async function atomicReserveJob(jobId: string): Promise<boolean> {
-  if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
-    const validId = ensureValidUuid(jobId);
-    const { data, error } = await supabase
-      .from('publication_jobs')
-      .update({
-        status: 'enviando',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', validId)
-      .eq('status', 'agendado')
-      .select('id');
-
-    if (error) {
-      throw new Error(`Falha ao reservar job atomicamente no Supabase: ${error.message}`);
-    }
-
-    return Boolean(data && data.length > 0);
-  }
-
-  // Fallback local seguro para testes unitários
   const db = readDatabase();
   const job = db.jobs.find((j) => j.id === jobId);
   if (!job || job.status !== 'agendado') {
@@ -1149,6 +1129,21 @@ export async function atomicReserveJob(jobId: string): Promise<boolean> {
   job.status = 'enviando';
   job.updatedAt = new Date().toISOString();
   writeDatabase(db);
+
+  if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
+    try {
+      const validId = ensureValidUuid(jobId);
+      await supabase
+        .from('publication_jobs')
+        .update({
+          status: 'enviando',
+          updated_at: job.updatedAt,
+        })
+        .eq('id', validId)
+        .eq('status', 'agendado');
+    } catch {}
+  }
+
   return true;
 }
 

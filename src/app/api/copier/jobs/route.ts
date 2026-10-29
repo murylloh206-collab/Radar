@@ -3,6 +3,7 @@ import { PublicationJob } from '@/lib/types';
 import { readDatabase, writeDatabase, ensureValidUuid, savePublicationJob } from '@/lib/server/storage';
 import { getSessionFromRequest } from '@/lib/server/auth';
 import { validateJobForDispatch } from '@/lib/server/job-validator';
+import { runWorkerCycle } from '@/lib/server/worker-engine';
 
 export async function GET(req: NextRequest) {
   try {
@@ -115,19 +116,38 @@ export async function POST(req: NextRequest) {
       }
 
       job.status = 'agendado';
-      job.scheduledFor =
-        action === 'send_now'
-          ? new Date(Date.now() - 1000).toISOString()
-          : new Date().toISOString();
+      job.scheduledFor = new Date(Date.now() - 1000).toISOString();
       job.updatedAt = new Date().toISOString();
+      await savePublicationJob(job);
+
+      const workerReport = await runWorkerCycle();
+      const updatedDb = readDatabase();
+      const finalJob = updatedDb.jobs.find((j) => j.id === jobId) || job;
+      const dispatchRes = workerReport.results.find((r) => r.jobId === jobId);
+
+      if (dispatchRes && !dispatchRes.success) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Falha ao enviar para o WhatsApp: ${dispatchRes.error}`,
+            job: finalJob,
+            workerReport,
+          },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json({ ok: true, job: finalJob, workerReport });
     } else if (action === 'cancel') {
       job.status = 'cancelado';
       job.updatedAt = new Date().toISOString();
+      await savePublicationJob(job);
     } else if (action === 'unquarantine') {
       // Reverter da quarentena para revisão manual do usuário
       job.status = 'aguardando_aprovacao';
       job.errorDetails = undefined;
       job.updatedAt = new Date().toISOString();
+      await savePublicationJob(job);
     } else if (action === 'retry') {
       const validation = validateJobForDispatch(job, db);
       if (!validation.valid) {
@@ -143,8 +163,14 @@ export async function POST(req: NextRequest) {
       job.status = 'agendado';
       job.attempts = 0;
       job.errorDetails = undefined;
-      job.scheduledFor = new Date().toISOString();
+      job.scheduledFor = new Date(Date.now() - 1000).toISOString();
       job.updatedAt = new Date().toISOString();
+      await savePublicationJob(job);
+
+      const workerReport = await runWorkerCycle();
+      const updatedDb = readDatabase();
+      const finalJob = updatedDb.jobs.find((j) => j.id === jobId) || job;
+      return NextResponse.json({ ok: true, job: finalJob, workerReport });
     } else {
       return NextResponse.json({ ok: false, error: 'Ação desconhecida' }, { status: 400 });
     }

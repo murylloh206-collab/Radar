@@ -94,6 +94,12 @@ export async function processAutomationCampaigns(): Promise<AutomationExecutionR
     const candidates = db.products.filter((p) => {
       if (p.storeName !== campaign.storeName) return false;
       if (!p.inStock) return false;
+      if (
+        (p.affiliateUrl && /teste|exemplo|MLB12345678/i.test(p.affiliateUrl)) ||
+        (p.productUrl && /teste|exemplo|MLB12345678/i.test(p.productUrl))
+      ) {
+        return false;
+      }
       if (campaign.minRating && (p.rating || 0) < campaign.minRating) return false;
       if (campaign.minReviews && (p.reviewsCount || 0) < campaign.minReviews) return false;
       if (campaign.minSales && (p.salesCount || 0) < campaign.minSales) return false;

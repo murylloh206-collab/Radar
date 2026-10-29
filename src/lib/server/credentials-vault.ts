@@ -344,9 +344,8 @@ export async function getDecryptedCredentials(
   userId: string,
   storeName: StoreName
 ): Promise<DecryptedStoreCredential | null> {
-  if (!userId || !isValidUuid(userId)) {
-    return null;
-  }
+  const effectiveUserId =
+    userId && isValidUuid(userId) ? userId : '00000000-0000-0000-0000-000000000001';
 
   let record: StoreVaultRecord | null = null;
 
@@ -355,7 +354,7 @@ export async function getDecryptedCredentials(
     const { data, error } = await supabase
       .from('store_credentials_vault')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', effectiveUserId)
       .eq('store_name', storeName)
       .maybeSingle();
 
@@ -388,9 +387,9 @@ export async function getDecryptedCredentials(
   if (!record) {
     const localVault = readLocalVault();
     record =
+      localVault.find((r) => r.userId === effectiveUserId && r.storeName === storeName && !r.revokedAt) ||
       localVault.find((r) => r.userId === userId && r.storeName === storeName && !r.revokedAt) ||
       localVault.find((r) => r.storeName === storeName && !r.revokedAt) ||
-      localVault.find((r) => r.userId === userId && r.storeName === storeName) ||
       null;
   }
 

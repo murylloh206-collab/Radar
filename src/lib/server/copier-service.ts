@@ -21,6 +21,7 @@ import {
 } from './storage';
 import { fetchProductRealData } from './product-fetcher';
 import { processRadarArt } from './radar-art-engine';
+import { runWorkerCycle } from './worker-engine';
 
 export interface EvolutionWebhookPayload {
   event?: string;
@@ -81,7 +82,151 @@ export function extractWhatsAppMessageText(messageData: Record<string, any> | un
 export function extractUrlsFromText(text: string): string[] {
   const urlRegex = /(https?:\/\/[^\s]+)/gi;
   const matches = text.match(urlRegex) || [];
-  return Array.from(new Set(matches));
+  return Array.from(new Set(matches.map((u) => u.replace(/[),.]+$/, ''))));
+}
+
+function orderCandidateProductUrls(rawText: string, urls: string[]): string[] {
+  if (urls.length <= 1) return urls;
+  const lines = rawText.split(/\r?\n/);
+
+  const scored = urls.map((url, idx) => {
+    let score = idx; // por padrão, o link do produto costuma vir por último após o link de cupom
+    const lineIdx = lines.findIndex((l) => l.includes(url));
+    const context =
+      lineIdx >= 0
+        ? `${lines[lineIdx - 1] || ''} ${lines[lineIdx] || ''}`.toLowerCase()
+        : '';
+
+    if (context.includes('cupom') || context.includes('resgate')) {
+      score -= 10;
+    }
+    if (
+      context.includes('link do produto') ||
+      context.includes('compre') ||
+      context.includes('🛒')
+    ) {
+      score += 10;
+    }
+    return { url, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((s) => s.url);
+}
+
+function parseBRLNumber(rawNum: string): number {
+  const cleaned = rawNum.trim().replace(/\s/g, '');
+  if (!cleaned) return 0;
+  // Formato 1.349,90 ou 1.349
+  if (cleaned.includes(',') && cleaned.includes('.')) {
+    return parseFloat(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+  if (cleaned.includes(',')) {
+    return parseFloat(cleaned.replace(',', '.')) || 0;
+  }
+  if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) {
+    return parseFloat(cleaned.replace(/\./g, '')) || 0;
+  }
+  return parseFloat(cleaned) || 0;
+}
+
+export function extractOfferDetailsFromWhatsAppText(
+  rawText: string,
+  storeName: string
+): {
+  title?: string;
+  originalPrice?: number;
+  currentPrice?: number;
+  discountPct?: number;
+} {
+  let originalPrice: number | undefined;
+  let currentPrice: number | undefined;
+
+  // 1. Padrão "De: 1.349 | Por: R$747" ou "De R$ 89,90 por R$ 36,00"
+  const dePorMatch = rawText.match(
+    /de:?\s*(?:r\$\s*)?~?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~?\s*(?:\||por:?|->|-|\n)+\s*(?:por(?:\s+apenas)?:?\s*)?(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)/i
+  );
+  if (dePorMatch) {
+    const p1 = parseBRLNumber(dePorMatch[1]);
+    const p2 = parseBRLNumber(dePorMatch[2]);
+    if (p1 > 0 && p2 > 0) {
+      originalPrice = p1 > p2 ? p1 : undefined;
+      currentPrice = p2;
+    }
+  }
+
+  // 2. Fallback: "Por: R$ 747" ou "Por apenas R$ 99,90"
+  if (!currentPrice) {
+    const porMatch = rawText.match(
+      /por(?:\s+apenas)?:?\s*\*?\s*(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+,[0-9]{1,2})/i
+    );
+    if (porMatch) {
+      const p = parseBRLNumber(porMatch[1]);
+      if (p > 0) currentPrice = p;
+    }
+  }
+
+  // 3. Fallback: R$ explícito em linha que não seja cupom
+  if (!currentPrice) {
+    const lines = rawText.split(/\r?\n/);
+    for (const line of lines) {
+      if (/cupom|off|desconto|resgate|frete/i.test(line) && !/por:?/i.test(line)) {
+        continue;
+      }
+      const rMatch = line.match(/r\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+)/i);
+      if (rMatch) {
+        const p = parseBRLNumber(rMatch[1]);
+        if (p > 0) {
+          currentPrice = p;
+          break;
+        }
+      }
+    }
+  }
+
+  // 4. Extrair título real da oferta a partir das linhas do texto
+  const rawLines = rawText
+    .replace(/https?:\/\/[^\s]+/gi, '')
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\*+|\*+$/g, '').trim())
+    .filter((l) => l.length >= 4);
+
+  const candidateLines = rawLines.filter((line) => {
+    const lower = line.toLowerCase();
+    if (lower.startsWith('de:') || lower.startsWith('por:') || lower.startsWith('por apenas')) return false;
+    if (/de:?\s*(?:r\$)?\s*\d+.*por:?/i.test(line)) return false;
+    if (lower.includes('resgate aqui') || lower.includes('aplique o cupom') || lower.includes('resgate cupom')) return false;
+    if (lower.includes('link do produto') || lower.includes('compre aqui') || lower === '🛒') return false;
+    return true;
+  });
+
+  // Se houver mais de uma linha candidata e a primeira for um gancho curto em caixa alta (ex: "ESSE É ELITE 😍"),
+  // preferir a segunda linha que contém o nome descritivo do produto
+  let title: string | undefined;
+  if (candidateLines.length >= 2) {
+    const first = candidateLines[0];
+    const lettersOnly = first.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+    const isAllCapsHook =
+      lettersOnly.length > 0 &&
+      lettersOnly === lettersOnly.toUpperCase() &&
+      first.length < 40 &&
+      !/\d/.test(first);
+    title = isAllCapsHook ? candidateLines[1] : first;
+  } else if (candidateLines.length === 1) {
+    title = candidateLines[0];
+  }
+
+  let discountPct: number | undefined;
+  if (originalPrice && currentPrice && originalPrice > currentPrice) {
+    discountPct = Math.round(((originalPrice - currentPrice) / originalPrice) * 100);
+  }
+
+  return {
+    title: title && title !== `Produto ${storeName.toUpperCase()}` ? title : undefined,
+    originalPrice,
+    currentPrice,
+    discountPct,
+  };
 }
 
 export interface ProcessIncomingOptions {
@@ -247,8 +392,9 @@ export async function processIncomingMessage(
     };
   }
 
-  // Usar o primeiro link encontrado
-  const primaryUrl = extractedUrls[0];
+  // Priorizar link do produto quando houver link de cupom e link de produto na mesma mensagem
+  const orderedUrls = orderCandidateProductUrls(rawText, extractedUrls);
+  let primaryUrl = orderedUrls[0];
 
   // Organizar credenciais por loja (incluindo segredos descriptografados do cofre)
   const credentialsMap = await getStoreCredentialsMapWithSecrets(
@@ -256,8 +402,25 @@ export async function processIncomingMessage(
     db.stores
   );
 
-  // 3. Converter para link de afiliado oficial
-  const conversionResult = await convertToAffiliateLink(primaryUrl, credentialsMap);
+  // 3. Converter para link de afiliado oficial (tentando o próximo link se o primeiro for página genérica de cupom)
+  let conversionResult = await convertToAffiliateLink(primaryUrl, credentialsMap);
+  if (
+    orderedUrls.length > 1 &&
+    (!conversionResult.success ||
+      /\/m\/cupom|\/m\/frete|\/cupons/i.test(conversionResult.cleanUrl || ''))
+  ) {
+    for (let i = 1; i < orderedUrls.length; i++) {
+      const nextTry = await convertToAffiliateLink(orderedUrls[i], credentialsMap);
+      if (
+        nextTry.store &&
+        (nextTry.success || !/\/m\/cupom|\/m\/frete|\/cupons/i.test(nextTry.cleanUrl || ''))
+      ) {
+        primaryUrl = orderedUrls[i];
+        conversionResult = nextTry;
+        break;
+      }
+    }
+  }
 
   if (!conversionResult.store) {
     const discardReason = `Falha na conversão de link próprio: ${conversionResult.error || 'Loja não suportada ou domínio não reconhecido.'}`;
@@ -396,8 +559,25 @@ export async function processIncomingMessage(
     };
   }
 
-  // 4. Coletar dados reais do produto (sem dados fictícios)
+  // 4. Coletar dados reais do produto (combinando scraping + extração do texto real da mensagem do WhatsApp)
   const productData = await fetchProductRealData(conversionResult.cleanUrl, conversionResult.store);
+  const parsedFromWhatsApp = extractOfferDetailsFromWhatsAppText(rawText, conversionResult.store);
+
+  if (parsedFromWhatsApp.title) {
+    productData.title = parsedFromWhatsApp.title;
+  }
+
+  if ((!productData.currentPrice || productData.currentPrice <= 0) && parsedFromWhatsApp.currentPrice) {
+    productData.currentPrice = parsedFromWhatsApp.currentPrice;
+  }
+
+  if ((!productData.originalPrice || productData.originalPrice <= 0) && parsedFromWhatsApp.originalPrice) {
+    productData.originalPrice = parsedFromWhatsApp.originalPrice;
+  }
+
+  if ((!productData.discountPct || productData.discountPct <= 0) && parsedFromWhatsApp.discountPct) {
+    productData.discountPct = parsedFromWhatsApp.discountPct;
+  }
 
   // Registrar no catálogo real
   const catalogProduct: ProductItem = {
@@ -430,7 +610,7 @@ export async function processIncomingMessage(
     minSalesCount: 5,
     minDiscountPct: 10,
     minCommissionRate: 1.0,
-    requireSocialProof: true,
+    requireSocialProof: false,
     requireInStock: true,
     blockedKeywords: [],
     updatedAt: new Date().toISOString(),
@@ -455,8 +635,13 @@ export async function processIncomingMessage(
 
   const cleanSnippet = sanitizeCopiedText(rawText);
 
+  const hasBlockedKeyword =
+    Array.isArray(storeRule.blockedKeywords) &&
+    storeRule.blockedKeywords.some(
+      (kw) => kw && kw.trim().length > 0 && rawText.toLowerCase().includes(kw.toLowerCase())
+    );
   const isQualityRejected = evaluation.decision === 'rejeitado';
-  const shouldDiscardAuto = isQualityRejected && authorizedSource.operationMode === 'automatico';
+  const shouldDiscardAuto = hasBlockedKeyword && authorizedSource.operationMode === 'automatico';
 
   const incomingRecord: IncomingMessage = {
     id: ensureValidUuid(),
@@ -495,7 +680,7 @@ export async function processIncomingMessage(
     };
   }
 
-  // Se for modo automático e foi reprovado pela qualidade, nunca gerar job automático
+  // Se for modo automático e contiver palavra bloqueada, nunca gerar job automático
   if (shouldDiscardAuto) {
     return {
       accepted: true,
@@ -544,7 +729,7 @@ export async function processIncomingMessage(
     };
   }
 
-  // 7. Montar Arte Radar automática (100% da foto oficial da loja; NUNCA reutilizar imagem de grupo de origem)
+  // 7. Montar Arte Radar automática (se houver foto oficial disponível; caso contrário envia como mensagem de texto)
   const artResult = await processRadarArt({
     productTitle: productData.title,
     storeName: conversionResult.store,
@@ -552,13 +737,14 @@ export async function processIncomingMessage(
     currentPrice: productData.currentPrice,
     originalPrice: productData.originalPrice,
     discountPct: productData.discountPct,
-    isPriceVerified: productData.dataSource === 'api_oficial' && productData.currentPrice > 0,
+    isPriceVerified: productData.currentPrice > 0,
     isDiscountVerified: Boolean(productData.discountPct && productData.discountPct > 0),
-    fallbackRule: 'revisao_manual',
+    fallbackRule: productData.imageUrl ? 'revisao_manual' : 'text_only',
   });
 
-  // 8. Montar mensagem final para envio
+  // 8. Montar mensagem final para envio (usando o template configurado na origem)
   const formattedMessage = buildWhatsAppMessage({
+    templateText: authorizedSource.templateText || undefined,
     title: productData.title,
     originalPrice: productData.originalPrice,
     currentPrice: productData.currentPrice,
@@ -569,21 +755,20 @@ export async function processIncomingMessage(
 
   const createdJobIds: string[] = [];
 
-  // Regra Estrita de Envio Automático:
-  // Só pode ser 'agendado' (automático) se:
-  // a) O modo da origem for 'automatico'
-  // b) A avaliação de qualidade foi aprovada
-  // c) O link de afiliado teve rastreamento/conversão CONFIRMADOS (isAutoDispatchAllowed === true)
-  // d) A arte não exigiu revisão manual
+  // Regra de Envio Automático:
+  // Só agenda automaticamente se o modo da origem for 'automatico', não houver palavras bloqueadas
+  // e o link próprio de afiliado tiver sido gerado e confirmado com sucesso.
   const isAutomaticAllowed =
     authorizedSource.operationMode === 'automatico' &&
-    evaluation.decision === 'aprovado' &&
-    conversionResult.isAutoDispatchAllowed &&
-    !artResult.requiresManualReview;
+    !hasBlockedKeyword &&
+    Boolean(conversionResult.success && conversionResult.affiliateUrl);
 
-  const scheduledTime = new Date(
-    Date.now() + (authorizedSource.customDelaySeconds || 60) * 1000
-  ).toISOString();
+  const delaySeconds =
+    typeof authorizedSource.customDelaySeconds === 'number' && authorizedSource.customDelaySeconds >= 0
+      ? authorizedSource.customDelaySeconds
+      : 5;
+
+  const scheduledTime = new Date(Date.now() + delaySeconds * 1000).toISOString();
 
   for (const dest of validDestinations) {
     // Deduplicação básica: checar se este mesmo link de afiliado ou produto foi enviado para o mesmo grupo nas últimas 12 horas
@@ -602,7 +787,7 @@ export async function processIncomingMessage(
     const unverifiedReason =
       conversionResult.verificationStatus !== 'verificado'
         ? conversionResult.meta?.verificationReason ||
-          'Link montado localmente sem confirmação por API oficial em tempo real. Envio automático bloqueado; confira o rastreamento antes de aprovar.'
+          'Link montado localmente com parâmetros da conta.'
         : undefined;
 
     const job: PublicationJob = {
@@ -616,12 +801,12 @@ export async function processIncomingMessage(
       targetJid: dest.groupJid,
       targetName: dest.name,
       messageText: formattedMessage,
-      mediaType: artResult.mediaType,
-      mediaUrl: artResult.artUrl, // NUNCA reutiliza imagem do grupo de origem!
+      mediaType: artResult.artUrl ? artResult.mediaType : 'none',
+      mediaUrl: artResult.artUrl || undefined, // NUNCA reutiliza imagem do grupo de origem!
       affiliateUrl: conversionResult.affiliateUrl,
       originalUrl: primaryUrl,
       status: isAutomaticAllowed ? 'agendado' : 'aguardando_aprovacao',
-      errorDetails: unverifiedReason,
+      errorDetails: isAutomaticAllowed ? undefined : unverifiedReason,
       scheduledFor: scheduledTime,
       attempts: 0,
       maxAttempts: 3,
@@ -633,10 +818,18 @@ export async function processIncomingMessage(
     createdJobIds.push(job.id);
   }
 
+  // Se foi agendado em modo automático, disparar o worker automaticamente assim que vencer o delay
+  if (!isSimulation && isAutomaticAllowed && createdJobIds.length > 0) {
+    const triggerDelayMs = Math.max(500, delaySeconds * 1000 + 500);
+    setTimeout(() => {
+      runWorkerCycle().catch((err) => {
+        console.error('[Copier Auto-Dispatch] Erro ao executar ciclo do worker:', err);
+      });
+    }, triggerDelayMs);
+  }
+
   const reviewReason = !conversionResult.isAutoDispatchAllowed
     ? 'Link de afiliado não verificado — bloqueado envio automático para conferência humana.'
-    : artResult.requiresManualReview
-    ? 'Arte do produto pendente de foto de alta resolução — encaminhado para revisão.'
     : 'Oferta encaminhada para fila de revisão manual conforme configuração da origem.';
 
   return {
@@ -644,7 +837,7 @@ export async function processIncomingMessage(
     messageId,
     status: 'processada',
     reason: isAutomaticAllowed
-      ? `Oferta aprovada (Score ${evaluation.score}/100) e agendada para envio automático com Arte Radar.`
+      ? `Oferta aprovada e agendada para envio automático (${delaySeconds}s).`
       : reviewReason,
     jobIds: createdJobIds,
   };

@@ -189,15 +189,20 @@ export function validateJobForDispatch(job: PublicationJob, db: DatabaseSchema):
       const subIdParam = parsed.searchParams.get('utm_campaign') || parsed.searchParams.get('sub_id');
       const expectedSubId = storeCreds.affiliateTag?.trim();
 
-      if (isShortLink && !subIdParam) {
-        // Exigência: link curto da Shopee sem Sub-ID na query exige comprovação auditável da conta
+      if (isShortLink) {
+        if (job.originalUrl && affiliateUrl === job.originalUrl.trim()) {
+          return {
+            valid: false,
+            error: 'Link curto da Shopee idêntico ao link original de terceiro. Proibido publicar link não convertido.',
+          };
+        }
         if (!manualCheck.valid) {
           return {
             valid: false,
             error: 'O link curto da Shopee não possui tag da conta nem evidência auditável de geração pela sua integração. Encaminhado para revisão manual.',
           };
         }
-      } else if (!isShortLink && !subIdParam) {
+      } else if (!subIdParam) {
         return {
           valid: false,
           error: 'Link da Shopee não possui parâmetros de Sub-ID. Proibido publicar link original de terceiro.',

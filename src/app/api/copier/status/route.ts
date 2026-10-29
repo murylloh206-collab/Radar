@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDatabase, getActiveEvolutionConfig } from '@/lib/server/storage';
 import { getSystemReadiness } from '@/lib/server/readiness';
+import { runWorkerCycle } from '@/lib/server/worker-engine';
 import { WhatsAppGroup } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   try {
-    const db = readDatabase();
-    const config = getActiveEvolutionConfig(db.whatsapp);
+    let db = readDatabase();
     const now = new Date();
+    const hasDueScheduledJobs = (db.jobs || []).some(
+      (j) => j.status === 'agendado' && !j.isDemo && new Date(j.scheduledFor).getTime() <= now.getTime()
+    );
+    if (hasDueScheduledJobs && !process.env.RADAR_DB_PATH) {
+      try {
+        await runWorkerCycle();
+        db = readDatabase();
+      } catch {}
+    }
+    const config = getActiveEvolutionConfig(db.whatsapp);
     const todayStr = now.toISOString().split('T')[0];
 
     // Mapa de grupos por JID para resolver nomes oficiais

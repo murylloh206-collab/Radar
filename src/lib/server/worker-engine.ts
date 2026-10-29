@@ -78,30 +78,46 @@ async function sendToEvolutionApi(
           text: job.messageText,
         };
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45000);
 
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: apiKey,
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: apiKey,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
 
-    clearTimeout(timeout);
+        clearTimeout(timeout);
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      return {
-        ok: false,
-        error: `Evolution API retornou status ${res.status}: ${errText.substring(0, 150)}`,
-      };
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          if (attempt === 1 && (res.status === 502 || res.status === 503 || res.status === 504)) {
+            await new Promise((r) => setTimeout(r, 2000));
+            continue;
+          }
+          return {
+            ok: false,
+            error: `Evolution API retornou status ${res.status}: ${errText.substring(0, 150)}`,
+          };
+        }
+
+        return { ok: true };
+      } catch (fetchErr: unknown) {
+        clearTimeout(timeout);
+        if (attempt === 1) {
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+        throw fetchErr;
+      }
     }
-
-    return { ok: true };
+    return { ok: false, error: 'Falha ao enviar para a Evolution API após retentativa.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return {

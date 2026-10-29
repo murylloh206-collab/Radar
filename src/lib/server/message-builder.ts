@@ -77,22 +77,34 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
   message = message.replace('{titulo}', title.trim());
 
   // Preço DE
-  if (originalPrice && originalPrice > currentPrice) {
+  if (originalPrice && currentPrice > 0 && originalPrice > currentPrice) {
+    message = message.replace(/~?R\$\s*\{preco_de\}~?/gi, `~${formatBRL(originalPrice)}~`);
     message = message.replace('{preco_de}', `De: ~${formatBRL(originalPrice)}~`);
   } else {
-    message = message.replace('{preco_de}', '');
+    message = message.replace(/^.*\{preco_de\}.*$/gm, '');
+  }
+
+  // Desconto
+  if (discountPct && discountPct > 0 && currentPrice > 0) {
+    message = message.replace('{desconto}', `-${Math.round(discountPct)}% OFF`);
+  } else {
+    message = message.replace(/\(\s*\{desconto\}\s*\)/g, '');
+    message = message.replace('{desconto}', '');
   }
 
   // Preço POR / Preço Atual
-  message = message.replace('{preco_por}', formatBRL(currentPrice));
-  message = message.replace('{preco}', formatBRL(currentPrice));
-
-  // Desconto
-  if (discountPct && discountPct > 0) {
-    message = message.replace('{desconto}', `-${Math.round(discountPct)}% OFF`);
+  if (currentPrice && currentPrice > 0) {
+    message = message.replace(/R\$\s*\{preco_por\}/gi, formatBRL(currentPrice));
+    message = message.replace('{preco_por}', formatBRL(currentPrice));
+    message = message.replace(/R\$\s*\{preco\}/gi, formatBRL(currentPrice));
+    message = message.replace('{preco}', formatBRL(currentPrice));
   } else {
-    message = message.replace('{desconto}', '');
+    message = message.replace(/^.*\{preco_por\}.*$/gm, '');
+    message = message.replace(/^.*\{preco\}.*$/gm, '');
   }
+
+  // Remover parênteses vazios residuais
+  message = message.replace(/\(\s*\)/g, '');
 
   // Cupom
   if (couponCode && couponCode.trim()) {
