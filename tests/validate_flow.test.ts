@@ -155,7 +155,7 @@ test('2. Diagnósticos seguros de erro na Evolution API sem vazamento de dados s
 
   // 503 - Indisponibilidade
   const diag503 = diagnoseEvolutionError(503, 'Service Unavailable', null, 'radar_ofertas');
-  assert.equal(diag503.reason, 'unavailable');
+  assert.equal(diag503.reason, 'server_error');
   assert.ok(diag503.message.includes('temporariamente indisponível'));
 });
 
