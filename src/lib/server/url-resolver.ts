@@ -101,9 +101,15 @@ export async function resolveUrlSafely(
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const isShortenerDomain =
+        parsedUrl.hostname.toLowerCase().includes('meli.la') ||
+        parsedUrl.hostname.toLowerCase().includes('s.shopee.com.br') ||
+        parsedUrl.hostname.toLowerCase().includes('shope.ee') ||
+        parsedUrl.hostname.toLowerCase().includes('amzn.to') ||
+        parsedUrl.hostname.toLowerCase().includes('magalu.me');
 
       const res = await fetch(currentUrl, {
-        method: 'HEAD',
+        method: isShortenerDomain ? 'GET' : 'HEAD',
         redirect: 'manual',
         signal: controller.signal,
         headers: {
