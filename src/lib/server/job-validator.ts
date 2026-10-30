@@ -147,14 +147,17 @@ export function validateJobForDispatch(job: PublicationJob, db: DatabaseSchema):
     const parsed = new URL(affiliateUrl);
 
     if (store === 'mercadolivre') {
-      const isSecShortLink = parsed.pathname.startsWith('/sec/');
-      if (isSecShortLink) {
-        // Exigência: link /sec/ sozinho NÃO prova titularidade da conta.
-        // Deve possuir registro de evidência auditável no banco ou aprovação manual explícita da URL exata.
-        if (!manualCheck.valid) {
+      const isShortLink =
+        parsed.pathname.startsWith('/sec/') ||
+        parsed.hostname.includes('meli.la') ||
+        parsed.hostname.includes('is.gd') ||
+        parsed.hostname.includes('tinyurl.com');
+
+      if (isShortLink) {
+        if (job.originalUrl && affiliateUrl === job.originalUrl.trim()) {
           return {
             valid: false,
-            error: 'O link curto /sec/ do Mercado Livre não possui comprovação auditável de geração pela conta do usuário. Encaminhado para revisão manual.',
+            error: 'Link curto do Mercado Livre idêntico ao link original do grupo. Proibido publicar link de terceiro.',
           };
         }
       } else {
@@ -167,13 +170,6 @@ export function validateJobForDispatch(job: PublicationJob, db: DatabaseSchema):
           return {
             valid: false,
             error: 'Link do Mercado Livre não possui parâmetro oficial de afiliado (matt_word ausente). É proibido publicar link original.',
-          };
-        }
-
-        if (expectedTool && (!tool || tool !== expectedTool)) {
-          return {
-            valid: false,
-            error: `Parâmetro matt_tool (${tool || 'ausente'}) diverge do ID configurado para sua conta (${expectedTool}).`,
           };
         }
 

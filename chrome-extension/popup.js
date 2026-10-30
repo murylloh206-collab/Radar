@@ -276,6 +276,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       const accountName = mlData?.accountName || `Afiliado ML (${realTag})`;
       const now = new Date().toISOString();
 
+      let cookieString = '';
+      try {
+        if (chrome.cookies) {
+          const mlCookies = await chrome.cookies.getAll({ domain: '.mercadolivre.com.br' });
+          if (mlCookies && mlCookies.length > 0) {
+            cookieString = mlCookies.map((c) => `${c.name}=${c.value}`).join('; ');
+          }
+        }
+      } catch {}
+
       // Enviar handshake autenticado ao backend
       const res = await fetch(`${DASHBOARD_BASE_URL}/api/integrations/mercadolivre/connect`, {
         method: 'POST',
@@ -287,6 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           affiliateTag: realTag,
           appId: realTool || undefined,
           authType: 'extension_session',
+          cookies: cookieString || undefined,
           accountName,
           verifiedAt: now,
         }),

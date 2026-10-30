@@ -48,6 +48,7 @@ export default function ConectarLojasPage() {
   const [mlForm, setMlForm] = useState({
     affiliateTag: '',
     appId: '',
+    cookieString: '',
   });
 
   const [shopeeForm, setShopeeForm] = useState({
@@ -310,6 +311,7 @@ export default function ConectarLojasPage() {
         body: JSON.stringify({
           affiliateTag: extractedTag,
           appId: extractedTool || undefined,
+          cookieString: mlForm.cookieString.trim() || undefined,
           accountName: `Afiliado ML (${extractedTag})`,
         }),
       });
@@ -630,9 +632,24 @@ export default function ConectarLojasPage() {
                   type="text"
                   value={mlForm.appId}
                   onChange={(e) => setMlForm((p) => ({ ...p, appId: e.target.value }))}
-                  placeholder="Ex: 12345678"
+                  placeholder="Ex: 77625408"
                   className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3 py-2 text-xs text-[#F8FBFF] focus:border-[#1CCAF2] outline-none"
                 />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[#1CCAF2] block mb-1">
+                  Cookie de Sessão ML (Gera links meli.la automaticamente):
+                </label>
+                <input
+                  type="password"
+                  value={mlForm.cookieString}
+                  onChange={(e) => setMlForm((p) => ({ ...p, cookieString: e.target.value }))}
+                  placeholder="Cole os cookies da sua conta Mercado Livre ou use a extensão"
+                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3 py-2 text-xs text-[#F8FBFF] focus:border-[#1CCAF2] outline-none font-mono"
+                />
+                <p className="text-[10px] text-[#8EADC7]/70 mt-1">
+                  💡 Com a sessão salva, o robô chama a API oficial do Mercado Livre e cria links <code>meli.la/...</code> diretamente!
+                </p>
               </div>
               <button
                 type="button"

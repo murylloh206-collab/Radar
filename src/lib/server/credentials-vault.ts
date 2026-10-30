@@ -488,10 +488,27 @@ export async function getStoreCredentialsMapWithSecrets(
       id: vaultCred?.id || base?.id || `store_${storeName}`,
       userId: vaultCred?.userId || base?.userId || userId,
       storeName,
-      appId: vaultCred?.appId || base?.appId || (storeName === 'shopee' ? process.env.SHOPEE_APP_ID || '' : ''),
-      affiliateTag: vaultCred?.affiliateTag || vaultCred?.tagIdentified || base?.affiliateTag || '',
-      appSecret: vaultCred?.appSecret || base?.appSecret || (storeName === 'shopee' ? process.env.SHOPEE_APP_SECRET || '' : ''),
-      userToken: vaultCred?.userToken || base?.userToken || '',
+      appId:
+        vaultCred?.appId ||
+        base?.appId ||
+        (storeName === 'shopee'
+          ? process.env.SHOPEE_APP_ID || ''
+          : storeName === 'mercadolivre'
+          ? process.env.ML_AFFILIATE_APP_ID || '77625408'
+          : ''),
+      affiliateTag:
+        vaultCred?.affiliateTag ||
+        vaultCred?.tagIdentified ||
+        base?.affiliateTag ||
+        (storeName === 'mercadolivre' ? process.env.ML_AFFILIATE_TAG || 'michelhenrique1' : ''),
+      appSecret:
+        vaultCred?.appSecret ||
+        base?.appSecret ||
+        (storeName === 'shopee' ? process.env.SHOPEE_APP_SECRET || '' : ''),
+      userToken:
+        vaultCred?.userToken ||
+        base?.userToken ||
+        (storeName === 'mercadolivre' ? process.env.MERCADOLIVRE_COOKIE || process.env.ML_COOKIE || '' : ''),
       isActive: vaultCred ? vaultCred.isActive : (base?.isActive ?? true),
       isValidated: vaultCred ? vaultCred.connectionStatus === 'conectado' : base?.isValidated,
       validationMethod: vaultCred?.authType || base?.validationMethod,

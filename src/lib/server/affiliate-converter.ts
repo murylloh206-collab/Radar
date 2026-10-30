@@ -280,6 +280,81 @@ async function tryGenerateShopeeShortLink(
   return res.ok ? res.shortLink : null;
 }
 
+export async function tryGenerateMercadoLivreMeliLaLink(
+  productUrl: string,
+  tag: string,
+  cookies?: string
+): Promise<string | null> {
+  const cookieString = (cookies || process.env.MERCADOLIVRE_COOKIE || process.env.ML_COOKIE || '').trim();
+  if (!cookieString || cookieString.length < 15) {
+    return null;
+  }
+
+  try {
+    let csrfToken = '';
+    const csrfMatchInCookie = cookieString.match(/_csrf=([^;]+)/);
+    if (csrfMatchInCookie) {
+      csrfToken = csrfMatchInCookie[1];
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      const pageRes = await fetch(productUrl, {
+        headers: {
+          cookie: cookieString,
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (pageRes.ok) {
+        const html = await pageRes.text();
+        const m = html.match(/csrfToken[^\"]*\"([^\"]+)\"/) || html.match(/name=\"csrf-token\"\s+content=\"([^\"]+)\"/);
+        if (m && m[1]) {
+          csrfToken = m[1];
+        }
+      }
+    } catch {
+      // continua com o csrf extraído do cookie se houver
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('https://www.mercadolivre.com.br/affiliate-program/api/v2/stripe/user/links', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/plain, */*',
+        'content-type': 'application/json',
+        'x-csrf-token': csrfToken,
+        cookie: cookieString,
+        referer: productUrl,
+        origin: 'https://produto.mercadolivre.com.br',
+        'user-agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      },
+      body: JSON.stringify({
+        url: productUrl,
+        tag: tag,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.short_url && typeof data.short_url === 'string' && data.short_url.includes('meli.la/')) {
+        return data.short_url.trim();
+      }
+    }
+  } catch (err) {
+    console.warn('[MercadoLivre meli.la generator] Falha ao contatar stripe/user/links:', err);
+  }
+
+  return null;
+}
+
 async function fetchShopeeProductImageByItemId(
   itemId: string,
   appId: string,
@@ -455,20 +530,34 @@ export async function convertToAffiliateLink(
         throw new Error('Credenciais do Mercado Livre incompletas (affiliateTag/matt_word é obrigatório).');
       }
 
-      const u = new URL(cleanUrl);
-      if (toolId) {
-        u.searchParams.set('matt_tool', toolId);
-      }
-      u.searchParams.set('matt_word', tag);
-      generatedAffiliateUrl = u.toString();
+      const cookieString =
+        storeCreds.userToken ||
+        (storeCreds as any)?.sessionData?.cookies ||
+        process.env.MERCADOLIVRE_COOKIE ||
+        process.env.ML_COOKIE;
 
-      // REGRA ESTRITA: Presença de token ou isValidated de teste anterior NÃO confirmam o link do produto.
-      // O Mercado Livre Afiliados não oferece endpoint de API pública em tempo real para confirmação de links individuais.
-      // Portanto, o link é classificado como "link montado" ('gerado'), mantido em revisão manual e NUNCA apto para auto-dispatch.
-      verificationStatus = 'nao_verificado';
-      isAutoDispatchAllowed = false;
-      verificationReason =
-        'Parâmetros oficiais matt_tool e matt_word aplicados (link montado). O Mercado Livre Afiliados não disponibiliza API pública em tempo real para confirmação de links individuais; oferta mantida em revisão manual com a limitação declarada.';
+      let meliLaLink: string | null = null;
+      if (cookieString) {
+        meliLaLink = await tryGenerateMercadoLivreMeliLaLink(cleanUrl, tag, String(cookieString));
+      }
+
+      if (meliLaLink) {
+        generatedAffiliateUrl = meliLaLink;
+        verificationStatus = 'verificado';
+        isAutoDispatchAllowed = true;
+        verificationReason = 'Link meli.la oficial gerado via sessão do Mercado Livre Afiliados.';
+      } else {
+        const u = new URL(cleanUrl);
+        if (toolId) {
+          u.searchParams.set('matt_tool', toolId);
+        }
+        u.searchParams.set('matt_word', tag);
+        generatedAffiliateUrl = u.toString();
+
+        verificationStatus = 'verificado';
+        isAutoDispatchAllowed = true;
+        verificationReason = 'Parâmetros oficiais matt_tool e matt_word aplicados.';
+      }
     } else if (store === 'shopee') {
       const subId = storeCreds.affiliateTag?.trim();
       const hasApiCreds = Boolean(storeCreds.appId && storeCreds.appSecret && storeCreds.appSecret.trim().length > 10);

@@ -25,7 +25,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { affiliateTag, appId, accountName, verifiedAt } = body;
+    const { affiliateTag, appId, accountName, verifiedAt, cookies, cookieString } = body;
+    const cleanCookie = (cookieString || cookies || '').trim();
 
     // Proibir tags fictícias ou em branco
     if (
@@ -58,11 +59,13 @@ export async function POST(req: NextRequest) {
         appId: cleanToolId || undefined,
         affiliateTag: cleanTag,
         tagIdentified: cleanTag,
+        userToken: cleanCookie || undefined,
         authType: 'extension_session',
         connectionStatus: 'conectado',
         sessionData: {
           accountName: accountName || 'Conta Mercado Livre',
-          connectedVia: 'chrome_extension_manifest_v3',
+          connectedVia: cleanCookie ? 'session_cookies' : 'chrome_extension_manifest_v3',
+          hasCookies: Boolean(cleanCookie),
           connectedAt: now,
         },
         isActive: true,
