@@ -205,8 +205,9 @@ export async function GET(req: NextRequest) {
 
     const cacheBelongsToAccount = Boolean(
       db.whatsapp.status === 'connected' &&
-      db.whatsapp.ownerJid &&
-      db.whatsapp.groupsOwnerJid === db.whatsapp.ownerJid
+      (!db.whatsapp.ownerJid ||
+        !db.whatsapp.groupsOwnerJid ||
+        db.whatsapp.groupsOwnerJid === db.whatsapp.ownerJid)
     );
     const visibleGroups = isLive || cacheBelongsToAccount ? db.groups || [] : [];
     const sanitizedGroups = visibleGroups.map((g) => ({

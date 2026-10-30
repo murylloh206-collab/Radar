@@ -433,7 +433,11 @@ export function getInitialDatabase(): DatabaseSchema {
       webhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET || '',
       status: isProdBoot ? 'connected' : 'disconnected',
       phoneNumber: isProdBoot ? '5519993812187' : '',
+      ownerJid: isProdBoot ? '5519993812187@s.whatsapp.net' : undefined,
+      groupsOwnerJid: isProdBoot ? '5519993812187@s.whatsapp.net' : undefined,
       profileName: isProdBoot ? 'Radar De Ofertas' : '',
+      lastVerificationStatus: isProdBoot ? 'verified' : undefined,
+      lastPingAt: isProdBoot ? new Date().toISOString() : undefined,
       updatedAt: new Date().toISOString(),
     },
     stores: [
