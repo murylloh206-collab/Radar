@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: radar-de-ofertas-painel
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: EVOLUTION_BASE_URL
+        value: https://radar-whatsapp-gateway.onrender.com
+      - key: EVOLUTION_INSTANCE_NAME
+        value: radar_ofertas
+      - key: SHOPEE_APP_ID
+        value: "18303261388"
+      - key: ML_AFFILIATE_TAG
+        value: michel
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: EVOLUTION_API_KEY
+        sync: false
+      - key: EVOLUTION_WEBHOOK_SECRET
+        sync: false
+      - key: VAULT_ENCRYPTION_KEY
+        sync: false
+      - key: AUTH_SESSION_SECRET
+        sync: false
+      - key: ADMIN_ACCESS_TOKEN
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+

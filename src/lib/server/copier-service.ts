@@ -18,7 +18,9 @@ import {
   saveProductToCatalog,
   saveOfferEvaluation,
   saveIncomingMessageRecord,
+  getActiveEvolutionConfig,
 } from './storage';
+import { isTestIsolationActive } from '../supabase';
 import { fetchProductRealData } from './product-fetcher';
 import { processRadarArt } from './radar-art-engine';
 import { runWorkerCycle } from './worker-engine';
@@ -768,7 +770,10 @@ export async function processIncomingMessage(
       ? authorizedSource.customDelaySeconds
       : 5;
 
-  const scheduledTime = new Date(Date.now() + delaySeconds * 1000).toISOString();
+  const isImmediateDispatchMode = !isTestIsolationActive() && isAutomaticAllowed;
+  const scheduledTime = isImmediateDispatchMode
+    ? new Date().toISOString()
+    : new Date(Date.now() + delaySeconds * 1000).toISOString();
 
   for (const dest of validDestinations) {
     // Deduplicação básica: checar se este mesmo link de afiliado ou produto foi enviado para o mesmo grupo nas últimas 12 horas
@@ -818,14 +823,22 @@ export async function processIncomingMessage(
     createdJobIds.push(job.id);
   }
 
-  // Se foi agendado em modo automático, disparar o worker automaticamente assim que vencer o delay
+  // Em produção (Render / Vercel / Local), executa o envio imediatamente na requisição para não depender de timers voláteis
   if (!isSimulation && isAutomaticAllowed && createdJobIds.length > 0) {
-    const triggerDelayMs = Math.max(500, delaySeconds * 1000 + 500);
-    setTimeout(() => {
-      runWorkerCycle().catch((err) => {
-        console.error('[Copier Auto-Dispatch] Erro ao executar ciclo do worker:', err);
-      });
-    }, triggerDelayMs);
+    if (isImmediateDispatchMode) {
+      try {
+        await runWorkerCycle();
+      } catch (err) {
+        console.error('[Copier Auto-Dispatch] Erro ao executar ciclo imediato do worker:', err);
+      }
+    } else {
+      const triggerDelayMs = Math.max(500, delaySeconds * 1000 + 500);
+      setTimeout(() => {
+        runWorkerCycle().catch((err) => {
+          console.error('[Copier Auto-Dispatch] Erro ao executar ciclo do worker:', err);
+        });
+      }, triggerDelayMs);
+    }
   }
 
   const reviewReason = !conversionResult.isAutoDispatchAllowed
@@ -837,8 +850,100 @@ export async function processIncomingMessage(
     messageId,
     status: 'processada',
     reason: isAutomaticAllowed
-      ? `Oferta aprovada e agendada para envio automático (${delaySeconds}s).`
+      ? `Oferta aprovada e processada para envio automático.`
       : reviewReason,
     jobIds: createdJobIds,
   };
+}
+
+let isSyncingOriginMessages = false;
+let lastOriginSyncAtMs = 0;
+
+/**
+ * Busca ativamente na Evolution API as últimas mensagens dos grupos de origem ativos
+ * para recuperar ofertas caso o webhook tenha sofrido oscilação ou cold start.
+ */
+export async function syncRecentOriginMessagesFromEvolution(force = false): Promise<number> {
+  if (isTestIsolationActive()) return 0;
+  if (isSyncingOriginMessages) return 0;
+  if (!force && Date.now() - lastOriginSyncAtMs < 25000) return 0;
+
+  isSyncingOriginMessages = true;
+  lastOriginSyncAtMs = Date.now();
+  let newlyProcessed = 0;
+
+  try {
+    const db = readDatabase();
+    const activeSources = (db.sources || []).filter((s) => s.isActive && s.groupJid);
+    if (activeSources.length === 0) return 0;
+
+    const evoConfig = getActiveEvolutionConfig(db.whatsapp);
+    if (!evoConfig.baseUrl || !evoConfig.apiKey || !evoConfig.instanceName) return 0;
+
+    const cleanBaseUrl = evoConfig.baseUrl.replace(/\/+$/, '');
+    const maxAgeSec = 8 * 3600; // Últimas 8 horas
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    for (const source of activeSources) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const res = await fetch(
+          `${cleanBaseUrl}/chat/findMessages/${encodeURIComponent(evoConfig.instanceName)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: evoConfig.apiKey,
+            },
+            body: JSON.stringify({
+              where: { key: { remoteJid: source.groupJid } },
+              limit: 3,
+            }),
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeout);
+        if (!res.ok) continue;
+
+        const data = await res.json().catch(() => null);
+        const records: any[] =
+          data?.messages?.records || data?.records || (Array.isArray(data) ? data : []);
+
+        // Processa da mais antiga para a mais recente entre as últimas 3
+        const recentRecords = records
+          .filter((m) => {
+            const msgId = m?.key?.id;
+            if (!msgId) return false;
+            const ts = Number(m?.messageTimestamp || 0);
+            if (ts > 0 && nowSec - ts > maxAgeSec) return false;
+            const currentDb = readDatabase();
+            return !currentDb.incomingMessages.some((inc) => inc.messageId === msgId);
+          })
+          .reverse();
+
+        for (const msg of recentRecords) {
+          const resProc = await processIncomingMessage({
+            event: 'messages.upsert',
+            instance: evoConfig.instanceName,
+            data: {
+              key: msg.key,
+              pushName: msg.pushName || 'Grupo',
+              message: msg.message,
+              messageTimestamp: msg.messageTimestamp,
+            },
+          });
+          if (resProc.accepted && resProc.status === 'processada') {
+            newlyProcessed++;
+          }
+        }
+      } catch {
+        clearTimeout(timeout);
+      }
+    }
+  } finally {
+    isSyncingOriginMessages = false;
+  }
+
+  return newlyProcessed;
 }

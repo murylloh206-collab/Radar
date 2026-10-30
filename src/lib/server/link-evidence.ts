@@ -49,6 +49,9 @@ function getEvidenceFilePath(): string {
   if (process.env.RADAR_EVIDENCE_PATH && process.env.RADAR_EVIDENCE_PATH.trim().length > 0) {
     return path.resolve(process.env.RADAR_EVIDENCE_PATH.trim());
   }
+  if (process.env.VERCEL === '1') {
+    return path.join('/tmp', '.data', 'link_evidence.json');
+  }
   return path.join(process.cwd(), '.data', 'link_evidence.json');
 }
 

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runWorkerCycle } from '@/lib/server/worker-engine';
+import { syncRecentOriginMessagesFromEvolution } from '@/lib/server/copier-service';
 
-export async function POST(req: NextRequest) {
+async function handlePoll(req: NextRequest) {
   try {
     const cronSecret = process.env.CRON_SECRET;
 
@@ -39,13 +40,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const syncedOriginMessages = await syncRecentOriginMessagesFromEvolution(true).catch(() => 0);
     const report = await runWorkerCycle();
     return NextResponse.json({
       ok: true,
+      syncedOriginMessages,
       report,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
+}
+
+export async function GET(req: NextRequest) {
+  return handlePoll(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handlePoll(req);
 }

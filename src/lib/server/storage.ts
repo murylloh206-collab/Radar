@@ -47,6 +47,9 @@ export function getDatabaseFilePath(): string {
   if (process.env.RADAR_DB_PATH && process.env.RADAR_DB_PATH.trim().length > 0) {
     return path.resolve(process.env.RADAR_DB_PATH.trim());
   }
+  if (process.env.VERCEL === '1') {
+    return path.join('/tmp', '.data', 'radar_db.json');
+  }
   return path.join(process.cwd(), '.data', 'radar_db.json');
 }
 
@@ -56,6 +59,9 @@ export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001';
  * Garante que o identificador esteja no padrão UUID v4 do Postgres
  */
 export function ensureValidUuid(id?: string): string {
+  if (id === 'user_radar_default') {
+    return DEFAULT_USER_ID;
+  }
   if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     return id;
   }
@@ -404,6 +410,7 @@ export function getPersistenceInfo(): {
 }
 
 export function getInitialDatabase(): DatabaseSchema {
+  const isProdBoot = !isTestIsolationActive();
   return {
     settings: {
       id: '00000000-0000-0000-0000-000000000002',
@@ -421,12 +428,12 @@ export function getInitialDatabase(): DatabaseSchema {
       id: '00000000-0000-0000-0000-000000000003',
       userId: DEFAULT_USER_ID,
       instanceName: process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_GATEWAY_INSTANCE || 'radar_ofertas',
-      baseUrl: process.env.EVOLUTION_BASE_URL || process.env.WHATSAPP_GATEWAY_URL || '',
+      baseUrl: process.env.EVOLUTION_BASE_URL || process.env.WHATSAPP_GATEWAY_URL || (isProdBoot ? 'https://radar-whatsapp-gateway.onrender.com' : ''),
       apiKey: process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || '',
       webhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET || '',
-      status: 'disconnected',
-      phoneNumber: '',
-      profileName: '',
+      status: isProdBoot ? 'connected' : 'disconnected',
+      phoneNumber: isProdBoot ? '5519993812187' : '',
+      profileName: isProdBoot ? 'Radar De Ofertas' : '',
       updatedAt: new Date().toISOString(),
     },
     stores: [
@@ -434,8 +441,10 @@ export function getInitialDatabase(): DatabaseSchema {
         id: '00000000-0000-0000-0000-000000000010',
         userId: DEFAULT_USER_ID,
         storeName: 'shopee',
+        appId: process.env.SHOPEE_APP_ID || (isProdBoot ? '18303261388' : ''),
         affiliateTag: process.env.SHOPEE_AFFILIATE_SUB_ID || '',
-        isActive: Boolean(process.env.SHOPEE_AFFILIATE_SUB_ID),
+        isActive: isProdBoot ? true : Boolean(process.env.SHOPEE_AFFILIATE_SUB_ID),
+        isValidated: isProdBoot ? true : undefined,
         updatedAt: new Date().toISOString(),
       },
       {
@@ -443,8 +452,9 @@ export function getInitialDatabase(): DatabaseSchema {
         userId: DEFAULT_USER_ID,
         storeName: 'mercadolivre',
         appId: process.env.ML_AFFILIATE_APP_ID || '',
-        affiliateTag: process.env.ML_AFFILIATE_TAG || '',
-        isActive: Boolean(process.env.ML_AFFILIATE_TAG),
+        affiliateTag: process.env.ML_AFFILIATE_TAG || (isProdBoot ? 'michel' : ''),
+        isActive: isProdBoot ? true : Boolean(process.env.ML_AFFILIATE_TAG),
+        isValidated: isProdBoot ? true : undefined,
         updatedAt: new Date().toISOString(),
       },
       {
@@ -593,9 +603,173 @@ export function getInitialDatabase(): DatabaseSchema {
         isActive: true,
       },
     ],
-    groups: [],
-    sources: [],
-    destinations: [],
+    groups: isProdBoot
+      ? [
+          {
+            id: '33354502-138a-49d9-b170-3eb278ed138b',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363351222832569@g.us',
+            name: 'Netshoes & Rakuten [Comunidade OFERTAS]',
+            participantCount: 5,
+            isAdmin: false,
+            canPost: true,
+            permissionStatus: 'verified_member',
+            isAnnounce: false,
+            roleDescription: 'Membro (envio liberado)',
+            isOrigin: false,
+            isDestination: false,
+            isTestGroup: false,
+            lastSyncedAt: new Date().toISOString(),
+          },
+          {
+            id: 'ede1e839-6a65-424a-a0d3-05998434848f',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363412589119281@g.us',
+            name: 'Radar de Ofertas #1',
+            participantCount: 8,
+            isAdmin: true,
+            canPost: true,
+            permissionStatus: 'verified_admin',
+            isAnnounce: true,
+            roleDescription: 'Administrador Criador',
+            isOrigin: false,
+            isDestination: true,
+            isTestGroup: true,
+            lastSyncedAt: new Date().toISOString(),
+          },
+          {
+            id: '3e76e9db-8755-4262-9675-abe396fd4365',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363431892948363@g.us',
+            name: 'ACHEI PARA VOCÊ',
+            participantCount: 87,
+            isAdmin: false,
+            canPost: false,
+            permissionStatus: 'restricted_readonly',
+            isAnnounce: true,
+            roleDescription: 'Somente Leitura (Restrito)',
+            isOrigin: false,
+            isDestination: false,
+            isTestGroup: false,
+            lastSyncedAt: new Date().toISOString(),
+          },
+          {
+            id: '8cd48c4b-06cd-40c3-8b24-1fe0eeb107bf',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363428029529223@g.us',
+            name: 'Will Garimpou | TCG #52',
+            participantCount: 577,
+            isAdmin: false,
+            canPost: false,
+            permissionStatus: 'restricted_readonly',
+            isAnnounce: true,
+            roleDescription: 'Somente Leitura (Restrito)',
+            isOrigin: false,
+            isDestination: false,
+            isTestGroup: false,
+            lastSyncedAt: new Date().toISOString(),
+          },
+          {
+            id: '29bf57a0-b745-40c1-8845-8fa120f8aac2',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363423890925139@g.us',
+            name: 'Gaby Garimpou #11',
+            participantCount: 728,
+            isAdmin: false,
+            canPost: false,
+            permissionStatus: 'restricted_readonly',
+            isAnnounce: true,
+            roleDescription: 'Somente Leitura (Restrito)',
+            isOrigin: true,
+            isDestination: false,
+            isTestGroup: false,
+            lastSyncedAt: new Date().toISOString(),
+          },
+          {
+            id: '9a8e6549-f807-4df3-b7a8-6c1bb8f86654',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363403914539021@g.us',
+            name: 'Will Garimpou [235]',
+            participantCount: 818,
+            isAdmin: false,
+            canPost: false,
+            permissionStatus: 'restricted_readonly',
+            isAnnounce: true,
+            roleDescription: 'Somente Leitura (Restrito)',
+            isOrigin: false,
+            isDestination: false,
+            isTestGroup: false,
+            lastSyncedAt: new Date().toISOString(),
+          },
+          {
+            id: '1c1c4f41-c4a9-4c3c-b187-efc78dbdfe35',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363418304510872@g.us',
+            name: 'Achados Originais [489]',
+            participantCount: 891,
+            isAdmin: false,
+            canPost: false,
+            permissionStatus: 'restricted_readonly',
+            isAnnounce: true,
+            roleDescription: 'Somente Leitura (Restrito)',
+            isOrigin: false,
+            isDestination: false,
+            isTestGroup: false,
+            lastSyncedAt: new Date().toISOString(),
+          },
+          {
+            id: '8c71d9cc-5a11-4d33-af56-3525e1b9a986',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363350506364075@g.us',
+            name: 'Netshoes & Rakuten [Comunidade OFERTAS]',
+            participantCount: 1927,
+            isAdmin: false,
+            canPost: false,
+            permissionStatus: 'restricted_readonly',
+            isAnnounce: true,
+            roleDescription: 'Somente Leitura (Restrito a Admins)',
+            isOrigin: false,
+            isDestination: false,
+            isTestGroup: false,
+            lastSyncedAt: new Date().toISOString(),
+          },
+        ]
+      : [],
+    sources: isProdBoot
+      ? [
+          {
+            id: 'f51b3dea-7cea-40b7-baad-3e06ddd87b46',
+            userId: DEFAULT_USER_ID,
+            groupJid: '120363423890925139@g.us',
+            name: 'Cópia: Gaby Garimpou #11',
+            operationMode: 'automatico',
+            isActive: true,
+            allowedStores: ['shopee', 'mercadolivre', 'netshoes', 'amazon', 'magalu'],
+            stripThirdPartyLinks: true,
+            stripExternalTags: true,
+            customDelaySeconds: 5,
+            templateText:
+              '🔥 *{titulo}*\n\nDe: ~R$ {preco_de}~\nPor apenas: *R$ {preco_por}* ({desconto})\n{cupom}\n\n🛒 *Compre aqui com segurança:*\n{link}\n\n{marca_dagua}',
+            imageMode: 'radar_art',
+            startTime: '08:00',
+            endTime: '22:00',
+            convertAffiliateLinks: true,
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      : [],
+    destinations: isProdBoot
+      ? [
+          {
+            id: '854c9d1f-1878-4f2a-9104-a1e08316a405',
+            sourceId: 'f51b3dea-7cea-40b7-baad-3e06ddd87b46',
+            groupJid: '120363412589119281@g.us',
+            name: 'Radar de Ofertas #1',
+            canPost: true,
+            isActive: true,
+          },
+        ]
+      : [],
     incomingMessages: [],
     products: [],
     evaluations: [],

@@ -147,6 +147,59 @@ export async function resolveUrlSafely(
     }
   }
 
+  // Se o link curto do Mercado Livre (ex: meli.la) redirecionou para uma página intermediária /social/,
+  // extrai a URL real do produto em destaque da página para não enviar o perfil de afiliado de terceiro
+  try {
+    const parsedCurrent = new URL(currentUrl);
+    if (
+      parsedCurrent.hostname.toLowerCase().includes('mercadolivre.com') &&
+      parsedCurrent.pathname.startsWith('/social/')
+    ) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const socialRes = await fetch(currentUrl, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      });
+      clearTimeout(timer);
+
+      if (socialRes.ok) {
+        const html = await socialRes.text();
+        const rawCandidates = html.match(/https?:\/\/[^\s"'<>\\]+/g) || [];
+        const decodedCandidates = rawCandidates.map((u) => u.replace(/&amp;/g, '&'));
+        const featuredMatch =
+          decodedCandidates.find(
+            (u) =>
+              u.includes('mercadolivre.com.br') &&
+              (u.includes('/p/MLB') || u.includes('/up/MLBU') || /MLB-?\d+/i.test(u)) &&
+              u.includes('card-featured')
+          ) ||
+          decodedCandidates.find(
+            (u) =>
+              u.includes('mercadolivre.com.br') &&
+              (u.includes('/p/MLB') || u.includes('/up/MLBU')) &&
+              !u.includes('/social/') &&
+              !u.includes('/c/')
+          );
+
+        if (featuredMatch) {
+          const cleanFeatured = new URL(featuredMatch);
+          cleanFeatured.search = '';
+          cleanFeatured.hash = '';
+          currentUrl = cleanFeatured.toString();
+          redirectChain.push(currentUrl);
+        }
+      }
+    }
+  } catch {
+    // Mantém currentUrl caso o scraping da página social falhe
+  }
+
   const detectedStore = detectStoreFromUrl(currentUrl);
 
   return {

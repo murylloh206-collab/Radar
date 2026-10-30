@@ -80,6 +80,9 @@ function getLocalVaultFilePath(): string {
   if (process.env.RADAR_VAULT_PATH && process.env.RADAR_VAULT_PATH.trim().length > 0) {
     return path.resolve(process.env.RADAR_VAULT_PATH.trim());
   }
+  if (process.env.VERCEL === '1') {
+    return path.join('/tmp', '.data', 'vault_encrypted.json');
+  }
   return path.join(process.cwd(), '.data', 'vault_encrypted.json');
 }
 

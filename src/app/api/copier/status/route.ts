@@ -1,13 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readDatabase, getActiveEvolutionConfig } from '@/lib/server/storage';
+import { readDatabase, writeDatabase, getActiveEvolutionConfig } from '@/lib/server/storage';
 import { getSystemReadiness } from '@/lib/server/readiness';
 import { runWorkerCycle } from '@/lib/server/worker-engine';
+import { syncRecentOriginMessagesFromEvolution } from '@/lib/server/copier-service';
 import { WhatsAppGroup } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   try {
     let db = readDatabase();
     const now = new Date();
+
+    if (!process.env.RADAR_DB_PATH) {
+      // Auto-configura o webhook na Evolution API caso o painel esteja rodando em domínio público definitivo (Render / Vercel)
+      const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').trim().toLowerCase();
+      const proto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim();
+      const isPublicCloudHost =
+        host.length > 0 &&
+        !host.includes('localhost') &&
+        !host.includes('127.0.0.1') &&
+        !host.endsWith('.trycloudflare.com') &&
+        proto === 'https';
+
+      if (isPublicCloudHost) {
+        const expectedWebhookUrl = `https://${host}/api/webhook/evolution`;
+        const evoCfg = getActiveEvolutionConfig(db.whatsapp);
+        const secret = process.env.EVOLUTION_WEBHOOK_SECRET || db.whatsapp.webhookSecret;
+        if (
+          evoCfg.baseUrl &&
+          evoCfg.apiKey &&
+          evoCfg.instanceName &&
+          secret &&
+          db.whatsapp.webhookUrl !== expectedWebhookUrl
+        ) {
+          db.whatsapp.webhookUrl = expectedWebhookUrl;
+          writeDatabase(db);
+          const cleanBase = evoCfg.baseUrl.replace(/\/+$/, '');
+          fetch(`${cleanBase}/webhook/set/${encodeURIComponent(evoCfg.instanceName)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: evoCfg.apiKey },
+            body: JSON.stringify({
+              webhook: {
+                enabled: true,
+                url: expectedWebhookUrl,
+                byEvents: false,
+                webhookByEvents: false,
+                events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE'],
+                headers: { 'x-webhook-secret': secret },
+              },
+              enabled: true,
+              url: expectedWebhookUrl,
+              webhookByEvents: false,
+              events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE'],
+              headers: { 'x-webhook-secret': secret },
+            }),
+          }).catch(() => {});
+        }
+      }
+
+      // Sincroniza mensagens recentes dos grupos de origem ativos caso o webhook tenha oscilado
+      syncRecentOriginMessagesFromEvolution().catch(() => {});
+    }
+
     const hasDueScheduledJobs = (db.jobs || []).some(
       (j) => j.status === 'agendado' && !j.isDemo && new Date(j.scheduledFor).getTime() <= now.getTime()
     );
