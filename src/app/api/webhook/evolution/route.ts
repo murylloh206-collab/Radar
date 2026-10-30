@@ -18,7 +18,10 @@ export async function POST(req: NextRequest) {
     const db = readDatabase();
     const config = getActiveEvolutionConfig(db.whatsapp);
     // AUTENTICAÇÃO ESPECÍFICA: Não usar a chave geral da Evolution como fallback sem necessidade comprovada
-    const expectedSecret = process.env.EVOLUTION_WEBHOOK_SECRET || db.whatsapp.webhookSecret;
+    const expectedSecret =
+      process.env.EVOLUTION_WEBHOOK_SECRET ||
+      process.env.WEBHOOK_SECRET ||
+      db.whatsapp.webhookSecret;
 
     // 1. REJEIÇÃO: Recusar chamadas se nenhum segredo específico foi configurado no servidor
     if (!expectedSecret || expectedSecret.trim().length === 0) {

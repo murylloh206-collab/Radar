@@ -430,7 +430,7 @@ export function getInitialDatabase(): DatabaseSchema {
       instanceName: process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_GATEWAY_INSTANCE || 'radar_ofertas',
       baseUrl: process.env.EVOLUTION_BASE_URL || process.env.WHATSAPP_GATEWAY_URL || (isProdBoot ? 'https://radar-whatsapp-gateway.onrender.com' : ''),
       apiKey: process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || '',
-      webhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET || '',
+      webhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || (isProdBoot ? 'whsec_d47a3e9c68f12a0b81e4c935b67e52a1' : ''),
       status: isProdBoot ? 'connected' : 'disconnected',
       phoneNumber: isProdBoot ? '5519993812187' : '',
       ownerJid: isProdBoot ? '5519993812187@s.whatsapp.net' : undefined,

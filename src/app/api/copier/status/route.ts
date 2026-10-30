@@ -22,9 +22,13 @@ export async function GET(req: NextRequest) {
         proto === 'https';
 
       if (isPublicCloudHost) {
-        const expectedWebhookUrl = `https://${host}/api/webhook/evolution`;
+        const publicHost = (process.env.VERCEL_PROJECT_PRODUCTION_URL || host).trim().toLowerCase();
+        const expectedWebhookUrl = `https://${publicHost}/api/webhook/evolution`;
         const evoCfg = getActiveEvolutionConfig(db.whatsapp);
-        const secret = process.env.EVOLUTION_WEBHOOK_SECRET || db.whatsapp.webhookSecret;
+        const secret =
+          process.env.EVOLUTION_WEBHOOK_SECRET ||
+          process.env.WEBHOOK_SECRET ||
+          db.whatsapp.webhookSecret;
         if (
           evoCfg.baseUrl &&
           evoCfg.apiKey &&
@@ -58,7 +62,12 @@ export async function GET(req: NextRequest) {
       }
 
       // Sincroniza mensagens recentes dos grupos de origem ativos caso o webhook tenha oscilado
-      syncRecentOriginMessagesFromEvolution().catch(() => {});
+      try {
+        const synced = await syncRecentOriginMessagesFromEvolution();
+        if (synced > 0) {
+          db = readDatabase();
+        }
+      } catch {}
     }
 
     const hasDueScheduledJobs = (db.jobs || []).some(
