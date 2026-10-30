@@ -81,7 +81,13 @@ export async function GET(req: NextRequest) {
 
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host') || 'localhost:3000';
-    const suggestedWebhookUrl = `${protocol}://${host}/api/webhook/evolution`;
+    const isLocalHost = host.includes('localhost') || host.includes('127.0.0.1');
+    const isGatewayRemote = config.baseUrl.includes('onrender.com') || (config.baseUrl.startsWith('https://') && !config.baseUrl.includes('localhost'));
+    
+    const publicUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'https://painel-de-ofertas.vercel.app');
+    const suggestedWebhookUrl = (isLocalHost && isGatewayRemote)
+      ? `${publicUrl.replace(/\/+$/, '')}/api/webhook/evolution`
+      : `${protocol}://${host}/api/webhook/evolution`;
 
     let sanitizedWebhookStatus: { enabled?: boolean; url?: string; events?: string[] } | null = null;
     let liveError: string | undefined = undefined;
@@ -181,7 +187,13 @@ export async function POST(req: NextRequest) {
     // 3. Validação e restrição estrita da URL do webhook ao próprio projeto
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
     const host = req.headers.get('host') || 'localhost:3000';
-    const defaultUrl = `${protocol}://${host}/api/webhook/evolution`;
+    const isLocalHost = host.includes('localhost') || host.includes('127.0.0.1');
+    const isGatewayRemote = config.baseUrl.includes('onrender.com') || (config.baseUrl.startsWith('https://') && !config.baseUrl.includes('localhost'));
+    const publicUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'https://painel-de-ofertas.vercel.app');
+
+    const defaultUrl = (isLocalHost && isGatewayRemote)
+      ? `${publicUrl.replace(/\/+$/, '')}/api/webhook/evolution`
+      : `${protocol}://${host}/api/webhook/evolution`;
     const targetUrl = webhookUrl ? String(webhookUrl).trim() : defaultUrl;
 
     const urlValidation = isAuthorizedProjectUrl(targetUrl, req);
@@ -261,7 +273,6 @@ export async function POST(req: NextRequest) {
     writeDatabase(db);
 
     const isLocalhost = targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1');
-    const isGatewayRemote = config.baseUrl.includes('onrender.com') || (config.baseUrl.startsWith('https://') && !config.baseUrl.includes('localhost'));
     const warning = (isLocalhost && isGatewayRemote)
       ? 'Aviso importante: Seu webhook foi registrado com uma URL local (localhost), mas a Evolution API está hospedada na nuvem (Render). O Render não consegue enviar eventos HTTP para seu computador local. Para capturar mensagens reais em tempo real, use a URL pública HTTPS da sua aplicação (ex: Render, Vercel ou túnel Cloudflare/ngrok).'
       : undefined;
