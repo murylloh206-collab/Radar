@@ -881,7 +881,7 @@ export async function syncRecentOriginMessagesFromEvolution(force = false): Prom
     if (!evoConfig.baseUrl || !evoConfig.apiKey || !evoConfig.instanceName) return 0;
 
     const cleanBaseUrl = evoConfig.baseUrl.replace(/\/+$/, '');
-    const maxAgeSec = 8 * 3600; // Últimas 8 horas
+    const maxAgeSec = 2 * 3600; // Últimas 2 horas
     const nowSec = Math.floor(Date.now() / 1000);
 
     for (const source of activeSources) {
@@ -898,7 +898,7 @@ export async function syncRecentOriginMessagesFromEvolution(force = false): Prom
             },
             body: JSON.stringify({
               where: { key: { remoteJid: source.groupJid } },
-              limit: 3,
+              limit: 2,
             }),
             signal: controller.signal,
           }
@@ -910,8 +910,9 @@ export async function syncRecentOriginMessagesFromEvolution(force = false): Prom
         const records: any[] =
           data?.messages?.records || data?.records || (Array.isArray(data) ? data : []);
 
-        // Processa da mais antiga para a mais recente entre as últimas 3
+        // Limita estritamente às 2 mensagens mais recentes para evitar disparo de histórico antigo
         const recentRecords = records
+          .slice(0, 2)
           .filter((m) => {
             const msgId = m?.key?.id;
             if (!msgId) return false;

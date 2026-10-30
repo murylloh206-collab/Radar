@@ -58,7 +58,10 @@ async function sendToEvolutionApi(
 
   try {
     const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
-    const endpoint = job.mediaUrl
+    const isValidHttpMedia = Boolean(
+      job.mediaUrl && (job.mediaUrl.startsWith('http://') || job.mediaUrl.startsWith('https://'))
+    );
+    const endpoint = isValidHttpMedia
       ? `${cleanBaseUrl}/message/sendMedia/${encodeURIComponent(instanceName)}`
       : `${cleanBaseUrl}/message/sendText/${encodeURIComponent(instanceName)}`;
 
@@ -66,7 +69,7 @@ async function sendToEvolutionApi(
       ? job.targetJid
       : job.targetJid.replace('@s.whatsapp.net', '');
 
-    const body = job.mediaUrl
+    const body = isValidHttpMedia
       ? {
           number: targetRecipient,
           mediatype: job.mediaType === 'video' ? 'video' : 'image',
@@ -97,6 +100,26 @@ async function sendToEvolutionApi(
 
         if (!res.ok) {
           const errText = await res.text().catch(() => '');
+          // Se o envio de mídia falhar por erro de formato (400), faz fallback imediato para texto
+          if (isValidHttpMedia && res.status === 400) {
+            const textRes = await fetch(
+              `${cleanBaseUrl}/message/sendText/${encodeURIComponent(instanceName)}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  apikey: apiKey,
+                },
+                body: JSON.stringify({
+                  number: targetRecipient,
+                  text: job.messageText,
+                }),
+              }
+            );
+            if (textRes.ok) {
+              return { ok: true };
+            }
+          }
           if (attempt === 1 && (res.status === 502 || res.status === 503 || res.status === 504)) {
             await new Promise((r) => setTimeout(r, 2000));
             continue;
