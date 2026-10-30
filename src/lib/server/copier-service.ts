@@ -87,6 +87,57 @@ export function extractUrlsFromText(text: string): string[] {
   return Array.from(new Set(matches.map((u) => u.replace(/[),.]+$/, ''))));
 }
 
+async function shortenUrlForWhatsApp(url: string): Promise<string> {
+  if (!url || !url.startsWith('http')) return url;
+  // Se já for um link curto nativo (Shopee s.shopee.com.br / shope.ee, Mercado Livre /sec/ ou meli.la, is.gd, tinyurl), mantém como está
+  if (
+    url.length <= 45 ||
+    /s\.shopee\.com\.br|shope\.ee|meli\.la|mercadolivre\.com\.br\/sec\/|is\.gd\/|tinyurl\.com\//i.test(url)
+  ) {
+    return url;
+  }
+
+  // 1. Tenta encurtar via is.gd (rápido e redirecionamento 301 direto)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(
+      `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeout);
+    if (res.ok) {
+      const short = (await res.text()).trim();
+      if (short.startsWith('https://is.gd/')) {
+        return short;
+      }
+    }
+  } catch {
+    // fallback para tinyurl
+  }
+
+  // 2. Fallback via TinyURL API
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(
+      `https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeout);
+    if (res.ok) {
+      const short = (await res.text()).trim();
+      if (short.startsWith('https://tinyurl.com/')) {
+        return short;
+      }
+    }
+  } catch {
+    // mantém a URL original caso ambos falhem
+  }
+
+  return url;
+}
+
 function orderCandidateProductUrls(rawText: string, urls: string[]): string[] {
   if (urls.length <= 1) return urls;
   const lines = rawText.split(/\r?\n/);
@@ -563,6 +614,9 @@ export async function processIncomingMessage(
 
   // 4. Coletar dados reais do produto (combinando scraping + extração do texto real da mensagem do WhatsApp)
   const productData = await fetchProductRealData(conversionResult.cleanUrl, conversionResult.store);
+  if ((!productData.imageUrl || !productData.imageUrl.startsWith('http')) && conversionResult.meta?.extractedImageUrl) {
+    productData.imageUrl = conversionResult.meta.extractedImageUrl;
+  }
   const parsedFromWhatsApp = extractOfferDetailsFromWhatsAppText(rawText, conversionResult.store);
 
   if (parsedFromWhatsApp.title) {
@@ -744,14 +798,24 @@ export async function processIncomingMessage(
     fallbackRule: productData.imageUrl ? 'revisao_manual' : 'text_only',
   });
 
-  // 8. Montar mensagem final para envio (usando o template configurado na origem)
+  const finalPhotoUrl =
+    (artResult.audit?.selectedPhotoUrl && artResult.audit.selectedPhotoUrl.startsWith('http')
+      ? artResult.audit.selectedPhotoUrl
+      : undefined) ||
+    (productData.imageUrl && productData.imageUrl.startsWith('http')
+      ? productData.imageUrl
+      : undefined);
+
+  // 8. Encurtar link de afiliado longo (ex: Mercado Livre) e montar mensagem final para envio
+  const displayAffiliateUrl = await shortenUrlForWhatsApp(conversionResult.affiliateUrl);
+
   const formattedMessage = buildWhatsAppMessage({
     templateText: authorizedSource.templateText || undefined,
     title: productData.title,
     originalPrice: productData.originalPrice,
     currentPrice: productData.currentPrice,
     discountPct: productData.discountPct,
-    affiliateUrl: conversionResult.affiliateUrl,
+    affiliateUrl: displayAffiliateUrl,
     watermarkText: db.settings.watermarkText,
   });
 
@@ -806,8 +870,8 @@ export async function processIncomingMessage(
       targetJid: dest.groupJid,
       targetName: dest.name,
       messageText: formattedMessage,
-      mediaType: artResult.artUrl ? artResult.mediaType : 'none',
-      mediaUrl: artResult.artUrl || undefined, // NUNCA reutiliza imagem do grupo de origem!
+      mediaType: finalPhotoUrl ? 'image' : 'none',
+      mediaUrl: finalPhotoUrl, // Usa a foto oficial de alta resolução da loja (HTTP/HTTPS) para envio no WhatsApp
       affiliateUrl: conversionResult.affiliateUrl,
       originalUrl: primaryUrl,
       status: isAutomaticAllowed ? 'agendado' : 'aguardando_aprovacao',

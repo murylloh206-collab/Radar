@@ -6,6 +6,7 @@ export interface ResolveResult {
   store: StoreName | null;
   error?: string;
   redirectChain: string[];
+  extractedImageUrl?: string;
 }
 
 const BLOCKED_IP_PATTERNS = [
@@ -153,8 +154,10 @@ export async function resolveUrlSafely(
     }
   }
 
+  let extractedImageUrl: string | undefined = undefined;
+
   // Se o link curto do Mercado Livre (ex: meli.la) redirecionou para uma página intermediária /social/,
-  // extrai a URL real do produto em destaque da página para não enviar o perfil de afiliado de terceiro
+  // extrai a URL real do produto em destaque e a foto oficial da página
   try {
     const parsedCurrent = new URL(currentUrl);
     if (
@@ -200,6 +203,20 @@ export async function resolveUrlSafely(
           currentUrl = cleanFeatured.toString();
           redirectChain.push(currentUrl);
         }
+
+        // Extrair foto oficial do produto em destaque (-P.webp ou -V.webp) e converter para master -O.jpg
+        const imgCandidate = decodedCandidates.find(
+          (u) =>
+            u.includes('http2.mlstatic.com/D_') &&
+            (u.endsWith('-P.webp') || u.endsWith('-V.webp') || u.endsWith('-O.webp') || u.endsWith('-F.jpg') || u.endsWith('-O.jpg')) &&
+            !u.includes('-G.webp')
+        );
+        if (imgCandidate) {
+          extractedImageUrl = imgCandidate
+            .replace(/^https:\/\/http2\.mlstatic\.com\/D_Q_NP_2X_/i, 'https://http2.mlstatic.com/D_NQ_NP_')
+            .replace(/-[PVO]\.webp$/i, '-O.jpg')
+            .replace(/\.webp$/i, '.jpg');
+        }
       }
     }
   } catch {
@@ -213,5 +230,6 @@ export async function resolveUrlSafely(
     finalUrl: currentUrl,
     store: detectedStore,
     redirectChain,
+    extractedImageUrl,
   };
 }

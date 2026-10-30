@@ -57,8 +57,8 @@ export function selectBestProductPhoto(
       // Priorizar a foto com maior dimensão indicada ou secure_url da galeria
       const best = picturesGallery[0];
       const bestUrl = best.secure_url || best.url || rawPhotoUrl || '';
-      // Garantir formato master (-O.webp ou -F.jpg)
-      const highResUrl = bestUrl.replace(/-[IV]\.jpg$/i, '-O.webp');
+      // Garantir formato master (-O.jpg) compatível com WhatsApp / Evolution API
+      const highResUrl = bestUrl.replace(/-[IPV]\.(?:jpg|webp)$/i, '-O.jpg').replace(/\.webp$/i, '.jpg');
       const res = best.max_size || best.size || '1200x1200';
       return {
         selectedUrl: highResUrl,
@@ -69,22 +69,13 @@ export function selectBestProductPhoto(
     }
 
     if (rawPhotoUrl) {
-      // Se for miniatura (secure_thumbnail), tentar converter para foto master de alta resolução
-      if (rawPhotoUrl.includes('-I.jpg') || rawPhotoUrl.includes('-V.jpg')) {
-        const upgraded = rawPhotoUrl.replace(/-[IV]\.jpg$/i, '-O.webp');
-        return {
-          selectedUrl: upgraded,
-          resolution: '1000x1000',
-          isHighRes: true,
-          reason: 'Miniatura do Mercado Livre expandida com segurança para formato master original (-O.webp)',
-        };
-      }
-
+      // Se for miniatura (secure_thumbnail) ou webp, converter para foto master de alta resolução em JPG
+      const upgraded = rawPhotoUrl.replace(/-[IPV]\.(?:jpg|webp)$/i, '-O.jpg').replace(/\.webp$/i, '.jpg');
       return {
-        selectedUrl: rawPhotoUrl,
-        resolution: '800x800',
+        selectedUrl: upgraded,
+        resolution: '1000x1000',
         isHighRes: true,
-        reason: 'Foto oficial do produto Mercado Livre selecionada',
+        reason: 'Foto oficial do produto Mercado Livre selecionada em formato master (-O.jpg)',
       };
     }
   }

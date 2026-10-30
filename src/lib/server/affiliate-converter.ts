@@ -23,6 +23,7 @@ export interface ConvertAffiliateResult {
     appIdUsed?: string;
     verificationReason?: string;
     integrationTested?: boolean;
+    extractedImageUrl?: string;
   };
 }
 
@@ -115,7 +116,10 @@ export function extractProductId(urlStr: string, store: StoreName): string | nul
     }
 
     if (store === 'shopee') {
-      const shopeeMatch = pathname.match(/-i\.(\d+)\.(\d+)/) || pathname.match(/\/product\/(\d+)\/(\d+)/);
+      const shopeeMatch =
+        pathname.match(/-i\.(\d+)\.(\d+)/) ||
+        pathname.match(/\/product\/(\d+)\/(\d+)/) ||
+        pathname.match(/\/opaanlp\/(\d+)\/(\d+)/);
       if (shopeeMatch) return `${shopeeMatch[1]}.${shopeeMatch[2]}`;
     }
 
@@ -276,6 +280,45 @@ async function tryGenerateShopeeShortLink(
   return res.ok ? res.shortLink : null;
 }
 
+async function fetchShopeeProductImageByItemId(
+  itemId: string,
+  appId: string,
+  appSecret: string
+): Promise<string | undefined> {
+  if (!/^\d+$/.test(itemId)) return undefined;
+  try {
+    const cleanAppId = appId.trim();
+    const cleanAppSecret = appSecret.trim();
+    const query = `{ productOfferV2(itemId: ${itemId}, limit: 1) { nodes { imageUrl } } }`;
+    const payload = JSON.stringify({ query });
+    const ts = Math.floor(Date.now() / 1000) + shopeeClockOffsetSec;
+    const factor = `${cleanAppId}${ts}${payload}${cleanAppSecret}`;
+    const signature = crypto.createHash('sha256').update(factor, 'utf8').digest('hex');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `SHA256 Credential=${cleanAppId}, Timestamp=${ts}, Signature=${signature}`,
+      },
+      body: payload,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return undefined;
+    const json = await res.json().catch(() => ({}));
+    const img = json?.data?.productOfferV2?.nodes?.[0]?.imageUrl;
+    if (img && typeof img === 'string' && img.startsWith('http')) {
+      return img.replace(/_tn(\.[a-z]+)?$/i, '');
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function tryGenerateRakutenDeepLink(
   originalUrl: string,
   advertiserId: string,
@@ -402,6 +445,7 @@ export async function convertToAffiliateLink(
   let isAutoDispatchAllowed = false;
   let verificationReason = 'Aguardando validação com a conta oficial';
   const isPriorIntegrationTested = Boolean(storeCreds.isValidated);
+  let extractedImageUrl: string | undefined = resolved.extractedImageUrl;
 
   try {
     if (store === 'mercadolivre') {
@@ -447,6 +491,16 @@ export async function convertToAffiliateLink(
           verificationStatus = 'verificado';
           isAutoDispatchAllowed = true;
           verificationReason = 'Link curto oficial gerado e confirmado via Shopee Open API GraphQL.';
+          if (!extractedImageUrl && productId && productId.includes('.')) {
+            const itemId = productId.split('.')[1];
+            if (itemId) {
+              extractedImageUrl = await fetchShopeeProductImageByItemId(
+                itemId,
+                storeCreds.appId!.trim(),
+                storeCreds.appSecret!.trim()
+              );
+            }
+          }
         } else {
           // A API falhou explicitamente
           return {
@@ -558,6 +612,7 @@ export async function convertToAffiliateLink(
         appIdUsed: storeCreds.appId,
         verificationReason,
         integrationTested: isPriorIntegrationTested,
+        extractedImageUrl,
       },
     };
   } catch (err: unknown) {
