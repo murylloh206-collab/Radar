@@ -463,14 +463,13 @@ export async function getStoreCredentialsMapWithSecrets(
   userId: string,
   baseStores: StoreCredential[] = []
 ): Promise<Record<StoreName, StoreCredential | null>> {
-  const storeNames: StoreName[] = ['shopee', 'mercadolivre', 'netshoes', 'amazon', 'magalu', 'aliexpress'];
+  const storeNames: StoreName[] = ['shopee', 'mercadolivre', 'netshoes', 'amazon', 'magalu'];
   const result: Record<StoreName, StoreCredential | null> = {
     shopee: null,
     mercadolivre: null,
     netshoes: null,
     amazon: null,
     magalu: null,
-    aliexpress: null,
   };
 
   for (const storeName of storeNames) {

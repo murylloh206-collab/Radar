@@ -931,7 +931,6 @@ export async function syncRecentOriginMessagesFromEvolution(force = false): Prom
               key: msg.key,
               pushName: msg.pushName || 'Grupo',
               message: msg.message,
-              messageTimestamp: msg.messageTimestamp,
             },
           });
           if (resProc.accepted && resProc.status === 'processada') {
