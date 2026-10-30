@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node -e \"process.env.NEXT_BUILD_DIR='.next-build'; require('child_process').execSync('npx next build', {stdio:'inherit'})\"",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "test": "npx tsx --test tests/acceptance.test.ts",
