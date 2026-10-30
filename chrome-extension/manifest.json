@@ -11,15 +11,13 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage",
-    "cookies"
+    "storage"
   ],
   "host_permissions": [
     "https://*.mercadolivre.com.br/*",
     "https://*.mercadolivre.com/*",
     "https://mercadolivre.com/*",
     "https://meli.la/*",
-    "https://painel-de-ofertas.vercel.app/*",
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*"
   ],

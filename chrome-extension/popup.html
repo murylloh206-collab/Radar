@@ -27,6 +27,15 @@
 
     <!-- Main Content -->
     <main class="popup-body">
+      <!-- Seleção de Painel de Destino -->
+      <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+        <span style="color: #8EADC7;">Painel Radar:</span>
+        <select id="selectDashboardUrl" style="background: #061225; color: #1CCAF2; border: 1px solid #18334D; border-radius: 6px; padding: 4px 8px; font-size: 11px; outline: none; cursor: pointer;">
+          <option value="https://painel-de-ofertas.vercel.app">Vercel (Nuvem)</option>
+          <option value="http://localhost:3000">Localhost:3000</option>
+        </select>
+      </div>
+
       <!-- 1. Seção de Pareamento com Painel Radar de Ofertas -->
       <section id="pairingSection" class="card-section">
         <div class="section-title">1. Pareamento com o Painel Radar</div>

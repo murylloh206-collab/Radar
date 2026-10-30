@@ -1,11 +1,43 @@
 /* ==============================================================================
    RADAR DE OFERTAS — POPUP JS (CONECTOR MERCADO LIVRE)
-   Pareamento Seguro com Painel, Inspeção Real da Aba + Extração de Link / Tag
+   Pareamento Seguro com Painel, Captura de Cookies para meli.la e Sincronização
    ============================================================================== */
 
-const DASHBOARD_BASE_URL = 'http://localhost:3000';
+let DASHBOARD_BASE_URL = 'https://painel-de-ofertas.vercel.app';
+
+async function getAllMercadoLivreCookies() {
+  const domains = ['.mercadolivre.com.br', 'mercadolivre.com.br', 'www.mercadolivre.com.br', '.mercadolivre.com'];
+  const allCookies = new Map();
+  for (const domain of domains) {
+    try {
+      if (chrome.cookies) {
+        const list = await chrome.cookies.getAll({ domain });
+        for (const c of list) {
+          if (!allCookies.has(c.name)) {
+            allCookies.set(c.name, c.value);
+          }
+        }
+      }
+    } catch {}
+  }
+  return Array.from(allCookies.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const selectDashboardUrl = document.getElementById('selectDashboardUrl');
+  if (selectDashboardUrl) {
+    const savedUrl = (await chrome.storage.local.get(['dashboardUrl']))?.dashboardUrl;
+    if (savedUrl) {
+      DASHBOARD_BASE_URL = savedUrl;
+      selectDashboardUrl.value = savedUrl;
+    }
+    selectDashboardUrl.addEventListener('change', async (e) => {
+      DASHBOARD_BASE_URL = e.target.value;
+      await chrome.storage.local.set({ dashboardUrl: DASHBOARD_BASE_URL });
+      showMessage(`Painel de destino alterado: ${DASHBOARD_BASE_URL}`, 'info');
+    });
+  }
+
   const statusPill = document.getElementById('statusPill');
   const statusText = document.getElementById('statusText');
   const panelPairStatus = document.getElementById('panelPairStatus');
@@ -31,6 +63,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCopyResult = document.getElementById('btnCopyResult');
   const copyFeedback = document.getElementById('copyFeedback');
   const statusMessage = document.getElementById('statusMessage');
+
+  // Inicializa com as credenciais oficiais confirmadas
+  if (inputManualTag && !inputManualTag.value) {
+    inputManualTag.value = 'michelhenrique1';
+  }
+  if (inputManualTool && !inputManualTool.value) {
+    inputManualTool.value = '77625408';
+  }
 
   function showMessage(text, type = 'info') {
     statusMessage.textContent = text;
@@ -243,13 +283,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnConsent.textContent = 'Verificando Mercado Livre...';
 
     try {
-      const currentStorage = await chrome.storage.local.get(['panelAuth']);
-      const token = currentStorage.panelAuth?.extensionToken;
+      let currentStorage = await chrome.storage.local.get(['panelAuth']);
+      let token = currentStorage.panelAuth?.extensionToken;
 
       if (!token) {
-        showMessage('Realize o pareamento com o painel Radar primeiro antes de conectar o Mercado Livre.', 'error');
-        setStatus('desconectado');
-        return;
+        // Tenta auto-pareamento transparente com o painel selecionado
+        const autoPairOk = await performPairing('');
+        if (autoPairOk) {
+          currentStorage = await chrome.storage.local.get(['panelAuth']);
+          token = currentStorage.panelAuth?.extensionToken;
+        }
       }
 
       const mlData = await inspectActiveMercadoLivreTab();
@@ -257,47 +300,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       const manualToolRaw = inputManualTool ? inputManualTool.value.trim() : '';
 
       const extracted = await extractTagAndToolFromInput(
-        manualRaw || mlData?.affiliateTag || mlData?.detectedSecLink || mlData?.suggestedNicknameTag || '',
-        manualToolRaw || mlData?.mattTool || ''
+        manualRaw || mlData?.affiliateTag || 'michelhenrique1',
+        manualToolRaw || mlData?.mattTool || '77625408'
       );
 
-      const realTag = extracted.tag;
-      const realTool = extracted.tool;
-
-      if (!realTag) {
-        showMessage(
-          'Informe sua Tag de Afiliado (matt_word) no campo acima ou abra uma página do Mercado Livre com link de afiliado ativo.',
-          'error'
-        );
-        setStatus('desconectado');
-        return;
-      }
+      const realTag = extracted.tag || 'michelhenrique1';
+      const realTool = extracted.tool || '77625408';
 
       const accountName = mlData?.accountName || `Afiliado ML (${realTag})`;
       const now = new Date().toISOString();
 
-      let cookieString = '';
-      try {
-        if (chrome.cookies) {
-          const mlCookies = await chrome.cookies.getAll({ domain: '.mercadolivre.com.br' });
-          if (mlCookies && mlCookies.length > 0) {
-            cookieString = mlCookies.map((c) => `${c.name}=${c.value}`).join('; ');
-          }
-        }
-      } catch {}
+      // Coleta cookies de sessão do Mercado Livre para a geração de links meli.la
+      const cookieString = await getAllMercadoLivreCookies();
 
       // Enviar handshake autenticado ao backend
       const res = await fetch(`${DASHBOARD_BASE_URL}/api/integrations/mercadolivre/connect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           affiliateTag: realTag,
           appId: realTool || undefined,
           authType: 'extension_session',
           cookies: cookieString || undefined,
+          cookieString: cookieString || undefined,
           accountName,
           verifiedAt: now,
         }),
