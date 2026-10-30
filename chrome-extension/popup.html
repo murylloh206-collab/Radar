@@ -3,8 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Radar de Ofertas — Conector</title>
+  <title>Radar de Ofertas — Conector 1-Clique</title>
   <link rel="stylesheet" href="popup.css">
+  <style>
+    .one-click-card {
+      background: #0D1B31;
+      border: 1px solid #18334D;
+      border-radius: 16px;
+      padding: 16px;
+      margin: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .btn-one-click {
+      width: 100%;
+      background: linear-gradient(135deg, #0879DF 0%, #1CCAF2 100%);
+      color: #061225;
+      font-weight: 800;
+      font-size: 13px;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 14px rgba(28, 202, 242, 0.25);
+      transition: all 0.2s ease;
+    }
+    .btn-one-click:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+    .btn-one-click:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .info-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: #061225;
+      border: 1px solid #18334D;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 12px;
+    }
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #8EADC7;
+    }
+    .info-item .val {
+      font-family: monospace;
+      font-weight: 700;
+      color: #F8FBFF;
+    }
+    .info-item .val.highlight {
+      color: #1CCAF2;
+    }
+    .info-item .val.success {
+      color: #4ade80;
+    }
+    .status-msg {
+      margin: 0 16px 14px 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      display: none;
+    }
+    .status-msg.success {
+      display: block;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+    }
+    .status-msg.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+    .server-select {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 16px;
+      font-size: 11px;
+      color: #8EADC7;
+    }
+    .server-select select {
+      background: #0D1B31;
+      border: 1px solid #18334D;
+      color: #1CCAF2;
+      border-radius: 6px;
+      padding: 3px 6px;
+      font-size: 11px;
+      outline: none;
+    }
+  </style>
 </head>
 <body>
   <div class="popup-container">
@@ -16,7 +118,7 @@
         </div>
         <div class="brand-text">
           <h1>Radar de Ofertas</h1>
-          <span class="subtext">Conector Mercado Livre</span>
+          <span class="subtext">Conector 1-Clique</span>
         </div>
       </div>
       <div id="statusPill" class="status-pill disconnected">
@@ -25,113 +127,47 @@
       </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="popup-body">
-      <!-- Seleção de Painel de Destino -->
-      <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
-        <span style="color: #8EADC7;">Painel Radar:</span>
-        <select id="selectDashboardUrl" style="background: #061225; color: #1CCAF2; border: 1px solid #18334D; border-radius: 6px; padding: 4px 8px; font-size: 11px; outline: none; cursor: pointer;">
-          <option value="https://painel-de-ofertas.vercel.app">Vercel (Nuvem)</option>
-          <option value="http://localhost:3000">Localhost:3000</option>
-        </select>
+    <!-- Servidor Destino -->
+    <div class="server-select" style="margin-top: 10px;">
+      <span>Painel Radar:</span>
+      <select id="selectDashboardUrl">
+        <option value="https://painel-de-ofertas.vercel.app">Vercel (Oficial Nuvem)</option>
+        <option value="http://localhost:3000">Local (localhost:3000)</option>
+      </select>
+    </div>
+
+    <!-- Card 1-Clique -->
+    <div class="one-click-card">
+      <button id="btnOneClick" class="btn-one-click">
+        <span>⚡ Conectar Mercado Livre em 1 Clique</span>
+      </button>
+
+      <div class="info-list">
+        <div class="info-item">
+          <span>Tag Oficial (matt_word):</span>
+          <span class="val highlight">michelhenrique1</span>
+        </div>
+        <div class="info-item">
+          <span>ID Ferramenta (matt_tool):</span>
+          <span class="val">77625408</span>
+        </div>
+        <div class="info-item">
+          <span>Links meli.la:</span>
+          <span id="valMeliLa" class="val success">Habilitado</span>
+        </div>
+        <div class="info-item">
+          <span>Validade da Sessão:</span>
+          <span id="valDaysLeft" class="val highlight">30 dias restantes</span>
+        </div>
       </div>
 
-      <!-- 1. Seção de Pareamento com Painel Radar de Ofertas -->
-      <section id="pairingSection" class="card-section">
-        <div class="section-title">1. Pareamento com o Painel Radar</div>
-        <div id="pairingInfo" class="pairing-info">
-          <span class="label">Status do Painel:</span>
-          <span id="panelPairStatus" class="value text-warning">Não Pareado</span>
-        </div>
+      <p style="font-size: 11px; color: #8EADC7; text-align: center; margin-top: 2px;">
+        💡 Ao clicar, captura os cookies da sua sessão do Mercado Livre e ativa a geração automática de <code>meli.la</code> no painel.
+      </p>
+    </div>
 
-        <div id="pairingForm" class="pairing-form">
-          <p class="help-text">
-            Obtenha o código de pareamento na tela <strong>Conectar Lojas</strong> do seu painel e informe abaixo:
-          </p>
-          <div class="input-group">
-            <input type="text" id="inputPairCode" placeholder="Ex: RDR-8392" class="code-input">
-            <button id="btnPairPanel" class="btn btn-secondary">Parear</button>
-          </div>
-          <button id="btnPairCookie" class="btn-link">Ou parear com sessão ativa do navegador</button>
-        </div>
-      </section>
-
-      <!-- 2. Seção de Consentimento e Conexão Mercado Livre -->
-      <section id="consentSection" class="consent-box hidden">
-        <div class="section-title">2. Conexão do Mercado Livre</div>
-        <p>
-          Abra uma aba no <strong>Mercado Livre</strong> logado na sua conta ou informe abaixo a sua <strong>Tag de Afiliado (<code>matt_word</code>)</strong> ou um <strong>link gerado pela sua barra de afiliado</strong>:
-        </p>
-
-        <div class="pairing-form" style="margin: 10px 0;">
-          <input
-            type="text"
-            id="inputManualTag"
-            placeholder="Sua tag (matt_word) ou cole link /sec/ ou meli.la"
-            class="code-input"
-            style="width: 100%; margin-bottom: 6px; box-sizing: border-box;"
-          >
-          <input
-            type="text"
-            id="inputManualTool"
-            placeholder="ID Ferramenta (matt_tool - opcional, ex: 12345678)"
-            class="code-input"
-            style="width: 100%; box-sizing: border-box;"
-          >
-        </div>
-
-        <button id="btnConsent" class="btn btn-primary">
-          Verificar e Conectar Mercado Livre
-        </button>
-      </section>
-
-      <!-- 3. Seção Conectada com Detalhes da Conta -->
-      <section id="connectedSection" class="connected-box hidden">
-        <div class="account-card">
-          <div class="card-row">
-            <span class="label">Conta Mercado Livre:</span>
-            <span id="accountUser" class="value">—</span>
-          </div>
-          <div class="card-row">
-            <span class="label">Tag Identificada:</span>
-            <span id="accountTag" class="value tag-badge">—</span>
-          </div>
-          <div class="card-row">
-            <span class="label">Última Verificação:</span>
-            <span id="lastSync" class="value">—</span>
-          </div>
-        </div>
-
-        <div class="actions-group">
-          <button id="btnGenerateCurrent" class="btn btn-accent">
-            ⚡ Capturar Link Oficial da Página Atual
-          </button>
-        </div>
-
-        <!-- Result Box -->
-        <div id="resultBox" class="result-box hidden">
-          <div class="result-header">
-            <span id="resultBadge" class="status-badge">Link Confirmado</span>
-            <span id="resultSource" class="result-source-text">Mercado Livre /sec/</span>
-          </div>
-          <input type="text" id="resultUrl" readonly class="result-input">
-          <div class="result-actions">
-            <button id="btnCopyResult" class="btn btn-small">Copiar Link</button>
-            <span id="copyFeedback" class="copy-feedback hidden">Copiado!</span>
-          </div>
-          <p id="resultNotice" class="result-notice"></p>
-        </div>
-
-        <div class="footer-actions">
-          <button id="btnDisconnect" class="btn-link text-danger">
-            Desconectar e Revogar Acesso
-          </button>
-        </div>
-      </section>
-
-      <!-- Feedback message -->
-      <div id="statusMessage" class="status-message hidden"></div>
-    </main>
+    <!-- Mensagem de Status -->
+    <div id="statusMessage" class="status-msg"></div>
   </div>
 
   <script src="popup.js"></script>

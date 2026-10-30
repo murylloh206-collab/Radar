@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Radar de Ofertas — Conector Mercado Livre",
-  "version": "1.1.0",
-  "description": "Conector oficial do Radar de Ofertas para identificação de conta e geração de links de afiliados no Mercado Livre.",
+  "name": "Radar de Ofertas — Conector 1-Clique",
+  "version": "2.0.0",
+  "description": "Conexão em 1 clique para sincronização automática de cookies e geração de links meli.la no Radar de Ofertas.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -11,15 +11,18 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "cookies"
   ],
   "host_permissions": [
-    "https://*.mercadolivre.com.br/*",
-    "https://*.mercadolivre.com/*",
-    "https://mercadolivre.com/*",
-    "https://meli.la/*",
-    "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*"
+    "*://*.mercadolivre.com.br/*",
+    "*://*.mercadolivre.com/*",
+    "*://mercadolivre.com/*",
+    "*://*.meli.la/*",
+    "*://meli.la/*",
+    "*://painel-de-ofertas.vercel.app/*",
+    "*://localhost:*/*",
+    "*://127.0.0.1:*/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -31,18 +34,5 @@
   },
   "background": {
     "service_worker": "background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://*.mercadolivre.com.br/*",
-        "https://*.mercadolivre.com/*",
-        "https://mercadolivre.com/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ]
+  }
 }
