@@ -44,18 +44,36 @@ export async function GET(req: NextRequest) {
 
       try {
         const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 25000); // 25s para tolerar cold start na nuvem
+        let res: Response | null = null;
+        let lastFetchErr: unknown = null;
 
-        const res = await fetch(
-          `${cleanBaseUrl}/instance/connectionState/${encodeURIComponent(config.instanceName)}`,
-          {
-            headers: { apikey: config.apiKey },
-            signal: controller.signal,
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000); // 30s por tentativa para absorver cold start no Render
+          try {
+            res = await fetch(
+              `${cleanBaseUrl}/instance/connectionState/${encodeURIComponent(config.instanceName)}`,
+              {
+                headers: { apikey: config.apiKey },
+                signal: controller.signal,
+              }
+            );
+            clearTimeout(timeout);
+            if (res.ok || (res.status < 500 && res.status !== 408)) {
+              break;
+            }
+          } catch (err) {
+            clearTimeout(timeout);
+            lastFetchErr = err;
           }
-        );
+          if (attempt === 1) {
+            await new Promise((r) => setTimeout(r, 2500));
+          }
+        }
 
-        clearTimeout(timeout);
+        if (!res) {
+          throw lastFetchErr || new Error('Timeout ao contatar Evolution API');
+        }
 
         if (res.ok) {
           const data = await res.json();

@@ -126,6 +126,7 @@ export default function WhatsAppConnectionPage() {
 
       if (data.ok && data.whatsapp) {
         setWa(data.whatsapp);
+        setFeedback(null);
         consecutiveErrorsRef.current = 0;
 
         // Se a instância estiver conectada, sincroniza grupos imediatamente

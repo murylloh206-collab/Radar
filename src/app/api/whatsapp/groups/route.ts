@@ -58,20 +58,51 @@ export async function GET(req: NextRequest) {
             // A lista ao vivo ainda pode ser consultada; permissões ficam não verificadas.
           }
 
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 25000);
-
-          const res = await fetch(
-            `${cleanBaseUrl}/group/fetchAllGroups/${encodeURIComponent(config.instanceName)}?getParticipants=true`,
-            {
-              headers: { apikey: config.apiKey },
-              signal: controller.signal,
+          let res: Response | null = null;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000);
+            try {
+              res = await fetch(
+                `${cleanBaseUrl}/group/fetchAllGroups/${encodeURIComponent(config.instanceName)}?getParticipants=true`,
+                {
+                  headers: { apikey: config.apiKey },
+                  signal: controller.signal,
+                }
+              );
+              clearTimeout(timeout);
+              if (res.ok) break;
+            } catch (err) {
+              clearTimeout(timeout);
+              if (attempt === 2) throw err;
             }
-          );
+            if (attempt === 1) {
+              await new Promise((r) => setTimeout(r, 2500));
+            }
+          }
 
-          clearTimeout(timeout);
+          // Fallback se getParticipants=true retornar HTTP 500 por sobrecarga de memória no gateway
+          if (!res || !res.ok) {
+            const controllerFallback = new AbortController();
+            const timeoutFallback = setTimeout(() => controllerFallback.abort(), 25000);
+            try {
+              const fallbackRes = await fetch(
+                `${cleanBaseUrl}/group/fetchAllGroups/${encodeURIComponent(config.instanceName)}?getParticipants=false`,
+                {
+                  headers: { apikey: config.apiKey },
+                  signal: controllerFallback.signal,
+                }
+              );
+              clearTimeout(timeoutFallback);
+              if (fallbackRes.ok) {
+                res = fallbackRes;
+              }
+            } catch {
+              clearTimeout(timeoutFallback);
+            }
+          }
 
-          if (res.ok) {
+          if (res && res.ok) {
             const rawGroups = await res.json();
             if (Array.isArray(rawGroups)) {
               isLive = true;
@@ -121,16 +152,22 @@ export async function GET(req: NextRequest) {
                     permissionStatus = 'verified_member';
                     roleDescription = 'Membro (envio liberado)';
                   }
+                } else if (existing && existing.permissionStatus === 'verified_admin') {
+                  isAdmin = true;
+                  canPost = true;
+                  permissionStatus = 'verified_admin';
+                  roleDescription = existing.roleDescription || 'Administrador';
                 } else {
-                  // Se não foi possível verificar a identidade nos participantes
+                  // Conta não listada como admin ou participantes retornados apenas com @lid
                   isAdmin = false;
-                  permissionStatus = 'unverified';
                   if (isAnnounce) {
                     canPost = false;
-                    roleDescription = 'Permissão não verificada (Restrito)';
+                    permissionStatus = 'restricted_readonly';
+                    roleDescription = 'Somente Leitura (Restrito a Admins)';
                   } else {
                     canPost = true;
-                    roleDescription = 'Permissão não verificada';
+                    permissionStatus = 'verified_member';
+                    roleDescription = 'Membro (envio liberado)';
                   }
                 }
 
@@ -157,7 +194,7 @@ export async function GET(req: NextRequest) {
               writeDatabase(db);
             }
           } else {
-            syncWarning = `Gateway retornou código ${res.status}. Exibindo dados locais em cache.`;
+            syncWarning = `Gateway retornou código ${res?.status || 500}. Exibindo dados locais em cache.`;
           }
         } catch (fetchErr) {
           syncWarning = 'Não foi possível conectar ao gateway no momento. Exibindo grupos locais em cache.';
