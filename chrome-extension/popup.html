@@ -3,172 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Radar de Ofertas — Conector 1-Clique</title>
+  <title>Radar Conector</title>
   <link rel="stylesheet" href="popup.css">
-  <style>
-    .one-click-card {
-      background: #0D1B31;
-      border: 1px solid #18334D;
-      border-radius: 16px;
-      padding: 16px;
-      margin: 14px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .btn-one-click {
-      width: 100%;
-      background: linear-gradient(135deg, #0879DF 0%, #1CCAF2 100%);
-      color: #061225;
-      font-weight: 800;
-      font-size: 13px;
-      border: none;
-      border-radius: 12px;
-      padding: 14px 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 14px rgba(28, 202, 242, 0.25);
-      transition: all 0.2s ease;
-    }
-    .btn-one-click:hover {
-      opacity: 0.95;
-      transform: translateY(-1px);
-    }
-    .btn-one-click:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .info-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      background: #061225;
-      border: 1px solid #18334D;
-      border-radius: 12px;
-      padding: 12px;
-      font-size: 12px;
-    }
-    .info-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #8EADC7;
-    }
-    .info-item .val {
-      font-family: monospace;
-      font-weight: 700;
-      color: #F8FBFF;
-    }
-    .info-item .val.highlight {
-      color: #1CCAF2;
-    }
-    .info-item .val.success {
-      color: #4ade80;
-    }
-    .status-msg {
-      margin: 0 16px 14px 16px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 600;
-      display: none;
-    }
-    .status-msg.success {
-      display: block;
-      background: rgba(34, 197, 94, 0.15);
-      border: 1px solid rgba(34, 197, 94, 0.3);
-      color: #86efac;
-    }
-    .status-msg.error {
-      display: block;
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
-    }
-    .server-select {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 16px;
-      font-size: 11px;
-      color: #8EADC7;
-    }
-    .server-select select {
-      background: #0D1B31;
-      border: 1px solid #18334D;
-      color: #1CCAF2;
-      border-radius: 6px;
-      padding: 3px 6px;
-      font-size: 11px;
-      outline: none;
-    }
-  </style>
 </head>
 <body>
-  <div class="popup-container">
-    <!-- Header -->
-    <header class="popup-header">
-      <div class="brand">
-        <div class="logo-radar">
-          <div class="radar-dot"></div>
-        </div>
-        <div class="brand-text">
-          <h1>Radar de Ofertas</h1>
-          <span class="subtext">Conector 1-Clique</span>
+  <article class="cc-popup" aria-label="Extensão Radar Conector">
+    <!-- Cabeçalho Radar Conector -->
+    <header class="cc-popup-header">
+      <div class="cc-brand">
+        <span class="cc-radar" aria-hidden="true"></span>
+        <div>
+          <strong>Radar Conector</strong>
+          <small>Suas lojas, mais perto.</small>
         </div>
       </div>
-      <div id="statusPill" class="status-pill disconnected">
-        <span class="dot"></span>
-        <span id="statusText">Desconectado</span>
-      </div>
+      <button type="button" class="cc-button cc-quiet" id="btnHelp" aria-label="Ajuda de instalação" title="Tutorial de instalação">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </button>
     </header>
 
-    <!-- Servidor Destino -->
-    <div class="server-select" style="margin-top: 10px;">
-      <span>Painel Radar:</span>
-      <select id="selectDashboardUrl">
-        <option value="https://painel-de-ofertas.vercel.app">Vercel (Oficial Nuvem)</option>
-        <option value="http://localhost:3000">Local (localhost:3000)</option>
-      </select>
-    </div>
-
-    <!-- Card 1-Clique -->
-    <div class="one-click-card">
-      <button id="btnOneClick" class="btn-one-click">
-        <span>⚡ Conectar Mercado Livre em 1 Clique</span>
-      </button>
-
-      <div class="info-list">
-        <div class="info-item">
-          <span>Tag Oficial (matt_word):</span>
-          <span class="val highlight">michelhenrique1</span>
-        </div>
-        <div class="info-item">
-          <span>ID Ferramenta (matt_tool):</span>
-          <span class="val">77625408</span>
-        </div>
-        <div class="info-item">
-          <span>Links meli.la:</span>
-          <span id="valMeliLa" class="val success">Habilitado</span>
-        </div>
-        <div class="info-item">
-          <span>Validade da Sessão:</span>
-          <span id="valDaysLeft" class="val highlight">30 dias restantes</span>
-        </div>
+    <!-- Conteúdo Principal -->
+    <div class="cc-popup-content">
+      <!-- Status do Painel Vinculado -->
+      <div class="cc-paired">
+        <span class="cc-dot" id="panelDot"></span>
+        <span id="pairedText">Painel vinculado</span>
+        <button type="button" class="cc-button cc-quiet" id="btnManagePanel">
+          Gerenciar
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="7" y1="17" x2="17" y2="7"></line>
+            <polyline points="7 7 17 7 17 17"></polyline>
+          </svg>
+        </button>
       </div>
 
-      <p style="font-size: 11px; color: #8EADC7; text-align: center; margin-top: 2px;">
-        💡 Ao clicar, captura os cookies da sua sessão do Mercado Livre e ativa a geração automática de <code>meli.la</code> no painel.
+      <!-- Seletor de 4 Lojas -->
+      <div class="cc-shop-picker" role="radiogroup" aria-label="Escolher loja">
+        <button type="button" role="radio" data-store="mercadolivre" aria-checked="true" aria-pressed="true">
+          <span class="cc-mark">
+            <img src="brands/mercadolivre-original.png" alt="Mercado Livre">
+          </span>
+          Mercado Livre
+        </button>
+        <button type="button" role="radio" data-store="shopee" aria-checked="false" aria-pressed="false">
+          <span class="cc-mark">
+            <img src="brands/shopee-original.png" alt="Shopee">
+          </span>
+          Shopee
+        </button>
+        <button type="button" role="radio" data-store="amazon" aria-checked="false" aria-pressed="false">
+          <span class="cc-mark">
+            <img src="brands/amazon-original.png" alt="Amazon">
+          </span>
+          Amazon
+        </button>
+        <button type="button" role="radio" data-store="netshoes" aria-checked="false" aria-pressed="false">
+          <span class="cc-mark">
+            <img src="brands/netshoes-original.png" alt="Netshoes">
+          </span>
+          Netshoes
+        </button>
+      </div>
+
+      <!-- Seção de Ação Contextual da Loja Selecionada -->
+      <section class="cc-connect-box" aria-live="polite">
+        <div class="cc-connect-heading">
+          <h3 id="storeTitle">Mercado Livre</h3>
+          <span class="cc-pill" id="storeMethod">Pelo navegador</span>
+        </div>
+        <p id="storeCopy">Entre na sua conta de afiliado neste navegador. Depois, autorize a vinculação ao Radar.</p>
+        <button type="button" class="cc-button cc-primary" id="btnStoreAction">
+          <svg id="btnStoreIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+          <span id="btnStoreLabel">Conectar conta</span>
+        </button>
+      </section>
+
+      <!-- Aviso de Segurança Oficial -->
+      <p class="cc-secure">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          <polyline points="9 12 11 14 15 10"></polyline>
+        </svg>
+        <span>Sua senha é informada somente na loja.</span>
       </p>
+
+      <!-- Feedback / Mensagem -->
+      <div class="cc-toast" id="popupToast" role="status" aria-live="polite"></div>
+
+      <!-- Opção de Ambiente / Servidor (Discreto, no rodapé interno) -->
+      <div class="cc-server-opt" style="margin-top: auto; padding-top: 14px;">
+        <span>Servidor do painel:</span>
+        <select id="selectDashboardUrl" aria-label="Endereço do painel">
+          <option value="https://painel-de-ofertas.vercel.app">Produção (Vercel)</option>
+          <option value="http://localhost:3000">Desenvolvimento (Localhost)</option>
+        </select>
+      </div>
     </div>
 
-    <!-- Mensagem de Status -->
-    <div id="statusMessage" class="status-msg"></div>
-  </div>
+    <!-- Rodapé -->
+    <footer class="cc-popup-foot">
+      <span>Radar de Ofertas</span>
+      <span>Conector v2.1</span>
+    </footer>
+  </article>
 
   <script src="popup.js"></script>
 </body>

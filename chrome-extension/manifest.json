@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Radar de Ofertas — Conector 1-Clique",
-  "version": "2.0.0",
-  "description": "Conexão em 1 clique para sincronização automática de cookies e geração de links meli.la no Radar de Ofertas.",
+  "name": "Radar Conector",
+  "version": "2.1.0",
+  "description": "Conector oficial do Radar de Ofertas para vincular suas lojas de afiliados e sincronizar links com segurança.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -10,7 +10,6 @@
   },
   "permissions": [
     "activeTab",
-    "scripting",
     "storage",
     "cookies"
   ],
