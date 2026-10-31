@@ -59,3 +59,43 @@
 .wa-spin{animation:wa-spin 1.2s linear infinite}@keyframes wa-spin{to{transform:rotate(360deg)}}
 @media(max-width:760px){.wa-account{padding:20px}.wa-account-top{align-items:flex-start}.wa-account-copy h2{font-size:16px!important}.wa-avatar--account{width:50px;height:50px;flex-basis:50px;border-radius:15px}.wa-account-bottom>.wa-button{width:100%;min-height:44px}.wa-groups-header{padding:20px;align-items:flex-start}.wa-search{width:100%}.wa-search input{font-size:16px}.wa-group-row{padding:18px;align-items:flex-start;flex-wrap:wrap;gap:10px}.wa-group-identity{width:100%}.wa-group-link{margin-left:59px;min-height:44px;padding-left:0}.wa-list-footer{padding:13px 18px}.wa-warning{margin:15px 18px}.wa-account>.wa-warning{margin:15px 0 0}}
 @media(prefers-reduced-motion:reduce){.wa-spin{animation:none}}
+
+
+/* Multi-contas SaaS e Modal de Adicionar WhatsApp */
+.wa-header-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.wa-header-row h1{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:0;color:#edf2f5}
+.wa-header-row p{font-size:13px;color:#9eb0bc;margin:4px 0 0}
+.wa-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:9px 16px;border-radius:9px;background:#185368;border:1px solid #237894;color:#a9ebff;font-weight:500;font-size:12px;cursor:pointer;transition:all .15s ease}
+.wa-btn-primary:hover{background:#1e6782;border-color:#39bee6;color:#ffffff}
+.wa-btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 12px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#fca5a5;font-size:11px;cursor:pointer}
+.wa-btn-danger:hover{background:rgba(239,68,68,.22);border-color:#ef4444;color:#fff}
+.wa-accounts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:6px}
+.wa-account-card{border:1px solid #3b444c;background:#242b30;border-radius:14px;padding:18px;position:relative;cursor:pointer;transition:all .2s ease;text-align:left;color:#edf2f5;display:flex;flex-direction:column;justify-content:space-between}
+.wa-account-card:hover{border-color:#53616d;background:#273037}
+.wa-account-card.wa-account-card--active{border-color:#39bee6;background:#222f38;box-shadow:0 0 0 1px #39bee6}
+.wa-account-card-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.wa-account-card-info{display:flex;align-items:center;gap:12px;min-width:0}
+.wa-account-card-details{min-width:0}
+.wa-account-card-label{font-size:14px;font-weight:600;color:#edf2f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.wa-badge-default{font-size:9px;font-weight:600;padding:1px 5px;border-radius:4px;background:#28434f;color:#67d3f2;border:1px solid #366072}
+.wa-account-card-number{font-size:12px;color:#8fa5b5;margin-top:2px;font-family:monospace}
+.wa-account-card-profile{font-size:11px;color:#708493;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-account-card-meta{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#8fa2af;border-top:1px solid #333d45;padding-top:12px;margin-top:10px}
+.wa-account-card-actions{display:flex;align-items:center;gap:8px;margin-top:12px}
+.wa-btn-sm{padding:5px 10px;border-radius:6px;font-size:11px;background:#2d373e;border:1px solid #44515c;color:#c0d0dc;cursor:pointer}
+.wa-btn-sm:hover{background:#35434d;border-color:#5b6e7d;color:#fff}
+.wa-modal-backdrop{position:fixed;inset:0;background:rgba(10,14,18,.8);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
+.wa-modal{background:#1f262b;border:1px solid #3d4953;border-radius:18px;max-width:500px;width:100%;box-shadow:0 24px 48px rgba(0,0,0,.5);overflow:hidden;color:#edf2f5}
+.wa-modal-header{padding:20px 24px;border-bottom:1px solid #343e46;display:flex;align-items:center;justify-content:space-between}
+.wa-modal-header h3{margin:0;font-size:16px;font-weight:600}
+.wa-modal-close{background:none;border:none;color:#8fa2af;cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center;border-radius:6px}
+.wa-modal-close:hover{color:#fff;background:#2e383f}
+.wa-modal-body{padding:24px}
+.wa-modal-footer{padding:16px 24px;border-top:1px solid #343e46;background:#1a2024;display:flex;justify-content:flex-end;gap:10px}
+.wa-input-group{margin-bottom:18px}
+.wa-input-group label{display:block;font-size:12px;font-weight:500;color:#c1d0dc;margin-bottom:6px}
+.wa-input-group input{width:100%;padding:10px 14px;background:#151a1e;border:1px solid #3a4752;border-radius:8px;color:#edf2f5;font-size:13px;outline:none;box-sizing:border-box}
+.wa-input-group input:focus{border-color:#39bee6}
+.wa-qr-container{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#ffffff;border-radius:12px;margin:16px 0;text-align:center}
+.wa-qr-container img{max-width:240px;height:auto;display:block}
+.wa-sync-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#6cd6f0;background:rgba(57,190,230,.1);padding:3px 8px;border-radius:12px}

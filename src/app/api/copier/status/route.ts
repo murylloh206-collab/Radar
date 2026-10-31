@@ -1,126 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readDatabase, writeDatabase, getActiveEvolutionConfig } from '@/lib/server/storage';
+import { readDatabase, listWhatsAppConnections, getActiveEvolutionConfig } from '@/lib/server/storage';
 import { getSystemReadiness } from '@/lib/server/readiness';
-import { runWorkerCycle } from '@/lib/server/worker-engine';
-import { syncRecentOriginMessagesFromEvolution } from '@/lib/server/copier-service';
-import { WhatsAppGroup } from '@/lib/types';
+import { WhatsAppConnection, WhatsAppGroup } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
   try {
-    let db = readDatabase();
+    const db = readDatabase();
     const now = new Date();
-
-    if (!process.env.RADAR_DB_PATH) {
-      // Auto-configura o webhook na Evolution API caso o painel esteja rodando em domínio público definitivo (Render / Vercel)
-      const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').trim().toLowerCase();
-      const proto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim();
-      const isPublicCloudHost =
-        host.length > 0 &&
-        !host.includes('localhost') &&
-        !host.includes('127.0.0.1') &&
-        !host.endsWith('.trycloudflare.com') &&
-        proto === 'https';
-
-      if (isPublicCloudHost) {
-        const publicHost = (process.env.VERCEL_PROJECT_PRODUCTION_URL || host).trim().toLowerCase();
-        const expectedWebhookUrl = `https://${publicHost}/api/webhook/evolution`;
-        const evoCfg = getActiveEvolutionConfig(db.whatsapp);
-        const secret =
-          process.env.EVOLUTION_WEBHOOK_SECRET ||
-          process.env.WEBHOOK_SECRET ||
-          db.whatsapp.webhookSecret;
-        if (
-          evoCfg.baseUrl &&
-          evoCfg.apiKey &&
-          evoCfg.instanceName &&
-          secret &&
-          db.whatsapp.webhookUrl !== expectedWebhookUrl
-        ) {
-          db.whatsapp.webhookUrl = expectedWebhookUrl;
-          writeDatabase(db);
-          const cleanBase = evoCfg.baseUrl.replace(/\/+$/, '');
-          fetch(`${cleanBase}/webhook/set/${encodeURIComponent(evoCfg.instanceName)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', apikey: evoCfg.apiKey },
-            body: JSON.stringify({
-              webhook: {
-                enabled: true,
-                url: expectedWebhookUrl,
-                byEvents: false,
-                webhookByEvents: false,
-                events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE'],
-                headers: { 'x-webhook-secret': secret },
-              },
-              enabled: true,
-              url: expectedWebhookUrl,
-              webhookByEvents: false,
-              events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE'],
-              headers: { 'x-webhook-secret': secret },
-            }),
-          }).catch(() => {});
-        }
-      }
-
-      // Sincroniza mensagens recentes dos grupos de origem ativos caso o webhook tenha oscilado
-      try {
-        const synced = await syncRecentOriginMessagesFromEvolution();
-        if (synced > 0) {
-          db = readDatabase();
-        }
-      } catch {}
-    }
-
-    const hasDueScheduledJobs = (db.jobs || []).some(
-      (j) => j.status === 'agendado' && !j.isDemo && new Date(j.scheduledFor).getTime() <= now.getTime()
-    );
-    if (hasDueScheduledJobs && !process.env.RADAR_DB_PATH) {
-      try {
-        await runWorkerCycle();
-        db = readDatabase();
-      } catch {}
-    }
-    const config = getActiveEvolutionConfig(db.whatsapp);
     const todayStr = now.toISOString().split('T')[0];
+    const { searchParams } = new URL(req.url);
+    const requestedConnId = searchParams.get('connectionId')?.trim();
+
+    // 1. Conexões disponíveis e conexão ativa
+    const connections = listWhatsAppConnections();
+    let activeConn: WhatsAppConnection | undefined;
+
+    if (requestedConnId) {
+      activeConn = connections.find((c) => c.id === requestedConnId);
+    }
+    if (!activeConn) {
+      activeConn = connections.find((c) => c.isDefault) || connections[0];
+    }
+
+    // Se ainda não houver conexões na lista, usa fallback de db.whatsapp
+    const connState = activeConn || {
+      id: 'default',
+      userId: 'default_user',
+      instanceName: db.whatsapp.instanceName || 'radar_default',
+      label: 'WhatsApp Principal',
+      status: db.whatsapp.status,
+      phoneNumber: db.whatsapp.phoneNumber,
+      profileName: db.whatsapp.profileName,
+      profilePicUrl: (db.whatsapp as any).profilePicUrl,
+      ownerJid: db.whatsapp.ownerJid,
+      lastPingAt: db.whatsapp.lastPingAt,
+      lastVerificationStatus: db.whatsapp.lastVerificationStatus,
+      lastVerificationError: db.whatsapp.lastVerificationError,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const config = getActiveEvolutionConfig(connState as any);
 
     // Mapa de grupos por JID para resolver nomes oficiais
     const groupsMap = new Map<string, WhatsAppGroup>();
     (db.groups || []).forEach((g) => groupsMap.set(g.groupJid, g));
 
-    // 1. ESTADO REAL DA CONEXÃO WHATSAPP
-    // Exigência estrita: só mostrar "Conectado agora" após consulta recente (< 3 min) e bem-sucedida à Evolution
+    // 2. Estado real da Conexão WhatsApp
     let realConnectionState: 'connected_now' | 'last_known_connection' | 'unreachable' | 'disconnected' = 'disconnected';
     let realConnectionLabel = 'Desconectado';
 
-    const lastPingTime = db.whatsapp.lastPingAt ? new Date(db.whatsapp.lastPingAt).getTime() : 0;
+    const lastPingTime = connState.lastPingAt ? new Date(connState.lastPingAt).getTime() : 0;
     const isPingRecent = lastPingTime > 0 && now.getTime() - lastPingTime < 3 * 60 * 1000;
-    const hasConfirmedPing = Boolean(db.whatsapp.lastPingAt);
+    const hasConfirmedPing = Boolean(connState.lastPingAt);
     const isVerificationTimeout =
-      db.whatsapp.lastVerificationStatus === 'timeout' ||
-      db.whatsapp.lastVerificationStatus === 'unreachable';
+      connState.lastVerificationStatus === 'timeout' ||
+      connState.lastVerificationStatus === 'unreachable';
 
-    if (db.whatsapp.status === 'connected' && db.whatsapp.lastVerificationStatus === 'verified' && isPingRecent) {
+    if (connState.status === 'connected' && connState.lastVerificationStatus === 'verified' && isPingRecent) {
       realConnectionState = 'connected_now';
       realConnectionLabel = 'Conectado agora';
-    } else if (db.whatsapp.status === 'connected' && hasConfirmedPing) {
+    } else if (connState.status === 'connected' && hasConfirmedPing) {
       realConnectionState = 'last_known_connection';
-      realConnectionLabel = `Última conexão conhecida (${new Date(db.whatsapp.lastPingAt!).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })})`;
+      realConnectionLabel = `Última conexão conhecida (${new Date(connState.lastPingAt!).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })})`;
     } else if (isVerificationTimeout) {
       realConnectionState = 'unreachable';
       realConnectionLabel = 'Não foi possível verificar agora';
-    } else if (db.whatsapp.status === 'connecting') {
+    } else if (connState.status === 'connecting' || connState.status === 'qrcode') {
       realConnectionState = 'unreachable';
-      realConnectionLabel = 'Conectando ao WhatsApp...';
+      realConnectionLabel = 'Aguardando pareamento...';
     } else {
       realConnectionState = 'disconnected';
       realConnectionLabel = 'Desconectado';
     }
 
-    // 2. ESTADO DO RECEBIMENTO DE MENSAGENS (SEPARANDO REAIS DE SIMULADAS)
+    // 3. Estado do Recebimento de Mensagens
     const allMessages = [...db.incomingMessages].sort(
       (a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
     );
-    const realMessages = allMessages.filter((m) => !m.isSimulation);
-    const simulatedMessages = allMessages.filter((m) => Boolean(m.isSimulation));
+    // Filtrar mensagens pertencentes a esta conexão se houver connectionId
+    const connMessages = activeConn?.id
+      ? allMessages.filter((m) => !m.connectionId || m.connectionId === activeConn?.id)
+      : allMessages;
+
+    const realMessages = connMessages.filter((m) => !m.isSimulation);
+    const simulatedMessages = connMessages.filter((m) => Boolean(m.isSimulation));
 
     const todayRealMessages = realMessages.filter((m) => m.receivedAt.startsWith(todayStr));
     const todaySimulatedMessages = simulatedMessages.filter((m) => m.receivedAt.startsWith(todayStr));
@@ -139,27 +104,30 @@ export async function GET(req: NextRequest) {
       receivingStatus = 'inativo';
     }
 
-    // 3. ESTADO DO PROCESSAMENTO DA FILA E CICLO REAL DO WORKER
-    // Um trabalho agendado NÃO significa que o worker está processando
-    const scheduledJobs = db.jobs.filter((j) => j.status === 'agendado');
-    const pendingReviewJobs = db.jobs.filter(
+    // 4. Estado do Processamento da Fila e Envio
+    const connJobs = activeConn?.id
+      ? db.jobs.filter((j) => !j.connectionId || j.connectionId === activeConn?.id)
+      : db.jobs;
+
+    const scheduledJobs = connJobs.filter((j) => j.status === 'agendado');
+    const pendingReviewJobs = connJobs.filter(
       (j) => j.status === 'aguardando_aprovacao' || j.status === 'rascunho'
     );
-    const sendingJobs = db.jobs.filter((j) => j.status === 'enviando');
-    const todaySentJobs = db.jobs.filter(
+    const sendingJobs = connJobs.filter((j) => j.status === 'enviando');
+    const todaySentJobs = connJobs.filter(
       (j) => j.status === 'enviado' && j.sentAt && j.sentAt.startsWith(todayStr)
     );
-    const failedJobs = db.jobs.filter((j) => j.status === 'falha');
+    const failedJobs = connJobs.filter((j) => j.status === 'falha');
 
-    // Último ciclo real do worker
+    // Último ciclo do worker
     const lastWorkerCycleTime = db.whatsapp.lastWorkerCycleAt
       ? new Date(db.whatsapp.lastWorkerCycleAt).getTime()
       : 0;
     const isWorkerActiveRecently =
-      lastWorkerCycleTime > 0 && now.getTime() - lastWorkerCycleTime < 3 * 60 * 1000;
+      lastWorkerCycleTime > 0 && now.getTime() - lastWorkerCycleTime < 5 * 60 * 1000;
 
     // Último processamento realizado (enviado, falha ou processado)
-    const processedJobs = [...db.jobs]
+    const processedJobs = [...connJobs]
       .filter((j) => j.status === 'enviado' || j.status === 'falha')
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     const latestProcessedJob = processedJobs[0] || null;
@@ -168,7 +136,6 @@ export async function GET(req: NextRequest) {
     if (sendingJobs.length > 0) {
       queueStatus = 'processando';
     } else if (scheduledJobs.length > 0) {
-      // Se há jobs agendados, só está processando se o worker estiver ativo e em ciclo recente
       queueStatus = isWorkerActiveRecently ? 'processando' : 'parada';
     } else if (pendingReviewJobs.length > 0) {
       queueStatus = 'aguardando_aprovacao';
@@ -176,9 +143,7 @@ export async function GET(req: NextRequest) {
       queueStatus = 'ociosa';
     }
 
-    // 4. ESTADO DE CADA FLUXO (REGRA)
-    // NUNCA chamar uma regra de ativa só porque existe no banco!
-    // Estados possíveis: "Pausado", "Aguardando mensagens", "Processando", "Aguardando aprovação", "Erro"
+    // 5. Estado dos Fluxos / Regras
     const flows = (db.sources || []).map((source) => {
       const originGroup = groupsMap.get(source.groupJid);
       const originName = originGroup?.name || source.name || 'Origem não identificada';
@@ -201,8 +166,7 @@ export async function GET(req: NextRequest) {
 
       const flowLabel = `Copiar de ${originName} → Enviar para ${destNamesStr}`;
 
-      // Jobs vinculados a essa regra
-      const rulePendingJobs = db.jobs.filter((j) => j.sourceId === source.id);
+      const rulePendingJobs = connJobs.filter((j) => j.sourceId === source.id);
       const hasSending = rulePendingJobs.some((j) => j.status === 'enviando' || j.status === 'agendado');
       const hasAwaitingApproval = rulePendingJobs.some((j) => j.status === 'aguardando_aprovacao');
 
@@ -219,7 +183,6 @@ export async function GET(req: NextRequest) {
       } else if (hasAwaitingApproval) {
         state = 'Aguardando aprovação';
       } else {
-        // Regra ativa aguardando mensagens chegarem via webhook
         state = 'Aguardando mensagens';
       }
 
@@ -244,7 +207,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // 5. RESUMO PERMANENTE OPERACIONAL
+    // 6. Resumo Operacional Principal
     const primaryRule = (db.sources || []).find((s) => s.isActive) || (db.sources || [])[0] || null;
     let activeSummary: {
       hasRule: boolean;
@@ -279,7 +242,7 @@ export async function GET(req: NextRequest) {
       const destJids = destList.map((d) => d.groupJid);
 
       const latestOfferMsg = realMessages.find((m) => m.remoteJid === primaryRule.groupJid) || realMessages[0] || null;
-      const latestSentJob = [...db.jobs]
+      const latestSentJob = [...connJobs]
         .filter((j) => (j.status === 'enviado' || j.status === 'agendado') && (!primaryRule || j.sourceId === primaryRule.id))
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] || null;
 
@@ -341,22 +304,82 @@ export async function GET(req: NextRequest) {
       };
     }
 
+    // 7. Histórico de Atividade Detalhada (Últimos 50 eventos com motivo de descarte/bloqueio)
+    const activityItems = [
+      ...connMessages.slice(0, 40).map((m) => {
+        const origGroup = groupsMap.get(m.remoteJid);
+        return {
+          id: `msg_${m.id}`,
+          type: 'recebimento' as const,
+          timestamp: m.receivedAt,
+          title: origGroup?.name ? `Mensagem de ${origGroup.name}` : 'Oferta detectada',
+          detail: m.cleanText || m.rawText.substring(0, 100),
+          status: m.status, // recebido, processado, ignorado, bloqueado
+          reason: m.discardReason || (m.extractedUrls?.length === 0 ? 'Sem link identificado na mensagem' : undefined),
+          store: m.extractedStore,
+          groupName: origGroup?.name || m.remoteJid,
+        };
+      }),
+      ...connJobs.slice(0, 40).map((j) => {
+        return {
+          id: `job_${j.id}`,
+          type: 'envio' as const,
+          timestamp: j.sentAt || j.updatedAt || j.scheduledFor,
+          title: `Publicação em ${j.targetName || 'Grupo Destino'}`,
+          detail: (j.messageText || '').substring(0, 100),
+          status: j.status, // rascunho, aguardando_aprovacao, agendado, enviando, enviado, falha, bloqueado
+          reason: j.errorDetails || j.quarantineReason || (j.linkVerified ? undefined : 'Link de afiliado em validação'),
+          store: undefined,
+          groupName: j.targetName || 'Grupo de Envio',
+        };
+      }),
+    ]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 50);
+
     return NextResponse.json({
       ok: true,
       timestamp: now.toISOString(),
       summary: activeSummary,
+      activeConnection: {
+        id: connState.id,
+        label: (connState as any).label || 'WhatsApp Principal',
+        state: realConnectionState,
+        statusLabel: realConnectionLabel,
+        status: connState.status,
+        lastPingAt: connState.lastPingAt || null,
+        isPingRecent,
+        lastVerificationStatus: connState.lastVerificationStatus || 'unverified',
+        concreteError: connState.lastVerificationError || null,
+        instanceName: config.instanceName || connState.instanceName,
+        phoneNumber: connState.phoneNumber,
+        profileName: connState.profileName,
+        profilePicUrl: (connState as any).profilePicUrl,
+        ownerJid: connState.ownerJid,
+        isDefault: (connState as any).isDefault ?? true,
+      },
+      connections: connections.map((c) => ({
+        id: c.id,
+        label: c.label,
+        phoneNumber: c.phoneNumber,
+        profileName: c.profileName,
+        profilePicUrl: c.profilePicUrl,
+        status: c.status,
+        isDefault: c.isDefault,
+        lastPingAt: c.lastPingAt,
+      })),
       connection: {
         state: realConnectionState,
         label: realConnectionLabel,
-        status: db.whatsapp.status,
-        lastPingAt: db.whatsapp.lastPingAt || null,
+        status: connState.status,
+        lastPingAt: connState.lastPingAt || null,
         isPingRecent,
-        lastVerificationStatus: db.whatsapp.lastVerificationStatus || 'unverified',
-        concreteError: db.whatsapp.lastVerificationError || null,
-        instanceName: config.instanceName || db.whatsapp.instanceName,
-        phoneNumber: db.whatsapp.phoneNumber,
-        profileName: db.whatsapp.profileName,
-        batteryLevel: db.whatsapp.batteryLevel,
+        lastVerificationStatus: connState.lastVerificationStatus || 'unverified',
+        concreteError: connState.lastVerificationError || null,
+        instanceName: config.instanceName || connState.instanceName,
+        phoneNumber: connState.phoneNumber,
+        profileName: connState.profileName,
+        batteryLevel: (connState as any).batteryLevel,
       },
       receiving: {
         status: receivingStatus,
@@ -380,6 +403,7 @@ export async function GET(req: NextRequest) {
         nextSendAt: scheduledJobs[0]?.scheduledFor || null,
       },
       flows,
+      activity: activityItems,
       webhookDiagnosis: {
         endpoint: '/api/webhook/evolution',
         hasSecret: Boolean(process.env.EVOLUTION_WEBHOOK_SECRET || db.whatsapp.webhookSecret),
@@ -390,14 +414,6 @@ export async function GET(req: NextRequest) {
       workerConfigured: true,
       workerReason: undefined,
       settings: db.settings,
-      // Compatibilidade retroativa com a página inicial do Dashboard
-      waHealth: {
-        status: db.whatsapp.status,
-        instanceName: config.instanceName || db.whatsapp.instanceName || 'Radar de Ofertas',
-        phoneNumber: db.whatsapp.phoneNumber || '',
-        batteryLevel: db.whatsapp.batteryLevel ?? 94,
-        profileName: db.whatsapp.profileName || 'Radar de Ofertas Oficial',
-      },
       stats: {
         offersToday: todayRealMessages.length,
         sentToday: todaySentJobs.length,

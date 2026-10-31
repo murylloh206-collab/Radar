@@ -47,6 +47,7 @@ export interface WhatsAppIntegration {
   groupsOwnerJid?: string;
   phoneNumber?: string;
   profileName?: string;
+  profilePicUrl?: string;
   batteryLevel?: number;
   qrCodeBase64?: string;
   webhookSecret?: string;
@@ -56,6 +57,7 @@ export interface WhatsAppIntegration {
   lastVerificationError?: string;
   lastWebhookReceivedAt?: string;
   lastRealWebhookAt?: string;
+  groupsCount?: number;
   lastWorkerCycleAt?: string;
   updatedAt: string;
 }
@@ -157,9 +159,12 @@ export interface WhatsAppConnection {
   webhookUrl?: string;
   webhookSecret?: string;
   lastPingAt?: string;
+  lastVerificationStatus?: 'verified' | 'unreachable' | 'timeout' | 'failed';
+  lastVerificationError?: string;
   lastSyncedAt?: string;
   lastWorkerCycleAt?: string;
   lastRealWebhookAt?: string;
+  groupsCount?: number;
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;

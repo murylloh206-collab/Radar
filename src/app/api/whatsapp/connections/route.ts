@@ -360,7 +360,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         connectionId: conn.id,
         status: 'qrcode',
-        qrCodeBase64,
+        qrCodeBase64: qrBase64,
       });
     }
 

@@ -19,6 +19,7 @@ import {
   SafeStoreCredential,
   UserSettings,
   WhatsAppGroup,
+  WhatsAppConnection,
   WhatsAppIntegration,
 } from '../types';
 import { isSupabaseConfigured, isTestIsolationActive, supabase } from '../supabase';
@@ -26,6 +27,7 @@ import { isSupabaseConfigured, isTestIsolationActive, supabase } from '../supaba
 export interface DatabaseSchema {
   settings: UserSettings;
   whatsapp: WhatsAppIntegration;
+  connections: WhatsAppConnection[];
   stores: StoreCredential[];
   rules: QualityRule[];
   templates: MessageTemplate[];
@@ -440,6 +442,21 @@ export function getInitialDatabase(): DatabaseSchema {
       lastPingAt: undefined,
       updatedAt: new Date().toISOString(),
     },
+    connections: [{
+      id: 'wa_default',
+      userId: DEFAULT_USER_ID,
+      instanceName: process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_GATEWAY_INSTANCE || 'radar_ofertas',
+      baseUrl: process.env.EVOLUTION_BASE_URL || process.env.WHATSAPP_GATEWAY_URL || (isProdBoot ? 'https://radar-whatsapp-gateway.onrender.com' : ''),
+      apiKey: process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || '',
+      webhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '',
+      status: 'disconnected',
+      phoneNumber: '',
+      profileName: '',
+      label: 'WhatsApp Principal',
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }],
     stores: [
       {
         id: '00000000-0000-0000-0000-000000000010',
@@ -673,6 +690,31 @@ export function readDatabase(): DatabaseSchema {
 
     const content = fs.readFileSync(dbFile, 'utf-8');
     const parsed = JSON.parse(content) as DatabaseSchema;
+    if (!Array.isArray(parsed.connections) || parsed.connections.length === 0) {
+      parsed.connections = [{
+        id: parsed.whatsapp?.id || 'conn_default_01',
+        userId: parsed.whatsapp?.userId || DEFAULT_USER_ID,
+        label: 'WhatsApp Principal',
+        instanceName: parsed.whatsapp?.instanceName || 'radar_default',
+        baseUrl: parsed.whatsapp?.baseUrl || '',
+        apiKey: parsed.whatsapp?.apiKey || '',
+        status: parsed.whatsapp?.status || 'disconnected',
+        phoneNumber: parsed.whatsapp?.phoneNumber,
+        ownerJid: parsed.whatsapp?.ownerJid,
+        profileName: parsed.whatsapp?.profileName,
+        profilePicUrl: parsed.whatsapp?.profilePicUrl,
+        batteryLevel: parsed.whatsapp?.batteryLevel,
+        qrCodeBase64: parsed.whatsapp?.qrCodeBase64,
+        webhookUrl: parsed.whatsapp?.webhookUrl,
+        webhookSecret: parsed.whatsapp?.webhookSecret,
+        lastPingAt: parsed.whatsapp?.lastPingAt,
+        lastVerificationStatus: parsed.whatsapp?.lastVerificationStatus,
+        lastVerificationError: parsed.whatsapp?.lastVerificationError,
+        isDefault: true,
+        createdAt: parsed.whatsapp?.updatedAt || new Date().toISOString(),
+        updatedAt: parsed.whatsapp?.updatedAt || new Date().toISOString(),
+      }];
+    }
     return parsed;
   } catch {
     return getInitialDatabase();
@@ -926,6 +968,7 @@ export async function getDatabase(): Promise<DatabaseSchema> {
             updatedAt: waData.updated_at,
           }
         : fallback.whatsapp,
+      connections: fallback.connections || [],
       stores: (storesData && storesData.length > 0)
         ? storesData.map((s) => ({
             id: s.id,
@@ -1396,10 +1439,17 @@ export async function saveIncomingMessageRecord(msg: IncomingMessage): Promise<v
 /**
  * Lista todas as conexões WhatsApp do usuário autenticado
  */
-export function listWhatsAppConnections(userId: string): WhatsAppConnection[] {
+function isSameUser(a?: string, b?: string) {
+  if (!a || !b) return true;
+  if (a === b) return true;
+  const defs = [DEFAULT_USER_ID, 'user_radar_default', 'default_user'];
+  return defs.includes(a) && defs.includes(b);
+}
+
+export function listWhatsAppConnections(userId: string = DEFAULT_USER_ID): WhatsAppConnection[] {
   const db = readDatabase();
   const effectiveUserId = userId || DEFAULT_USER_ID;
-  const list = (db.connections || []).filter(c => c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID);
+  const list = (db.connections || []).filter(c => isSameUser(c.userId, effectiveUserId));
   return list;
 }
 
@@ -1412,12 +1462,12 @@ export function getWhatsAppConnection(connectionId?: string, userId?: string): W
   const list = db.connections || [];
   
   if (connectionId) {
-    const found = list.find(c => c.id === connectionId && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID));
+    const found = list.find(c => c.id === connectionId && (isSameUser(c.userId, effectiveUserId)));
     if (found) return found;
   }
 
   // Fallback para a conexão padrão
-  const def = list.find(c => c.isDefault && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID));
+  const def = list.find(c => c.isDefault && (isSameUser(c.userId, effectiveUserId)));
   if (def) return def;
 
   return list[0] || null;
@@ -1480,7 +1530,7 @@ export async function deleteWhatsAppConnection(connectionId: string, userId: str
   if (!db.connections) return false;
 
   const effectiveUserId = userId || DEFAULT_USER_ID;
-  const idx = db.connections.findIndex(c => c.id === connectionId && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID));
+  const idx = db.connections.findIndex(c => c.id === connectionId && (isSameUser(c.userId, effectiveUserId)));
   if (idx < 0) return false;
 
   const wasDefault = db.connections[idx].isDefault;
@@ -1510,7 +1560,7 @@ export async function setDefaultWhatsAppConnection(connectionId: string, userId:
   let found = false;
 
   db.connections.forEach(c => {
-    if (c.id === connectionId && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID)) {
+    if (c.id === connectionId && (isSameUser(c.userId, effectiveUserId))) {
       c.isDefault = true;
       found = true;
     } else {
