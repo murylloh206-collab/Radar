@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { PublicationJob, WhatsAppGroup } from '@/lib/types';
+import { PublicationJob, WhatsAppGroup, ListCampaign } from '@/lib/types';
 
 function EnviosContent() {
   const router = useRouter();
@@ -29,9 +29,10 @@ function EnviosContent() {
 
   const [jobs, setJobs] = useState<PublicationJob[]>([]);
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
+  const [campaigns, setCampaigns] = useState<ListCampaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<'all' | 'sent' | 'failed'>('all');
-  const [campaignActive, setCampaignActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Modais
@@ -41,32 +42,62 @@ function EnviosContent() {
   // Campos do agendamento
   const [scheduleDest, setScheduleDest] = useState('');
   const [scheduleDateTime, setScheduleDateTime] = useState('');
+  const [scheduleText, setScheduleText] = useState('');
+  const [scheduling, setScheduling] = useState(false);
 
   // Campos da campanha
-  const [campaignName, setCampaignName] = useState('Casa & Conforto');
+  const [campaignName, setCampaignName] = useState('Campanha de Ofertas');
   const [campaignDest, setCampaignDest] = useState('');
   const [campaignInterval, setCampaignInterval] = useState('30');
+  const [savingCampaign, setSavingCampaign] = useState(false);
+
+  // Carregar dados de rascunho transportados de "Criar conteúdo" se existirem
+  useEffect(() => {
+    try {
+      const draft = sessionStorage.getItem('radar_transport_draft');
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed.text) setScheduleText(parsed.text);
+        if (parsed.targetJid) setScheduleDest(parsed.targetJid);
+        // Limpar após leitura para não reusar indevidamente
+        sessionStorage.removeItem('radar_transport_draft');
+      }
+    } catch {}
+  }, []);
 
   const loadData = async () => {
+    setLoading(true);
+    setApiError(null);
     try {
-      const [resJobs, resGroups] = await Promise.all([
+      const [resJobs, resGroups, resAuto] = await Promise.all([
         fetch('/api/copier/jobs'),
         fetch('/api/whatsapp/groups'),
+        fetch('/api/automation'),
       ]);
+
       const dataJobs = await resJobs.json().catch(() => ({}));
       const dataGroups = await resGroups.json().catch(() => ({}));
+      const dataAuto = await resAuto.json().catch(() => ({}));
 
-      if (dataJobs.ok && Array.isArray(dataJobs.jobs)) {
+      if (!resJobs.ok || !dataJobs.ok) {
+        setApiError(dataJobs.error || 'Falha ao consultar publicações no servidor.');
+      } else if (Array.isArray(dataJobs.jobs)) {
         setJobs(dataJobs.jobs);
       }
+
       if (dataGroups.ok && Array.isArray(dataGroups.groups)) {
         setGroups(dataGroups.groups);
         if (dataGroups.groups.length > 0) {
-          setScheduleDest(dataGroups.groups[0].groupJid);
-          setCampaignDest(dataGroups.groups[0].groupJid);
+          if (!scheduleDest) setScheduleDest(dataGroups.groups[0].groupJid);
+          if (!campaignDest) setCampaignDest(dataGroups.groups[0].groupJid);
         }
       }
-    } catch {
+
+      if (dataAuto.ok && Array.isArray(dataAuto.listCampaigns)) {
+        setCampaigns(dataAuto.listCampaigns);
+      }
+    } catch (e: any) {
+      setApiError('Erro de conexão ao carregar dados de envios: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -100,6 +131,7 @@ function EnviosContent() {
     });
   }, [jobs, historyFilter]);
 
+  // Aprovar publicação
   const handleApprove = async (jobId: string) => {
     try {
       const res = await fetch('/api/copier/jobs', {
@@ -109,16 +141,17 @@ function EnviosContent() {
       });
       const data = await res.json();
       if (data.ok) {
-        setNotice('Oferta aprovada com sucesso!');
+        setNotice('Oferta aprovada com sucesso! Enviada para a fila de disparo.');
         await loadData();
       } else {
-        setNotice(data.error || 'Falha ao aprovar oferta.');
+        setNotice(data.error || 'Falha ao aprovar oferta no servidor.');
       }
     } catch {
-      setNotice('Erro ao conectar com o servidor.');
+      setNotice('Erro de conexão ao aprovar publicação.');
     }
   };
 
+  // Cancelar publicação agendada
   const handleCancelJob = async (jobId: string) => {
     try {
       const res = await fetch('/api/copier/jobs', {
@@ -128,24 +161,136 @@ function EnviosContent() {
       });
       const data = await res.json();
       if (data.ok) {
-        setNotice('Publicação cancelada.');
+        setNotice('Publicação cancelada com sucesso.');
         await loadData();
       } else {
-        setNotice(data.error || 'Falha ao cancelar.');
+        setNotice(data.error || 'Falha ao cancelar publicação.');
       }
     } catch {
       setNotice('Erro ao conectar com o servidor.');
     }
   };
 
+  // Confirmação Real de Agendamento
   const handleConfirmSchedule = async () => {
-    setShowScheduleDialog(false);
-    setNotice('Agendamento confirmado para os destinos selecionados!');
+    if (!scheduleDest) {
+      setNotice('Selecione o grupo de destino para o agendamento.');
+      return;
+    }
+    if (!scheduleDateTime) {
+      setNotice('Informe a data e o horário desejados para o envio.');
+      return;
+    }
+
+    setScheduling(true);
+    setNotice(null);
+
+    const targetGroup = groups.find((g) => g.groupJid === scheduleDest);
+    const finalMessage = scheduleText.trim() || 'Oferta agendada';
+
+    try {
+      const res = await fetch('/api/copier/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          jobData: {
+            originType: 'manual',
+            targetJid: scheduleDest,
+            targetName: targetGroup?.name || scheduleDest,
+            messageText: finalMessage,
+            scheduledFor: new Date(scheduleDateTime).toISOString(),
+            status: 'agendado',
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        setShowScheduleDialog(false);
+        setScheduleText('');
+        setNotice('Publicação agendada e persistida no servidor com sucesso!');
+        await loadData();
+      } else {
+        setNotice(data.error || 'Falha ao agendar publicação no servidor.');
+      }
+    } catch {
+      setNotice('Erro de rede ao confirmar agendamento.');
+    } finally {
+      setScheduling(false);
+    }
   };
 
+  // Confirmação Real de Criação/Edição de Campanha
   const handleConfirmCampaign = async () => {
-    setShowCampaignDialog(false);
-    setNotice('Campanha salva com sucesso!');
+    if (!campaignName.trim()) {
+      setNotice('Informe um nome para a campanha.');
+      return;
+    }
+    if (!campaignDest) {
+      setNotice('Selecione o grupo de destino da campanha.');
+      return;
+    }
+
+    setSavingCampaign(true);
+    setNotice(null);
+
+    try {
+      const res = await fetch('/api/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_list',
+          listData: {
+            name: campaignName.trim(),
+            targetJids: [campaignDest],
+            intervalMinutes: parseInt(campaignInterval, 10) || 30,
+            status: 'ativa',
+            items: [],
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        setShowCampaignDialog(false);
+        setNotice('Campanha salva e confirmada no servidor!');
+        await loadData();
+      } else {
+        setNotice(data.error || 'Falha ao salvar campanha.');
+      }
+    } catch {
+      setNotice('Erro de conexão ao salvar campanha.');
+    } finally {
+      setSavingCampaign(false);
+    }
+  };
+
+  // Alternar estado da campanha (Ativar / Pausar)
+  const handleToggleCampaign = async (campaign: ListCampaign) => {
+    const nextStatus = campaign.status === 'ativa' ? 'pausada' : 'ativa';
+    try {
+      const res = await fetch('/api/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_list',
+          listData: {
+            ...campaign,
+            status: nextStatus,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setNotice(`Campanha ${nextStatus === 'ativa' ? 'ativada' : 'pausada'} com sucesso!`);
+        await loadData();
+      } else {
+        setNotice(data.error || 'Não foi possível alterar o estado da campanha.');
+      }
+    } catch {
+      setNotice('Erro ao atualizar status da campanha.');
+    }
   };
 
   return (
@@ -162,6 +307,12 @@ function EnviosContent() {
         </Link>
       </div>
 
+      {apiError && (
+        <div className="rp-panel rp-section rp-warn" style={{ borderColor: '#e05353' }}>
+          <p>{apiError}</p>
+        </div>
+      )}
+
       {notice && (
         <div className="rp-panel rp-section" style={{ borderColor: '#39bee6' }}>
           <p>{notice}</p>
@@ -177,7 +328,7 @@ function EnviosContent() {
             aria-selected={activeTab === 'revisao'}
             onClick={() => handleSelectTab('revisao')}
           >
-            Revisão {pendingJobs.length > 0 ? `· ${pendingJobs.length}` : '· 2'}
+            Revisão {pendingJobs.length > 0 ? `· ${pendingJobs.length}` : '· 0'}
           </button>
           <button
             role="tab"
@@ -185,7 +336,7 @@ function EnviosContent() {
             aria-selected={activeTab === 'agenda'}
             onClick={() => handleSelectTab('agenda')}
           >
-            Agenda
+            Agenda {scheduledJobs.length > 0 ? `· ${scheduledJobs.length}` : ''}
           </button>
           <button
             role="tab"
@@ -193,7 +344,7 @@ function EnviosContent() {
             aria-selected={activeTab === 'campanhas'}
             onClick={() => handleSelectTab('campanhas')}
           >
-            Campanhas
+            Campanhas {campaigns.length > 0 ? `· ${campaigns.length}` : ''}
           </button>
           <button
             role="tab"
@@ -215,55 +366,34 @@ function EnviosContent() {
               </div>
 
               <div className="rp-list">
-                {pendingJobs.length === 0 ? (
-                  /* Exibição padrão aprovada nas telas de referência */
-                  <>
-                    <div className="rp-list-item">
-                      <div className="rp-product-photo rp-p1" role="img" aria-label="Fone" />
-                      <div className="rp-list-copy">
-                        <strong>Fone sem fio</strong>
-                        <p>R$ 149,90 · Shopee · Meu grupo</p>
-                        <p>Texto e imagem prontos para revisão.</p>
-                      </div>
-                      <div className="rp-actions">
-                        <Link href="/criar-conteudo" className="rp-btn">
-                          Editar
-                        </Link>
-                        <button
-                          className="rp-btn rp-primary"
-                          type="button"
-                          onClick={() => setNotice('Oferta Fone sem fio aprovada para envio!')}
-                        >
-                          Aprovar
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="rp-list-item">
-                      <div className="rp-product-photo rp-p2" role="img" aria-label="Almofada" />
-                      <div className="rp-list-copy">
-                        <strong>Almofada de linho</strong>
-                        <p>R$ 69,90 · Amazon · VIP Casa</p>
-                        <span className="rp-tag rp-warn">Link ainda não confirmado</span>
-                      </div>
-                      <Link href="/conexoes?aba=lojas" className="rp-btn">
-                        Resolver link
-                      </Link>
-                    </div>
-                  </>
+                {loading ? (
+                  <p className="rp-sub" style={{ padding: '24px 0', textAlign: 'center' }}>
+                    Consultando fila de revisão no servidor...
+                  </p>
+                ) : pendingJobs.length === 0 ? (
+                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                    <p className="rp-sub">Nenhuma oferta aguardando revisão manual no momento.</p>
+                    <Link
+                      href="/criar-conteudo"
+                      className="rp-btn rp-primary"
+                      style={{ display: 'inline-block', marginTop: 12 }}
+                    >
+                      Criar nova publicação
+                    </Link>
+                  </div>
                 ) : (
                   pendingJobs.map((j) => (
                     <div key={j.id} className="rp-list-item">
                       <div className="rp-product-photo rp-p1" role="img" aria-label={j.targetName} />
                       <div className="rp-list-copy">
                         <strong>{j.targetName || 'Oferta em revisão'}</strong>
-                        <p>{j.messageText.slice(0, 70)}...</p>
-                        <span className="rp-tag">
-                          {j.affiliateUrl ? 'Link pronto' : 'Aguardando validação'}
+                        <p>{j.messageText.slice(0, 80)}...</p>
+                        <span className={`rp-tag ${j.affiliateUrl ? 'rp-good' : 'rp-warn'}`}>
+                          {j.affiliateUrl ? 'Link gerado' : 'Link ausente ou pendente'}
                         </span>
                       </div>
                       <div className="rp-actions">
-                        <Link href="/criar-conteudo" className="rp-btn">
+                        <Link href={`/criar-conteudo?aba=oferta-link`} className="rp-btn">
                           Editar
                         </Link>
                         <button
@@ -293,7 +423,7 @@ function EnviosContent() {
               <div className="rp-row">
                 <div>
                   <h2>Próximas publicações</h2>
-                  <p className="rp-sub">Horário de Brasília · publicações programadas</p>
+                  <p className="rp-sub">Horário de Brasília · publicações confirmadas no servidor</p>
                 </div>
                 <button
                   className="rp-btn"
@@ -305,44 +435,30 @@ function EnviosContent() {
               </div>
 
               <div className="rp-list">
-                {scheduledJobs.length === 0 ? (
-                  <>
-                    <div className="rp-list-item">
-                      <span className="rp-tag">Hoje · 14:00</span>
-                      <div className="rp-list-copy">
-                        <strong>Fone sem fio</strong>
-                        <p>Meu grupo · Oferta avulsa</p>
-                      </div>
-                      <button
-                        className="rp-btn rp-quiet"
-                        type="button"
-                        onClick={() => setShowScheduleDialog(true)}
-                      >
-                        Editar
-                      </button>
-                    </div>
-
-                    <div className="rp-list-item">
-                      <span className="rp-tag">Hoje · 16:30</span>
-                      <div className="rp-list-copy">
-                        <strong>Luminária de mesa</strong>
-                        <p>VIP Casa · Campanha Casa & Conforto</p>
-                      </div>
-                      <button
-                        className="rp-btn rp-quiet"
-                        type="button"
-                        onClick={() => setNotice('Agendamento cancelado.')}
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </>
+                {loading ? (
+                  <p className="rp-sub" style={{ padding: '24px 0', textAlign: 'center' }}>
+                    Consultando agendamentos...
+                  </p>
+                ) : scheduledJobs.length === 0 ? (
+                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                    <p className="rp-sub">Nenhuma publicação agendada no momento.</p>
+                    <button
+                      className="rp-btn rp-primary"
+                      type="button"
+                      style={{ marginTop: 12 }}
+                      onClick={() => setShowScheduleDialog(true)}
+                    >
+                      Agendar agora
+                    </button>
+                  </div>
                 ) : (
                   scheduledJobs.map((j) => (
                     <div key={j.id} className="rp-list-item">
                       <span className="rp-tag">
                         {j.scheduledFor
-                          ? new Date(j.scheduledFor).toLocaleTimeString('pt-BR', {
+                          ? new Date(j.scheduledFor).toLocaleString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
                               hour: '2-digit',
                               minute: '2-digit',
                             })
@@ -350,7 +466,7 @@ function EnviosContent() {
                       </span>
                       <div className="rp-list-copy">
                         <strong>{j.targetName || 'Oferta'}</strong>
-                        <p>{j.messageText.slice(0, 60)}...</p>
+                        <p>{j.messageText.slice(0, 70)}...</p>
                       </div>
                       <button
                         className="rp-btn rp-quiet"
@@ -382,36 +498,66 @@ function EnviosContent() {
                 </button>
               </div>
 
-              <div className="rp-list-item">
-                <div className="rp-list-copy">
-                  <strong>Casa & Conforto</strong>
-                  <p>3 ofertas · 30 min de intervalo · VIP Casa</p>
+              {loading ? (
+                <p className="rp-sub" style={{ padding: '24px 0', textAlign: 'center' }}>
+                  Carregando campanhas...
+                </p>
+              ) : campaigns.length === 0 ? (
+                <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                  <p className="rp-sub">Nenhuma campanha em lote cadastrada ainda.</p>
+                  <button
+                    className="rp-btn rp-primary"
+                    type="button"
+                    style={{ marginTop: 12 }}
+                    onClick={() => setShowCampaignDialog(true)}
+                  >
+                    Criar primeira campanha
+                  </button>
                 </div>
-                <span
-                  className={`rp-tag ${campaignActive ? 'rp-good' : 'rp-warn'}`}
-                  id="rp-campaign-state"
-                >
-                  {campaignActive ? 'Ativa' : 'Pausada'}
-                </span>
-              </div>
+              ) : (
+                campaigns.map((c) => {
+                  const isActive = c.status === 'ativa';
+                  return (
+                    <div key={c.id} className="rp-section" style={{ borderBottom: '1px solid #363c41', paddingBottom: 16 }}>
+                      <div className="rp-list-item" style={{ padding: '12px 0' }}>
+                        <div className="rp-list-copy">
+                          <strong>{c.name}</strong>
+                          <p>
+                            Intervalo: {c.intervalMinutes} min · Itens: {c.totalItems || 0}
+                          </p>
+                        </div>
+                        <span
+                          className={`rp-tag ${isActive ? 'rp-good' : 'rp-warn'}`}
+                        >
+                          {isActive ? 'Ativa' : 'Pausada'}
+                        </span>
+                      </div>
 
-              <div className="rp-actions rp-section">
-                <button
-                  className="rp-btn"
-                  type="button"
-                  onClick={() => setShowCampaignDialog(true)}
-                >
-                  Editar campanha
-                </button>
-                <button
-                  className="rp-btn"
-                  id="rp-toggle-campaign"
-                  type="button"
-                  onClick={() => setCampaignActive(!campaignActive)}
-                >
-                  {campaignActive ? 'Pausar campanha' : 'Ativar campanha'}
-                </button>
-              </div>
+                      <div className="rp-actions">
+                        <button
+                          className="rp-btn"
+                          type="button"
+                          onClick={() => {
+                            setCampaignName(c.name);
+                            if (c.targetJids?.[0]) setCampaignDest(c.targetJids[0]);
+                            setCampaignInterval(String(c.intervalMinutes || 30));
+                            setShowCampaignDialog(true);
+                          }}
+                        >
+                          Editar campanha
+                        </button>
+                        <button
+                          className={`rp-btn ${isActive ? '' : 'rp-primary'}`}
+                          type="button"
+                          onClick={() => handleToggleCampaign(c)}
+                        >
+                          {isActive ? 'Pausar campanha' : 'Ativar campanha'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
@@ -439,31 +585,14 @@ function EnviosContent() {
               </div>
 
               <div className="rp-list">
-                {historyJobs.length === 0 ? (
-                  <>
-                    {(historyFilter === 'all' || historyFilter === 'sent') && (
-                      <div className="rp-list-item" data-history-state="sent">
-                        <div className="rp-list-copy">
-                          <strong>Oferta de fone</strong>
-                          <p>Meu grupo · Hoje, 10:30</p>
-                        </div>
-                        <span className="rp-tag rp-good">Enviado</span>
-                      </div>
-                    )}
-
-                    {(historyFilter === 'all' || historyFilter === 'failed') && (
-                      <div className="rp-list-item" data-history-state="failed">
-                        <div className="rp-list-copy">
-                          <strong>Oferta de luminária</strong>
-                          <p>VIP Casa · Hoje, 09:45 · Conexão indisponível</p>
-                        </div>
-                        <span className="rp-tag rp-warn">Não enviado</span>
-                        <Link href="/conexoes" className="rp-btn">
-                          Ver conexão
-                        </Link>
-                      </div>
-                    )}
-                  </>
+                {loading ? (
+                  <p className="rp-sub" style={{ padding: '24px 0', textAlign: 'center' }}>
+                    Consultando histórico...
+                  </p>
+                ) : historyJobs.length === 0 ? (
+                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                    <p className="rp-sub">Nenhum envio registrado no histórico com o filtro selecionado.</p>
+                  </div>
                 ) : (
                   historyJobs.map((j) => (
                     <div key={j.id} className="rp-list-item">
@@ -473,7 +602,7 @@ function EnviosContent() {
                           {j.sentAt
                             ? new Date(j.sentAt).toLocaleString('pt-BR')
                             : 'Registrado'}{' '}
-                          {j.errorDetails ? `· ${j.errorDetails}` : ''}
+                          {j.errorDetails ? `· Motivo: ${j.errorDetails}` : ''}
                         </p>
                       </div>
                       {j.status === 'enviado' ? (
@@ -524,8 +653,22 @@ function EnviosContent() {
                   {g.name}
                 </option>
               ))}
-              {groups.length === 0 && <option value="">Meu grupo • Exemplo</option>}
+              {groups.length === 0 && (
+                <option value="" disabled>
+                  Nenhum grupo sincronizado
+                </option>
+              )}
             </select>
+          </label>
+
+          <label className="rp-field">
+            Mensagem
+            <textarea
+              rows={3}
+              value={scheduleText}
+              placeholder="Digite ou revise o texto da mensagem a enviar..."
+              onChange={(e) => setScheduleText(e.target.value)}
+            />
           </label>
 
           <label className="rp-field">
@@ -545,9 +688,10 @@ function EnviosContent() {
             <button
               className="rp-btn rp-primary"
               type="button"
+              disabled={scheduling}
               onClick={handleConfirmSchedule}
             >
-              Confirmar agendamento
+              {scheduling ? 'Salvando no servidor...' : 'Confirmar agendamento'}
             </button>
           </div>
         </dialog>
@@ -572,9 +716,10 @@ function EnviosContent() {
           </div>
 
           <label className="rp-field">
-            Nome
+            Nome da campanha
             <input
               value={campaignName}
+              placeholder="Ex: Achadinhos de Casa & Decoração"
               onChange={(e) => setCampaignName(e.target.value)}
             />
           </label>
@@ -590,7 +735,11 @@ function EnviosContent() {
                   {g.name}
                 </option>
               ))}
-              {groups.length === 0 && <option value="">VIP Casa • Exemplo</option>}
+              {groups.length === 0 && (
+                <option value="" disabled>
+                  Nenhum grupo sincronizado
+                </option>
+              )}
             </select>
           </label>
 
@@ -604,25 +753,14 @@ function EnviosContent() {
             />
           </label>
 
-          <div className="rp-section">
-            <label className="rp-check">
-              <input type="checkbox" defaultChecked /> Fone sem fio
-            </label>
-            <label className="rp-check">
-              <input type="checkbox" defaultChecked /> Almofada de linho
-            </label>
-            <label className="rp-check">
-              <input type="checkbox" defaultChecked /> Luminária de mesa
-            </label>
-          </div>
-
           <div className="rp-footer">
             <button
               className="rp-btn rp-primary"
               type="button"
+              disabled={savingCampaign}
               onClick={handleConfirmCampaign}
             >
-              Salvar campanha
+              {savingCampaign ? 'Salvando no servidor...' : 'Salvar campanha'}
             </button>
           </div>
         </dialog>

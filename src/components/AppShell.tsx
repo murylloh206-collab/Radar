@@ -21,6 +21,7 @@ import {
   Sliders,
   Check,
 } from 'lucide-react';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -375,27 +376,27 @@ export function AppShell({ children }: AppShellProps) {
           </p>
           <div className="rdv3-store-options">
             <a href="https://shopee.com.br" target="_blank" rel="noopener noreferrer">
-              <span className="rdv3-store-mark rdv3-shopee" style={{ width: 28, height: 28, fontSize: 13 }}>S</span>
+              <BrandLogo brand="shopee" size={20} containerSize={28} withBackground />
               Shopee
               <span>↗</span>
             </a>
             <a href="https://www.netshoes.com.br" target="_blank" rel="noopener noreferrer">
-              <span className="rdv3-store-mark rdv3-netshoes" style={{ width: 28, height: 28, fontSize: 11 }}>N</span>
+              <BrandLogo brand="netshoes" size={20} containerSize={28} withBackground />
               Netshoes
               <span>↗</span>
             </a>
             <a href="https://www.amazon.com.br" target="_blank" rel="noopener noreferrer">
-              <span className="rdv3-store-mark rdv3-amazon" style={{ width: 28, height: 28, fontSize: 13 }}>a</span>
+              <BrandLogo brand="amazon" size={20} containerSize={28} withBackground />
               Amazon
               <span>↗</span>
             </a>
             <a href="https://www.mercadolivre.com.br" target="_blank" rel="noopener noreferrer">
-              <span className="rdv3-store-mark" style={{ width: 28, height: 28, fontSize: 11, background: '#ffe600', color: '#2d3277' }}>ML</span>
+              <BrandLogo brand="mercadolivre" size={20} containerSize={28} withBackground />
               Mercado Livre
               <span>↗</span>
             </a>
             <a href="https://www.magazineluiza.com.br" target="_blank" rel="noopener noreferrer">
-              <span className="rdv3-store-mark" style={{ width: 28, height: 28, fontSize: 11, background: '#0086ff', color: '#fff' }}>MG</span>
+              <BrandLogo brand="magalu" size={20} containerSize={28} withBackground />
               Magalu
               <span>↗</span>
             </a>

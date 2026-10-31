@@ -27,11 +27,6 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       {
-        source: '/automacao',
-        destination: '/ofertas?aba=busca-automatica',
-        permanent: false,
-      },
-      {
         source: '/agenda',
         destination: '/envios?aba=agenda',
         permanent: false,
@@ -58,11 +53,6 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/conectar-lojas',
-        destination: '/conexoes?aba=lojas',
-        permanent: false,
-      },
-      {
-        source: '/ajustes',
         destination: '/conexoes?aba=lojas',
         permanent: false,
       },

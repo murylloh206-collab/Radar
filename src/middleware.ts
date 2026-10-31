@@ -18,19 +18,53 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 1.1 Redirecionamento de compatibilidade com rotas legadas (preservando parâmetros)
+  // 1.1 Redirecionamento de compatibilidade com rotas legadas inteligente
+  if (pathname === '/automacao') {
+    const tab = (req.nextUrl.searchParams.get('tab') || req.nextUrl.searchParams.get('aba') || '').toLowerCase();
+    let dest = '/ofertas?aba=busca-automatica';
+    if (tab.includes('curador') || tab.includes('curadoria')) {
+      dest = '/ofertas?aba=curadoria';
+    } else if (tab.includes('lista') || tab.includes('lote') || tab.includes('campanha')) {
+      dest = '/envios?aba=campanhas';
+    } else if (tab.includes('garimpo') || tab.includes('busca')) {
+      dest = '/ofertas?aba=busca-automatica';
+    }
+    const targetUrl = new URL(dest, req.url);
+    req.nextUrl.searchParams.forEach((val, key) => {
+      if (key !== 'tab' && key !== 'aba') targetUrl.searchParams.set(key, val);
+    });
+    return NextResponse.redirect(targetUrl);
+  }
+
+  if (pathname === '/ajustes') {
+    const secao = (req.nextUrl.searchParams.get('secao') || req.nextUrl.searchParams.get('tab') || req.nextUrl.searchParams.get('aba') || '').toLowerCase();
+    let dest = '/conexoes?aba=lojas';
+    if (secao.includes('whatsapp') || secao.includes('conexao')) {
+      dest = '/conexoes?aba=whatsapp';
+    } else if (secao.includes('curador') || secao.includes('qualidade') || secao.includes('filtro')) {
+      dest = '/ofertas?aba=curadoria';
+    } else if (secao.includes('template')) {
+      dest = '/criar-conteudo?aba=templates';
+    } else if (secao.includes('loja')) {
+      dest = '/conexoes?aba=lojas';
+    }
+    const targetUrl = new URL(dest, req.url);
+    req.nextUrl.searchParams.forEach((val, key) => {
+      if (key !== 'secao' && key !== 'tab' && key !== 'aba') targetUrl.searchParams.set(key, val);
+    });
+    return NextResponse.redirect(targetUrl);
+  }
+
   const LEGACY_ROUTES: Record<string, string> = {
     '/gerar-postagem': '/criar-conteudo?aba=oferta-link',
     '/mensagem-avulsa': '/criar-conteudo?aba=mensagem-livre',
     '/stories': '/criar-conteudo?aba=story',
-    '/automacao': '/ofertas?aba=busca-automatica',
     '/agenda': '/envios?aba=agenda',
     '/analytics': '/resultados?aba=grupos',
     '/relatorios': '/resultados?aba=vendas',
     '/bio-link': '/pagina-publica',
     '/conexao-whatsapp': '/conexoes?aba=whatsapp',
     '/conectar-lojas': '/conexoes?aba=lojas',
-    '/ajustes': '/conexoes?aba=lojas',
   };
 
   if (LEGACY_ROUTES[pathname]) {

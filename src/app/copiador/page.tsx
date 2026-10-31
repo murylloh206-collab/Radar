@@ -9,6 +9,7 @@ import {
   PublicationJob,
   WhatsAppGroup,
 } from '@/lib/types';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface CopierStatusData {
   connection: {
@@ -233,16 +234,29 @@ export default function CopierPage() {
         </button>
       </div>
 
-      {/* Banner de status do WhatsApp */}
-      <div className="rp-banner">
-        <span>
-          {isConnected ? (
-            <span style={{ color: '#56c288' }}>● </span>
-          ) : (
-            <span style={{ color: '#d97736' }}>○ </span>
-          )}
-          WhatsApp {isConnected ? 'conectado' : 'desconectado'} · {instanceProfile}
-        </span>
+      {/* Banner de status unificado do WhatsApp */}
+      <div className="rp-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Suporte de 44-48px com ícone oficial de 28-32px conforme especificado */}
+          <BrandLogo brand="whatsapp" size={32} containerSize={46} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <strong>WhatsApp {isConnected ? 'Conectado' : 'Desconectado'}</strong>
+              <span className={`rp-tag ${isConnected ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10, padding: '2px 7px' }}>
+                {isConnected ? 'Sessão Ativa' : 'Sem Conexão'}
+              </span>
+              <span className={`rp-tag ${isActiveRule ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10, padding: '2px 7px' }}>
+                {isActiveRule ? 'Regra Ativa' : 'Regra Pausada'}
+              </span>
+            </div>
+            <p className="rp-sub" style={{ margin: 0, marginTop: 2, fontSize: 11 }}>
+              Instância: <strong>{instanceProfile}</strong> ·{' '}
+              {copierStatus?.receiving?.todayCount !== undefined
+                ? `${copierStatus.receiving.todayCount} ofertas recebidas hoje`
+                : 'Aguardando novas ofertas do webhook'}
+            </p>
+          </div>
+        </div>
         <Link href="/conexoes?aba=whatsapp" className="rp-btn rp-quiet">
           Gerenciar conexão ↗
         </Link>

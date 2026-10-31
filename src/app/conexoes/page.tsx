@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { WhatsAppGroup } from '@/lib/types';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface WhatsAppStatusData {
   status: 'connected' | 'connecting' | 'disconnected';
@@ -174,12 +175,12 @@ function ConexoesContent() {
             <div className="rp-panel">
               <div className="rp-row">
                 <div className="rp-inline">
-                  <span className="rp-logo-letter">WA</span>
+                  <BrandLogo brand="whatsapp" size={30} containerSize={46} />
                   <div>
                     <h2>{waData?.profileName || 'Radar de Ofertas'}</h2>
                     <p className="rp-sub">
                       {isConnected
-                        ? `Conta conectada · ${waData?.phoneNumber || 'número protegido'}`
+                        ? `Conta conectada · ${waData?.phoneNumber || 'WhatsApp verificado'}`
                         : 'Conta desconectada · Configure para iniciar as publicações'}
                     </p>
                   </div>
@@ -238,40 +239,15 @@ function ConexoesContent() {
 
               <div className="rp-list">
                 {groups.length === 0 ? (
-                  <>
-                    <div className="rp-list-item">
-                      <div className="rp-list-copy">
-                        <strong>Achadinhos • Exemplo</strong>
-                        <p>Pode receber mensagens</p>
-                      </div>
-                      <span className="rp-tag">Leitura</span>
-                      <Link href="/copiador" className="rp-btn">
-                        Usar no Copiador
-                      </Link>
-                    </div>
-
-                    <div className="rp-list-item">
-                      <div className="rp-list-copy">
-                        <strong>Meu grupo • Exemplo</strong>
-                        <p>Pode enviar mensagens</p>
-                      </div>
-                      <span className="rp-tag rp-good">Publicação</span>
-                      <Link href="/copiador" className="rp-btn">
-                        Usar no Copiador
-                      </Link>
-                    </div>
-
-                    <div className="rp-list-item">
-                      <div className="rp-list-copy">
-                        <strong>VIP Casa • Exemplo</strong>
-                        <p>Pode enviar mensagens</p>
-                      </div>
-                      <span className="rp-tag rp-good">Publicação</span>
-                      <Link href="/copiador" className="rp-btn">
-                        Usar no Copiador
-                      </Link>
-                    </div>
-                  </>
+                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '24px 16px' }}>
+                    <p className="rp-sub">
+                      Nenhum grupo sincronizado no momento. Clique em &quot;Atualizar grupos&quot; para carregar os grupos da sua conta do WhatsApp.
+                    </p>
+                  </div>
+                ) : filteredGroups.length === 0 ? (
+                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '20px 16px' }}>
+                    <p className="rp-sub">Nenhum grupo encontrado para &quot;{groupSearch}&quot;.</p>
+                  </div>
                 ) : (
                   filteredGroups.map((g) => (
                     <div key={g.groupJid} className="rp-list-item">
@@ -320,7 +296,7 @@ function ConexoesContent() {
               <div className="rp-panel rp-store">
                 <div className="rp-row">
                   <div className="rp-inline">
-                    <span className="rp-logo-letter">ML</span>
+                    <BrandLogo brand="mercadolivre" size={28} containerSize={44} withBackground />
                     <h2>Mercado Livre</h2>
                   </div>
                   <span className="rp-tag">Configurar</span>
@@ -338,7 +314,7 @@ function ConexoesContent() {
               <div className="rp-panel rp-store">
                 <div className="rp-row">
                   <div className="rp-inline">
-                    <span className="rp-logo-letter">SH</span>
+                    <BrandLogo brand="shopee" size={28} containerSize={44} withBackground />
                     <h2>Shopee</h2>
                   </div>
                   <span className="rp-tag">Configurar</span>
@@ -354,9 +330,12 @@ function ConexoesContent() {
               </div>
 
               <div className="rp-panel rp-store">
-                <div className="rp-inline">
-                  <span className="rp-logo-letter">NS</span>
-                  <h2>Netshoes</h2>
+                <div className="rp-row">
+                  <div className="rp-inline">
+                    <BrandLogo brand="netshoes" size={28} containerSize={44} withBackground />
+                    <h2>Netshoes</h2>
+                  </div>
+                  <span className="rp-tag">Configurar</span>
                 </div>
                 <p className="rp-sub">Programa de afiliados através da Rakuten.</p>
                 <button
@@ -369,9 +348,12 @@ function ConexoesContent() {
               </div>
 
               <div className="rp-panel rp-store">
-                <div className="rp-inline">
-                  <span className="rp-logo-letter">AM</span>
-                  <h2>Amazon</h2>
+                <div className="rp-row">
+                  <div className="rp-inline">
+                    <BrandLogo brand="amazon" size={28} containerSize={44} withBackground />
+                    <h2>Amazon</h2>
+                  </div>
+                  <span className="rp-tag">Configurar</span>
                 </div>
                 <p className="rp-sub">Configure a identificação da sua conta de associado.</p>
                 <button
@@ -384,9 +366,12 @@ function ConexoesContent() {
               </div>
 
               <div className="rp-panel rp-store">
-                <div className="rp-inline">
-                  <span className="rp-logo-letter">MG</span>
-                  <h2>Magalu</h2>
+                <div className="rp-row">
+                  <div className="rp-inline">
+                    <BrandLogo brand="magalu" size={28} containerSize={44} withBackground />
+                    <h2>Magalu</h2>
+                  </div>
+                  <span className="rp-tag">Configurar</span>
                 </div>
                 <p className="rp-sub">Acompanhe a configuração da sua conta de parceiro.</p>
                 <button

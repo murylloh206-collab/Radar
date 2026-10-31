@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function PaginaPublicaPage() {
   const [bioTitle, setBioTitle] = useState('Radar de Ofertas');
@@ -11,10 +11,59 @@ export default function PaginaPublicaPage() {
   const [btn1Text, setBtn1Text] = useState('Entrar no grupo de ofertas');
   const [btn1Url, setBtn1Url] = useState('https://chat.whatsapp.com/exemplo');
   const [btn2Text, setBtn2Text] = useState('Conhecer as lojas');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const handleSave = () => {
-    setNotice('Página pública atualizada e publicada com sucesso!');
+  // Carregar dados reais salvos no servidor
+  useEffect(() => {
+    fetch('/api/public-page')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.ok && res.data) {
+          if (res.data.title) setBioTitle(res.data.title);
+          if (res.data.bio) setBioText(res.data.bio);
+          if (res.data.slug) setSlug(res.data.slug);
+          if (res.data.btn1Text) setBtn1Text(res.data.btn1Text);
+          if (res.data.btn1Url) setBtn1Url(res.data.btn1Url);
+          if (res.data.btn2Text) setBtn2Text(res.data.btn2Text);
+        }
+      })
+      .catch(() => {
+        setNotice('Não foi possível carregar a configuração da página pública.');
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setNotice(null);
+
+    try {
+      const res = await fetch('/api/public-page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: bioTitle,
+          bio: bioText,
+          slug,
+          btn1Text,
+          btn1Url,
+          btn2Text,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        setNotice('Página pública atualizada e salva com sucesso no servidor!');
+      } else {
+        setNotice(data.error || 'Falha ao salvar a página pública.');
+      }
+    } catch {
+      setNotice('Erro de rede ao salvar página pública.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -29,9 +78,10 @@ export default function PaginaPublicaPage() {
         <button
           className="rp-btn rp-primary"
           type="button"
+          disabled={saving || loading}
           onClick={handleSave}
         >
-          Salvar página
+          {saving ? 'Salvando...' : 'Salvar página'}
         </button>
       </div>
 
@@ -78,7 +128,7 @@ export default function PaginaPublicaPage() {
             </label>
 
             <p className="rp-sub">
-              A disponibilidade do endereço será verificada ao publicar.
+              Acesse sua página pública em: <strong>/u/{slug || 'sua-pagina'}</strong>
             </p>
           </div>
 
@@ -90,7 +140,7 @@ export default function PaginaPublicaPage() {
                 className="rp-btn"
                 id="rp-add-bio-link"
                 type="button"
-                onClick={() => setNotice('Novo botão adicionado ao perfil.')}
+                onClick={() => setNotice('Campos de botão prontos para edição.')}
               >
                 Adicionar
               </button>
@@ -134,7 +184,11 @@ export default function PaginaPublicaPage() {
           </div>
 
           <div className="rp-public-preview rp-section">
-            <span className="rdv3-brand-mark" aria-hidden="true" style={{ fontSize: 24, display: 'inline-block', marginBottom: 8, color: '#39bee6' }}>
+            <span
+              className="rdv3-brand-mark"
+              aria-hidden="true"
+              style={{ fontSize: 24, display: 'inline-block', marginBottom: 8, color: '#39bee6' }}
+            >
               ◉
             </span>
             <h2 id="rp-bio-live-title">{bioTitle}</h2>
@@ -179,4 +233,3 @@ export default function PaginaPublicaPage() {
     </section>
   );
 }
-

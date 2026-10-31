@@ -66,17 +66,29 @@ function OfertasContent() {
       .finally(() => setLoadingProducts(false));
   }, []);
 
-  // Carregar dados de automação
+  // Carregar dados de automação e curadoria
   useEffect(() => {
     fetch('/api/automation')
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok && data.queueCampaigns && data.queueCampaigns.length > 0) {
-          const q = data.queueCampaigns[0];
-          setSearchActive(Boolean(q.isActive));
-          if (q.storeName) setPrimaryStore(q.storeName);
-          if (q.minRating) setMinRating(String(q.minRating));
-          if (q.minReviews) setMinReviews(String(q.minReviews));
+        if (data.ok) {
+          if (data.queueCampaigns && data.queueCampaigns.length > 0) {
+            const q = data.queueCampaigns[0];
+            setSearchActive(Boolean(q.isActive));
+            if (q.storeName) setPrimaryStore(q.storeName);
+            if (q.minRating) setMinRating(String(q.minRating));
+            if (q.minReviews) setMinReviews(String(q.minReviews));
+          }
+          if (data.curatorPlans && data.curatorPlans.length > 0) {
+            const c = data.curatorPlans[0];
+            if (c.audienceProfile) setInterests(c.audienceProfile);
+            if (c.dailyOffersLimit) setOffersPerDay(String(c.dailyOffersLimit));
+            if (c.criteria?.minRating) setMinRating(String(c.criteria.minRating));
+            if (c.criteria?.minReviews) setMinReviews(String(c.criteria.minReviews));
+            if (c.criteria?.noRepeatDays) setNoRepeatDays(String(c.criteria.noRepeatDays));
+            if (typeof c.criteria?.alternateCategories === 'boolean') setAlternateCategories(c.criteria.alternateCategories);
+            if (typeof c.criteria?.reviewMissingInfo === 'boolean') setReviewMissingInfo(c.criteria.reviewMissingInfo);
+          }
         }
       })
       .catch(() => {});
@@ -127,7 +139,34 @@ function OfertasContent() {
   };
 
   const handleSaveCurator = async () => {
-    setNotice('Critérios de curadoria salvos com sucesso!');
+    try {
+      const res = await fetch('/api/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_curator',
+          curatorData: {
+            audienceProfile: interests,
+            dailyOffersLimit: parseInt(offersPerDay, 10) || 10,
+            criteria: {
+              minRating: parseFloat(minRating) || 4.5,
+              minReviews: parseInt(minReviews, 10) || 100,
+              noRepeatDays: parseInt(noRepeatDays, 10) || 7,
+              alternateCategories,
+              reviewMissingInfo,
+            },
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setNotice('Critérios de curadoria salvos e confirmados pelo servidor com sucesso!');
+      } else {
+        setNotice(data.error || 'Falha ao salvar critérios de curadoria.');
+      }
+    } catch {
+      setNotice('Erro de rede ao salvar critérios de curadoria.');
+    }
   };
 
   return (
@@ -213,40 +252,19 @@ function OfertasContent() {
             {loadingProducts ? (
               <p className="rp-sub rp-section">Carregando catálogo...</p>
             ) : filteredProducts.length === 0 ? (
-              /* Fallback com os 3 cards do protótipo se não houver produtos reais ainda */
-              <div className="rp-three rp-section" id="rp-catalog">
-                <div className="rp-panel rp-catalog-card">
-                  <div className="rp-product-photo rp-p1" role="img" aria-label="Fone bege" />
-                  <p className="rp-sub">Shopee · Exemplo</p>
-                  <h3>Fone sem fio</h3>
-                  <p className="rp-price">R$ 149,90</p>
-                  <span className="rp-tag">Em revisão</span>
-                  <Link href="/criar-conteudo" className="rp-btn rp-section">
-                    Criar postagem
-                  </Link>
-                </div>
-
-                <div className="rp-panel rp-catalog-card">
-                  <div className="rp-product-photo rp-p2" role="img" aria-label="Almofada de linho" />
-                  <p className="rp-sub">Amazon · Exemplo</p>
-                  <h3>Almofada de linho</h3>
-                  <p className="rp-price">R$ 69,90</p>
-                  <span className="rp-tag rp-warn">Validar link</span>
-                  <Link href="/criar-conteudo" className="rp-btn rp-section">
-                    Criar postagem
-                  </Link>
-                </div>
-
-                <div className="rp-panel rp-catalog-card">
-                  <div className="rp-product-photo rp-p3" role="img" aria-label="Luminária de mesa" />
-                  <p className="rp-sub">Shopee · Exemplo</p>
-                  <h3>Luminária de mesa</h3>
-                  <p className="rp-price">R$ 119,90</p>
-                  <span className="rp-tag">Em revisão</span>
-                  <Link href="/criar-conteudo" className="rp-btn rp-section">
-                    Criar postagem
-                  </Link>
-                </div>
+              <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                <p className="rp-sub">
+                  {searchTerm.trim() || storeFilter !== 'all'
+                    ? 'Nenhum produto encontrado para os filtros selecionados.'
+                    : 'Nenhum produto cadastrado no catálogo ainda.'}
+                </p>
+                <Link
+                  href="/criar-conteudo"
+                  className="rp-btn rp-primary"
+                  style={{ display: 'inline-block', marginTop: 12 }}
+                >
+                  Adicionar primeira oferta
+                </Link>
               </div>
             ) : (
               <div className="rp-three rp-section" id="rp-catalog">

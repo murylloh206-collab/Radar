@@ -1,16 +1,43 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { WhatsAppGroup } from '@/lib/types';
+
+type LinkStatus = 'ausente' | 'convertendo' | 'erro' | 'gerado' | 'confirmado';
+
+interface TemplateItem {
+  key: string;
+  name: string;
+  body: string;
+  isDefault?: boolean;
+}
+
+const DEFAULT_TEMPLATES: TemplateItem[] = [
+  {
+    key: 'Oferta essencial',
+    name: 'Oferta essencial',
+    body: 'Um achado para o seu dia ✨\n*{titulo}*\nPor *{preco_por}*\n{link}',
+    isDefault: true,
+  },
+  {
+    key: 'Oferta com cupom',
+    name: 'Oferta com cupom',
+    body: '🔥 SUPER ACHADO COM CUPOM!\n\n*{titulo}*\nDe: ~R$ {preco_de}~\nPor apenas: *{preco_por}*\nCupom: *{cupom}*\n\nCompre com segurança no link verificado:\n{link}',
+  },
+  {
+    key: 'Texto curto',
+    name: 'Texto curto',
+    body: '*{titulo}* por *{preco_por}*\n{link}',
+  },
+];
 
 function CriarConteudoContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTabParam = searchParams.get('aba');
 
-  // Mapear abas válidas
   const parseTab = (val: string | null) => {
     if (val === 'mensagem' || val === 'mensagem-livre') return 'mensagem';
     if (val === 'story') return 'story';
@@ -30,17 +57,20 @@ function CriarConteudoContent() {
 
   // Aba 1: Oferta por link
   const [productUrl, setProductUrl] = useState('');
-  const [offerTitle, setOfferTitle] = useState('Fone sem fio · modelo exemplo');
-  const [offerPrice, setOfferPrice] = useState('149.90');
-  const [offerCoupon, setOfferCoupon] = useState('RADAR10');
+  const [offerTitle, setOfferTitle] = useState('');
+  const [offerPrice, setOfferPrice] = useState('');
+  const [offerCoupon, setOfferCoupon] = useState('');
   const [offerTemplate, setOfferTemplate] = useState('Oferta essencial');
   const [converting, setConverting] = useState(false);
   const [affiliateLink, setAffiliateLink] = useState('');
+  const [linkStatus, setLinkStatus] = useState<LinkStatus>('ausente');
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [submittingToReview, setSubmittingToReview] = useState(false);
 
   // Aba 2: Mensagem livre
   const [freeMessage, setFreeMessage] = useState(
-    'Bom dia! ✨ Separamos novos achados para vocês. As ofertas de hoje chegam por aqui ao longo do dia.'
+    'Bom dia! ✨ Separamos novos achados para vocês hoje. Fiquem atentos às próximas ofertas.'
   );
   const [freeImageUrl, setFreeImageUrl] = useState('');
   const [selectedDestGroup, setSelectedDestGroup] = useState('');
@@ -52,13 +82,53 @@ function CriarConteudoContent() {
   const [storyCoupon, setStoryCoupon] = useState('RADAR10');
   const [storyStyle, setStoryStyle] = useState('Editorial · Grafite');
   const [showStoryPrice, setShowStoryPrice] = useState(true);
+  const [exportingStory, setExportingStory] = useState(false);
 
   // Aba 4: Templates
+  const [templates, setTemplates] = useState<TemplateItem[]>(DEFAULT_TEMPLATES);
   const [activeTemplateKey, setActiveTemplateKey] = useState('Oferta essencial');
   const [templateName, setTemplateName] = useState('Oferta essencial');
-  const [templateBody, setTemplateBody] = useState(
-    'Um achado para o seu dia ✨\n*{titulo}*\nPor *{preco_por}*\n{link}'
-  );
+  const [templateBody, setTemplateBody] = useState(DEFAULT_TEMPLATES[0].body);
+
+  // Carregar templates salvos do storage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('radar_custom_templates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTemplates(parsed);
+          setTemplateName(parsed[0].name);
+          setTemplateBody(parsed[0].body);
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Carregar rascunhos salvos da oferta e mensagem livre
+  useEffect(() => {
+    try {
+      const savedOffer = localStorage.getItem('radar_draft_offer');
+      if (savedOffer) {
+        const o = JSON.parse(savedOffer);
+        if (o.productUrl) setProductUrl(o.productUrl);
+        if (o.offerTitle) setOfferTitle(o.offerTitle);
+        if (o.offerPrice) setOfferPrice(o.offerPrice);
+        if (o.offerCoupon) setOfferCoupon(o.offerCoupon);
+        if (o.affiliateLink) {
+          setAffiliateLink(o.affiliateLink);
+          setLinkStatus('gerado');
+        }
+      }
+
+      const savedFree = localStorage.getItem('radar_draft_free');
+      if (savedFree) {
+        const f = JSON.parse(savedFree);
+        if (f.freeMessage) setFreeMessage(f.freeMessage);
+        if (f.freeImageUrl) setFreeImageUrl(f.freeImageUrl);
+      }
+    } catch {}
+  }, []);
 
   // Carregar grupos disponíveis
   useEffect(() => {
@@ -75,14 +145,27 @@ function CriarConteudoContent() {
       .catch(() => {});
   }, []);
 
-  // Conversão de link real
+  // Limpeza estrita de link anterior quando URL ou produto muda
+  const handleProductUrlChange = (newUrl: string) => {
+    setProductUrl(newUrl);
+    // Limpar imediatamente associações anteriores
+    setAffiliateLink('');
+    setLinkStatus('ausente');
+    setLinkError(null);
+  };
+
+  // Conversão real de link e captura de dados
   const handleFetchProduct = async () => {
     if (!productUrl.trim()) {
       setNotice('Cole a URL do produto para buscar.');
       return;
     }
+
     setConverting(true);
+    setLinkStatus('convertendo');
+    setLinkError(null);
     setNotice(null);
+    setAffiliateLink('');
 
     try {
       const res = await fetch('/api/converter', {
@@ -91,18 +174,239 @@ function CriarConteudoContent() {
         body: JSON.stringify({ url: productUrl.trim() }),
       });
       const data = await res.json();
+
       if (data.ok && data.data) {
         if (data.data.title) setOfferTitle(data.data.title);
         if (data.data.priceCurrent) setOfferPrice(String(data.data.priceCurrent));
-        if (data.data.affiliateUrl) setAffiliateLink(data.data.affiliateUrl);
-        setNotice('Link convertido e dados do produto carregados com sucesso!');
+        if (data.data.affiliateUrl) {
+          setAffiliateLink(data.data.affiliateUrl);
+          setLinkStatus(data.data.isValidated ? 'confirmado' : 'gerado');
+          setNotice('Link convertido e confirmado pela integração com sucesso!');
+        } else {
+          setLinkStatus('ausente');
+          setNotice('Produto localizado, mas o link de afiliado não pôde ser gerado.');
+        }
       } else {
-        setNotice(data.error || 'Não foi possível converter o link automaticamente. Você pode preencher os dados manualmente.');
+        setLinkStatus('erro');
+        setLinkError(data.error || 'Falha ao converter o link.');
+        setNotice(data.error || 'Falha na conversão do link.');
       }
-    } catch {
-      setNotice('Erro de conexão ao buscar o produto.');
+    } catch (e: any) {
+      setLinkStatus('erro');
+      setLinkError('Erro de conexão ao consultar conversor.');
+      setNotice('Erro de rede ao buscar produto.');
     } finally {
       setConverting(false);
+    }
+  };
+
+  // Salvar rascunho persistido
+  const handleSaveDraft = () => {
+    try {
+      localStorage.setItem(
+        'radar_draft_offer',
+        JSON.stringify({
+          productUrl,
+          offerTitle,
+          offerPrice,
+          offerCoupon,
+          affiliateLink,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+      setNotice(`Rascunho salvo no navegador em ${new Date().toLocaleTimeString('pt-BR')}.`);
+    } catch {
+      setNotice('Não foi possível salvar o rascunho localmente.');
+    }
+  };
+
+  // Continuar para envio (Aba Oferta) - Cria o registro real e transporta para /envios?aba=revisao
+  const handleContinueToReview = async () => {
+    if (!offerTitle.trim()) {
+      setNotice('Informe o título do produto antes de prosseguir.');
+      return;
+    }
+
+    setSubmittingToReview(true);
+    const compiledMessage = `${offerTitle}\nPor apenas: R$ ${offerPrice || '0,00'}\n${offerCoupon ? `Cupom: ${offerCoupon}\n` : ''}${affiliateLink || productUrl}`;
+
+    try {
+      // 1. Persistir no backend como job de revisão
+      const targetJid = groups[0]?.groupJid || 'destino_padrao';
+      const res = await fetch('/api/copier/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          jobData: {
+            originType: 'manual',
+            targetJid,
+            targetName: groups[0]?.name || 'Meu grupo',
+            messageText: compiledMessage,
+            affiliateUrl: affiliateLink || productUrl,
+            status: 'aguardando_aprovacao',
+            scheduledFor: new Date().toISOString(),
+          },
+        }),
+      });
+      const data = await res.json();
+
+      // 2. Transportar no sessionStorage
+      sessionStorage.setItem(
+        'radar_transport_draft',
+        JSON.stringify({
+          title: offerTitle,
+          price: offerPrice,
+          coupon: offerCoupon,
+          link: affiliateLink || productUrl,
+          text: compiledMessage,
+          jobId: data?.job?.id,
+        })
+      );
+
+      // 3. Navegar para tela de revisão
+      router.push('/envios?aba=revisao');
+    } catch {
+      setNotice('Erro ao enviar oferta para a revisão.');
+    } finally {
+      setSubmittingToReview(false);
+    }
+  };
+
+  // Escolher envio (Aba Mensagem Livre) - Transporta para /envios?aba=agenda
+  const handleContinueToSchedule = () => {
+    if (!freeMessage.trim()) {
+      setNotice('Escreva uma mensagem antes de prosseguir.');
+      return;
+    }
+
+    sessionStorage.setItem(
+      'radar_transport_draft',
+      JSON.stringify({
+        text: freeMessage.trim(),
+        targetJid: selectedDestGroup,
+        imageUrl: freeImageUrl.trim(),
+      })
+    );
+
+    router.push('/envios?aba=agenda');
+  };
+
+  // Exportação Real de Imagem 9:16 (Story) via Canvas
+  const handleExportStory = () => {
+    setExportingStory(true);
+    setNotice(null);
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        throw new Error('Não foi possível inicializar o contexto 2D.');
+      }
+
+      // Fundo grafite editorial escuro (#1a1d20 a #24282c)
+      const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+      grad.addColorStop(0, '#171a1d');
+      grad.addColorStop(0.5, '#202428');
+      grad.addColorStop(1, '#131517');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1080, 1920);
+
+      // Borda sutil de destaque
+      ctx.strokeStyle = '#363c41';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(36, 36, 1008, 1848);
+
+      // Marca superior: RADAR DE OFERTAS
+      ctx.fillStyle = '#39bee6';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('◉  RADAR DE OFERTAS', 540, 180);
+
+      ctx.fillStyle = '#aab2b7';
+      ctx.font = '500 24px sans-serif';
+      ctx.fillText('ACHADOS & OFERTAS EXCLUSIVAS', 540, 230);
+
+      // Caixa da imagem central
+      ctx.fillStyle = '#292e33';
+      ctx.fillRect(100, 320, 880, 880);
+      ctx.strokeStyle = '#39bee6';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(100, 320, 880, 880);
+
+      // Ícone ou texto representativo no centro da foto
+      ctx.fillStyle = '#f2f4f5';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.fillText(storyTitle.slice(0, 30), 540, 760);
+
+      // Título do Produto
+      ctx.fillStyle = '#f2f4f5';
+      ctx.font = 'bold 54px sans-serif';
+      ctx.fillText(storyTitle, 540, 1300);
+
+      // Preço e Cupom
+      if (showStoryPrice) {
+        ctx.fillStyle = '#56c288';
+        ctx.font = 'bold 76px sans-serif';
+        ctx.fillText(`R$ ${storyPrice}`, 540, 1420);
+
+        if (storyCoupon) {
+          ctx.fillStyle = '#39bee6';
+          ctx.font = 'bold 38px sans-serif';
+          ctx.fillText(`CUPOM: ${storyCoupon}`, 540, 1500);
+        }
+      }
+
+      // Rodapé CTA
+      ctx.fillStyle = '#f2f4f5';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText('CLIQUE NO LINK DOS STORIES OU RESPONDA NO CHAT', 540, 1720);
+
+      // Download real do arquivo PNG
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `story-radar-ofertas-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setNotice('Arte 9:16 gerada e baixada com sucesso no seu dispositivo!');
+      }, 'image/png');
+    } catch (e: any) {
+      setNotice('Erro ao gerar imagem 9:16: ' + e.message);
+    } finally {
+      setExportingStory(false);
+    }
+  };
+
+  // Salvar Template de Verdade no Storage
+  const handleSaveTemplate = () => {
+    if (!templateName.trim() || !templateBody.trim()) {
+      setNotice('Informe o nome e o corpo do template.');
+      return;
+    }
+
+    const updated = templates.map((t) =>
+      t.key === activeTemplateKey ? { ...t, name: templateName, body: templateBody } : t
+    );
+
+    // Se for novo
+    if (!templates.find((t) => t.key === activeTemplateKey)) {
+      updated.push({ key: templateName, name: templateName, body: templateBody });
+    }
+
+    setTemplates(updated);
+    try {
+      localStorage.setItem('radar_custom_templates', JSON.stringify(updated));
+      setNotice(`Template "${templateName}" salvo e persistido com sucesso!`);
+    } catch {
+      setNotice('Falha ao persistir template no navegador.');
     }
   };
 
@@ -112,15 +416,12 @@ function CriarConteudoContent() {
     router.replace(`/criar-conteudo?aba=${mapped}`, { scroll: false });
   };
 
-  const handleSelectTemplate = (tpl: string) => {
-    setActiveTemplateKey(tpl);
-    setTemplateName(tpl);
-    if (tpl === 'Oferta essencial') {
-      setTemplateBody('Um achado para o seu dia ✨\n*{titulo}*\nPor *{preco_por}*\n{link}');
-    } else if (tpl === 'Oferta com cupom') {
-      setTemplateBody('🔥 SUPER ACHADO COM CUPOM!\n\n*{titulo}*\nDe: ~R$ {preco_de}~\nPor apenas: *{preco_por}*\nCupom: *{cupom}*\n\nCompre com segurança:\n{link}');
-    } else if (tpl === 'Texto curto') {
-      setTemplateBody('*{titulo}* por *{preco_por}*\n{link}');
+  const handleSelectTemplate = (tplKey: string) => {
+    setActiveTemplateKey(tplKey);
+    const found = templates.find((t) => t.key === tplKey);
+    if (found) {
+      setTemplateName(found.name);
+      setTemplateBody(found.body);
     }
   };
 
@@ -192,9 +493,9 @@ function CriarConteudoContent() {
                   Link do produto
                   <input
                     type="url"
-                    placeholder="Cole o link do produto"
+                    placeholder="Cole a URL crua do produto (Shopee, Amazon, ML...)"
                     value={productUrl}
-                    onChange={(e) => setProductUrl(e.target.value)}
+                    onChange={(e) => handleProductUrlChange(e.target.value)}
                   />
                 </label>
 
@@ -212,6 +513,7 @@ function CriarConteudoContent() {
                   <input
                     id="rp-offer-title"
                     value={offerTitle}
+                    placeholder="Ex: Fone sem fio com cancelamento de ruído"
                     onChange={(e) => setOfferTitle(e.target.value)}
                   />
                 </label>
@@ -225,6 +527,7 @@ function CriarConteudoContent() {
                       value={offerPrice}
                       min="0"
                       step="0.01"
+                      placeholder="0.00"
                       onChange={(e) => setOfferPrice(e.target.value)}
                     />
                   </label>
@@ -233,6 +536,7 @@ function CriarConteudoContent() {
                     <input
                       id="rp-offer-coupon"
                       value={offerCoupon}
+                      placeholder="Ex: PROMO10"
                       onChange={(e) => setOfferCoupon(e.target.value)}
                     />
                   </label>
@@ -244,8 +548,11 @@ function CriarConteudoContent() {
                     value={offerTemplate}
                     onChange={(e) => setOfferTemplate(e.target.value)}
                   >
-                    <option value="Oferta essencial">Oferta essencial</option>
-                    <option value="Oferta com cupom">Oferta com cupom</option>
+                    {templates.map((t) => (
+                      <option key={t.key} value={t.key}>
+                        {t.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
@@ -253,25 +560,39 @@ function CriarConteudoContent() {
                   <button
                     className="rp-btn"
                     type="button"
-                    onClick={() => setNotice('Rascunho salvo na sessão.')}
+                    onClick={handleSaveDraft}
                   >
                     Salvar rascunho
                   </button>
-                  <Link href="/envios?aba=revisao" className="rp-btn rp-primary">
-                    Continuar para envio →
-                  </Link>
+                  <button
+                    className="rp-btn rp-primary"
+                    type="button"
+                    disabled={submittingToReview}
+                    onClick={handleContinueToReview}
+                  >
+                    {submittingToReview ? 'Preparando envio...' : 'Continuar para envio →'}
+                  </button>
                 </div>
               </div>
 
               <div className="rp-panel">
                 <h2>Prévia no WhatsApp</h2>
                 <div className="rp-message rp-section">
-                  <div className="rp-product-photo rp-p1" role="img" aria-label={offerTitle} />
+                  <div
+                    className="rp-product-photo rp-p1"
+                    role="img"
+                    aria-label={offerTitle || 'Prévia do produto'}
+                  />
                   <p>
                     Um achado para o seu dia ✨<br />
-                    <strong id="rp-live-title">{offerTitle}</strong>
+                    <strong id="rp-live-title">
+                      {offerTitle || 'Título da oferta aparecerá aqui'}
+                    </strong>
                     <br />
-                    Por <strong id="rp-live-price">R$ {offerPrice}</strong>
+                    Por{' '}
+                    <strong id="rp-live-price">
+                      {offerPrice ? `R$ ${offerPrice}` : 'R$ --,--'}
+                    </strong>
                     <br />
                     {offerCoupon && (
                       <>
@@ -279,11 +600,43 @@ function CriarConteudoContent() {
                         <br />
                       </>
                     )}
-                    <span className="rp-link">
-                      {affiliateLink || 'Link de afiliado verificado'}
-                    </span>
+                    {/* Validação honesta de link */}
+                    {linkStatus === 'ausente' && (
+                      <span className="rp-link" style={{ opacity: 0.6 }}>
+                        Link de afiliado ausente (informe a URL e clique em Buscar)
+                      </span>
+                    )}
+                    {linkStatus === 'convertendo' && (
+                      <span className="rp-link" style={{ color: '#39bee6' }}>
+                        Convertendo link de afiliado...
+                      </span>
+                    )}
+                    {linkStatus === 'erro' && (
+                      <span className="rp-link" style={{ color: '#e05353' }}>
+                        {linkError || 'Falha na validação do link'}
+                      </span>
+                    )}
+                    {(linkStatus === 'gerado' || linkStatus === 'confirmado') && (
+                      <span className="rp-link" style={{ color: '#56c288' }}>
+                        {affiliateLink}
+                      </span>
+                    )}
                   </p>
                 </div>
+                <p className="rp-sub" style={{ marginTop: 8 }}>
+                  Status do link:{' '}
+                  <strong style={{ color: linkStatus === 'confirmado' ? '#56c288' : linkStatus === 'erro' ? '#e05353' : '#aab2b7' }}>
+                    {linkStatus === 'confirmado'
+                      ? 'Confirmado pela integração'
+                      : linkStatus === 'gerado'
+                      ? 'Link gerado (validação disponível)'
+                      : linkStatus === 'convertendo'
+                      ? 'Em processamento'
+                      : linkStatus === 'erro'
+                      ? 'Falha na conversão'
+                      : 'Ausente'}
+                  </strong>
+                </p>
               </div>
             </div>
           </div>
@@ -328,18 +681,21 @@ function CriarConteudoContent() {
                       </option>
                     ))}
                     {groups.length === 0 && (
-                      <option value="">Nenhum grupo de destino encontrado</option>
+                      <option value="" disabled>
+                        Nenhum grupo de destino encontrado
+                      </option>
                     )}
                   </select>
                 </label>
 
                 <div className="rp-footer">
-                  <Link
-                    href="/envios?aba=agenda"
+                  <button
+                    type="button"
                     className="rp-btn rp-primary"
+                    onClick={handleContinueToSchedule}
                   >
                     Escolher envio →
-                  </Link>
+                  </button>
                 </div>
               </div>
 
@@ -388,21 +744,19 @@ function CriarConteudoContent() {
                 </label>
 
                 <label className="rp-field">
-                  Produto
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value === 'fone') {
-                        setStoryTitle('Um achado para ouvir melhor');
-                        setStoryPrice('149,90');
-                      } else {
-                        setStoryTitle('Conforto e elegância para o ambiente');
-                        setStoryPrice('69,90');
-                      }
-                    }}
-                  >
-                    <option value="fone">Fone sem fio · exemplo</option>
-                    <option value="almofada">Almofada de linho · exemplo</option>
-                  </select>
+                  Preço destacado (R$)
+                  <input
+                    value={storyPrice}
+                    onChange={(e) => setStoryPrice(e.target.value)}
+                  />
+                </label>
+
+                <label className="rp-field">
+                  Cupom
+                  <input
+                    value={storyCoupon}
+                    onChange={(e) => setStoryCoupon(e.target.value)}
+                  />
                 </label>
 
                 <label className="rp-field">
@@ -428,21 +782,22 @@ function CriarConteudoContent() {
                 <button
                   className="rp-btn rp-primary rp-section"
                   type="button"
-                  onClick={() => setNotice('Imagem 9:16 renderizada e pronta para download!')}
+                  disabled={exportingStory}
+                  onClick={handleExportStory}
                 >
-                  Exportar imagem
+                  {exportingStory ? 'Exportando imagem...' : 'Exportar imagem 9:16'}
                 </button>
               </div>
 
               <div className="rp-story">
-                <div className="rp-product-photo rp-p1" role="img" aria-label="Story de fone" />
+                <div className="rp-product-photo rp-p1" role="img" aria-label="Story de produto" />
                 <div className="rp-story-caption">
                   <small>RADAR DE OFERTAS</small>
                   <p>{storyTitle}</p>
                   {showStoryPrice && (
                     <>
                       <strong>R$ {storyPrice}</strong>
-                      <small>CUPOM {storyCoupon}</small>
+                      {storyCoupon && <small>CUPOM {storyCoupon}</small>}
                     </>
                   )}
                 </div>
@@ -458,59 +813,25 @@ function CriarConteudoContent() {
               <div className="rp-panel">
                 <h2>Seus modelos</h2>
                 <div className="rp-list">
-                  <div className="rp-list-item">
-                    <div className="rp-list-copy">
-                      <strong>Oferta essencial</strong>
-                      <p>Título, preço e link</p>
+                  {templates.map((tpl) => (
+                    <div key={tpl.key} className="rp-list-item">
+                      <div className="rp-list-copy">
+                        <strong>{tpl.name}</strong>
+                        <p>{tpl.body.slice(0, 40)}...</p>
+                      </div>
+                      {activeTemplateKey === tpl.key ? (
+                        <span className="rp-tag rp-good">Em edição</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="rp-btn"
+                          onClick={() => handleSelectTemplate(tpl.key)}
+                        >
+                          Editar
+                        </button>
+                      )}
                     </div>
-                    {activeTemplateKey === 'Oferta essencial' ? (
-                      <span className="rp-tag">Ativo</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="rp-btn"
-                        onClick={() => handleSelectTemplate('Oferta essencial')}
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="rp-list-item">
-                    <div className="rp-list-copy">
-                      <strong>Oferta com cupom</strong>
-                      <p>Destaque para o desconto</p>
-                    </div>
-                    {activeTemplateKey === 'Oferta com cupom' ? (
-                      <span className="rp-tag">Ativo</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="rp-btn"
-                        onClick={() => handleSelectTemplate('Oferta com cupom')}
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="rp-list-item">
-                    <div className="rp-list-copy">
-                      <strong>Texto curto</strong>
-                      <p>Direto ao produto</p>
-                    </div>
-                    {activeTemplateKey === 'Texto curto' ? (
-                      <span className="rp-tag">Ativo</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="rp-btn"
-                        onClick={() => handleSelectTemplate('Texto curto')}
-                      >
-                        Editar
-                      </button>
-                    )}
-                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -543,7 +864,7 @@ function CriarConteudoContent() {
                 <button
                   type="button"
                   className="rp-btn rp-primary rp-section"
-                  onClick={() => setNotice('Template atualizado com sucesso!')}
+                  onClick={handleSaveTemplate}
                 >
                   Salvar template
                 </button>
@@ -563,4 +884,3 @@ export default function CriarConteudoPage() {
     </Suspense>
   );
 }
-

@@ -12,6 +12,7 @@ import {
   Tag,
   Check,
 } from 'lucide-react';
+import { OverlappingStoreLogos } from '@/components/BrandLogo';
 
 export default function HomePage() {
   const [slide, setSlide] = useState<number>(0);
@@ -76,11 +77,7 @@ export default function HomePage() {
             <h1>A próxima descoberta começa por aqui.</h1>
             <p>Acesse as lojas, encontre produtos e traga novas oportunidades para seus grupos.</p>
             <div className="rdv3-slide-brands">
-              <span className="rdv3-stores-row" aria-hidden="true">
-                <span className="rdv3-store-mark rdv3-shopee" style={{ width: 30, height: 30, fontSize: 13 }}>S</span>
-                <span className="rdv3-store-mark rdv3-netshoes" style={{ width: 30, height: 30, fontSize: 11 }}>N</span>
-                <span className="rdv3-store-mark rdv3-amazon" style={{ width: 30, height: 30, fontSize: 13 }}>a</span>
-              </span>
+              <OverlappingStoreLogos size={24} containerSize={32} />
               <span>Shopee · Netshoes · Amazon</span>
             </div>
             <button
@@ -202,11 +199,7 @@ export default function HomePage() {
           <p>Configure suas integrações de afiliados e gere seus links.</p>
           <p>Shopee · Netshoes · Amazon</p>
         </div>
-        <div className="rdv3-stores-row" aria-label="Shopee, Netshoes e Amazon">
-          <span className="rdv3-store-mark rdv3-shopee">S</span>
-          <span className="rdv3-store-mark rdv3-netshoes">N</span>
-          <span className="rdv3-store-mark rdv3-amazon">a</span>
-        </div>
+        <OverlappingStoreLogos size={28} containerSize={40} />
         <span className="rdv3-arrow" aria-hidden="true">
           ↗
         </span>

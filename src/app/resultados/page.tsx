@@ -45,14 +45,11 @@ function ResultadosContent() {
   }, []);
 
   const totalSent = useMemo(() => {
-    if (groups.length === 0) return 24;
-    const sum = groups.reduce((acc, g) => acc + (g.messagesSent || 0), 0);
-    return sum > 0 ? sum : 24;
+    return groups.reduce((acc, g) => acc + (g.messagesSent || 0), 0);
   }, [groups]);
 
   const activeGroupCount = useMemo(() => {
-    if (groups.length === 0) return 2;
-    return groups.filter((g) => g.messagesSent > 0).length || groups.length;
+    return groups.filter((g) => (g.messagesSent || 0) > 0).length;
   }, [groups]);
 
   const handleSelectTab = (tab: 'grupos' | 'vendas') => {
@@ -165,22 +162,9 @@ function ResultadosContent() {
             <div className="rp-panel rp-section">
               <h2>Por grupo</h2>
               {groups.length === 0 ? (
-                <>
-                  <div className="rp-list-item">
-                    <div className="rp-list-copy">
-                      <strong>Meu grupo</strong>
-                      <p>Ofertas gerais</p>
-                    </div>
-                    <span className="rp-tag">16 envios</span>
-                  </div>
-                  <div className="rp-list-item">
-                    <div className="rp-list-copy">
-                      <strong>VIP Casa</strong>
-                      <p>Casa & Conforto</p>
-                    </div>
-                    <span className="rp-tag">8 envios</span>
-                  </div>
-                </>
+                <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '24px 16px' }}>
+                  <p className="rp-sub">Nenhum grupo com histórico de envios registrado até o momento.</p>
+                </div>
               ) : (
                 groups.map((g) => (
                   <div key={g.id || g.groupJid} className="rp-list-item">
