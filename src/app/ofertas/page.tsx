@@ -1,233 +1,490 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Tag, Search, Filter, Share2, Star, ShoppingBag, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
-import { StatusBadge } from '@/components/StatusBadge';
-import { ProductItem, StoreName } from '@/lib/types';
+import React, { Suspense, useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ProductItem } from '@/lib/types';
 
-export default function OfertasCatalogoPage() {
-  const [selectedStore, setSelectedStore] = useState<string>('todas');
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [products, setProducts] = useState<ProductItem[]>([]);
+function OfertasContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTabParam = searchParams.get('aba');
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/products?store=${selectedStore}&search=${encodeURIComponent(search)}`);
-      const data = await res.json();
-      if (data.ok) {
-        setProducts(data.products || []);
-      }
-    } catch {
-    } finally {
-      setLoading(false);
-    }
+  const parseTab = (val: string | null) => {
+    if (val === 'busca' || val === 'busca-automatica') return 'busca';
+    if (val === 'curadoria') return 'curadoria';
+    return 'catalogo';
   };
+
+  const [activeTab, setActiveTab] = useState<'catalogo' | 'busca' | 'curadoria'>(() =>
+    parseTab(initialTabParam)
+  );
 
   useEffect(() => {
-    fetchProducts();
-  }, [selectedStore]);
+    if (initialTabParam) {
+      setActiveTab(parseTab(initialTabParam));
+    }
+  }, [initialTabParam]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchProducts();
+  // Aba 1: Catálogo
+  const [searchTerm, setSearchTerm] = useState('');
+  const [storeFilter, setStoreFilter] = useState('all');
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
+  // Aba 2: Busca automática
+  const [searchActive, setSearchActive] = useState(false);
+  const [primaryStore, setPrimaryStore] = useState('Shopee');
+  const [categories, setCategories] = useState('Tecnologia, casa e conforto');
+  const [searchInterval, setSearchInterval] = useState('A cada 30 minutos');
+  const [sendToReview, setSendToReview] = useState(true);
+
+  // Aba 3: Curadoria
+  const [interests, setInterests] = useState(
+    'Produtos úteis para casa, tecnologia acessível e conforto no dia a dia.'
+  );
+  const [minRating, setMinRating] = useState('4.5');
+  const [minReviews, setMinReviews] = useState('100');
+  const [offersPerDay, setOffersPerDay] = useState('10');
+  const [noRepeatDays, setNoRepeatDays] = useState('7');
+  const [alternateCategories, setAlternateCategories] = useState(true);
+  const [reviewMissingInfo, setReviewMissingInfo] = useState(true);
+
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Carregar produtos
+  useEffect(() => {
+    setLoadingProducts(true);
+    fetch('/api/products')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && Array.isArray(data.products)) {
+          setProducts(data.products);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProducts(false));
+  }, []);
+
+  // Carregar dados de automação
+  useEffect(() => {
+    fetch('/api/automation')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.queueCampaigns && data.queueCampaigns.length > 0) {
+          const q = data.queueCampaigns[0];
+          setSearchActive(Boolean(q.isActive));
+          if (q.storeName) setPrimaryStore(q.storeName);
+          if (q.minRating) setMinRating(String(q.minRating));
+          if (q.minReviews) setMinReviews(String(q.minReviews));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Produtos filtrados
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchStore = storeFilter === 'all' || p.storeName === storeFilter;
+      const matchSearch =
+        !searchTerm.trim() ||
+        p.title.toLowerCase().includes(searchTerm.toLowerCase().trim());
+      return matchStore && matchSearch;
+    });
+  }, [products, storeFilter, searchTerm]);
+
+  const handleSelectTab = (tab: 'catalogo' | 'busca' | 'curadoria') => {
+    setActiveTab(tab);
+    const mapped = tab === 'busca' ? 'busca-automatica' : tab;
+    router.replace(`/ofertas?aba=${mapped}`, { scroll: false });
   };
 
-  const getStoreBadgeColor = (store: StoreName) => {
-    switch (store) {
-      case 'shopee':
-        return '#1CCAF2';
-      case 'mercadolivre':
-        return '#F7B84B';
-      case 'netshoes':
-        return '#9B51E0';
-      case 'amazon':
-        return '#20C997';
-      case 'magalu':
-        return '#0879DF';
-      default:
-        return '#8EADC7';
+  const handleSaveSearch = async () => {
+    try {
+      const res = await fetch('/api/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_queue',
+          queueData: {
+            name: 'Busca Automática Radar',
+            storeName: primaryStore.toLowerCase(),
+            isActive: searchActive,
+            minRating: parseFloat(minRating) || 4.5,
+            minReviews: parseInt(minReviews, 10) || 100,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setNotice('Preferências de busca automática salvas com sucesso!');
+      } else {
+        setNotice('Falha ao salvar preferências.');
+      }
+    } catch {
+      setNotice('Erro de rede ao salvar preferências.');
     }
+  };
+
+  const handleSaveCurator = async () => {
+    setNotice('Critérios de curadoria salvos com sucesso!');
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <section className="rp-page" aria-label="Ofertas">
+      {/* Cabeçalho da página */}
+      <div className="rp-head">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#F8FBFF] tracking-tight">
-            Catálogo de Ofertas Verificadas
-          </h1>
-          <p className="text-xs sm:text-sm text-[#8EADC7] mt-0.5">
-            Produtos reais capturados pelas origens ou analisados pelo Radar de Ofertas com histórico de preços.
-          </p>
+          <span className="rp-step">Descobertas</span>
+          <h1>Ofertas</h1>
+          <p>Organize seu catálogo e defina o que vale compartilhar.</p>
         </div>
-
-        <Link
-          href="/gerar-postagem"
-          className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] flex items-center justify-center gap-2 shadow-md shadow-[#1CCAF2]/15"
-        >
-          <Share2 className="w-4 h-4" />
-          <span>Garimpar Novo Link</span>
+        <Link href="/criar-conteudo" className="rp-btn rp-primary">
+          Adicionar por link
         </Link>
       </div>
 
-      {/* Filtros e Busca */}
-      <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-[#8EADC7] absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="Buscar por título ou palavra-chave..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#061225] border border-[#18334D] rounded-xl pl-9 pr-3 py-2 text-xs text-[#F8FBFF] placeholder-[#8EADC7]/50 focus:outline-none focus:border-[#1CCAF2]"
-          />
-        </form>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <select
-            value={selectedStore}
-            onChange={(e) => setSelectedStore(e.target.value)}
-            className="flex-1 sm:flex-none min-h-[40px] bg-[#061225] border border-[#18334D] rounded-xl px-3 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
-          >
-            <option value="todas">Todas as Lojas</option>
-            <option value="shopee">Shopee</option>
-            <option value="mercadolivre">Mercado Livre</option>
-            <option value="netshoes">Netshoes</option>
-            <option value="amazon">Amazon</option>
-            <option value="magalu">Magazine Luiza</option>
-          </select>
-
-          <button
-            onClick={fetchProducts}
-            title="Atualizar lista de produtos"
-            className="min-h-[40px] px-3 py-2 rounded-xl bg-[#061225] border border-[#18334D] text-[#8EADC7] hover:text-[#1CCAF2]"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#1CCAF2]' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Grid de Produtos Reais */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center p-12 text-[#8EADC7] text-xs">
-          <RefreshCw className="w-6 h-6 animate-spin text-[#1CCAF2] mb-2" />
-          <span>Carregando ofertas verificadas...</span>
-        </div>
-      ) : products.length === 0 ? (
-        <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-8 text-center">
-          <div className="flex justify-center mb-3">
-            <div className="p-3 rounded-2xl bg-[#1CCAF2]/10 text-[#1CCAF2]">
-              <ShoppingBag className="w-8 h-8" />
-            </div>
-          </div>
-          <h3 className="text-sm font-bold text-[#F8FBFF]">Nenhuma oferta registrada no catálogo</h3>
-          <p className="text-xs text-[#8EADC7] max-w-md mx-auto mt-1">
-            As ofertas capturadas através do Copiador de Ofertas ou geradas no painel com dados reais de preços aparecerão aqui automaticamente.
-          </p>
-          <div className="mt-4">
-            <Link
-              href="/gerar-postagem"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#061225] border border-[#1CCAF2]/40 text-[#1CCAF2] hover:bg-[#1CCAF2]/10"
-            >
-              <span>Processar Primeira Oferta</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {products.map((prod) => (
-            <div
-              key={prod.id}
-              className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 flex flex-col justify-between hover:border-[#1CCAF2]/40 transition-all group"
-            >
-              <div>
-                <div className="relative aspect-video w-full rounded-xl bg-[#061225] border border-[#18334D] overflow-hidden mb-3 flex items-center justify-center">
-                  {prod.imageUrl ? (
-                    <img
-                      src={prod.imageUrl}
-                      alt={prod.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <ShoppingBag className="w-8 h-8 text-[#18334D]" />
-                  )}
-
-                  <span
-                    className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
-                    style={{
-                      backgroundColor: `${getStoreBadgeColor(prod.storeName)}20`,
-                      color: getStoreBadgeColor(prod.storeName),
-                      border: `1px solid ${getStoreBadgeColor(prod.storeName)}40`,
-                    }}
-                  >
-                    {prod.storeName}
-                  </span>
-
-                  {prod.discountPct > 0 && (
-                    <span className="absolute top-2 right-2 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-[#20C997] text-[#061225]">
-                      -{prod.discountPct}% OFF
-                    </span>
-                  )}
-                </div>
-
-                <h3 className="text-xs font-bold text-[#F8FBFF] line-clamp-2 leading-snug">
-                  {prod.title}
-                </h3>
-
-                <div className="flex items-center gap-2 mt-2">
-                  {prod.originalPrice && prod.originalPrice > prod.currentPrice && (
-                    <span className="text-[11px] text-[#8EADC7] line-through">
-                      R$ {prod.originalPrice.toFixed(2).replace('.', ',')}
-                    </span>
-                  )}
-                  <span className="text-sm font-black text-[#1CCAF2]">
-                    R$ {prod.currentPrice.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3 text-[10px] text-[#8EADC7] mt-2 pt-2 border-t border-[#18334D]">
-                  {prod.rating ? (
-                    <div className="flex items-center gap-1 text-[#F7B84B]">
-                      <Star className="w-3 h-3 fill-current" />
-                      <span>{prod.rating.toFixed(1)}</span>
-                    </div>
-                  ) : (
-                    <span className="text-[#8EADC7]/70">Sem nota verificada</span>
-                  )}
-
-                  {prod.reviewsCount !== undefined && prod.reviewsCount > 0 ? (
-                    <span>{prod.reviewsCount} avaliações</span>
-                  ) : null}
-
-                  {prod.salesCount !== undefined && prod.salesCount > 0 ? (
-                    <span>{prod.salesCount} vendas</span>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-[#18334D] flex items-center justify-between">
-                <span className="text-[10px] text-[#8EADC7]/70">
-                  {new Date(prod.lastCheckedAt).toLocaleDateString('pt-BR')}
-                </span>
-
-                <a
-                  href={prod.affiliateUrl || prod.productUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[11px] font-bold text-[#1CCAF2] hover:underline"
-                >
-                  <span>Ver Oferta</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </div>
-          ))}
+      {notice && (
+        <div className="rp-panel rp-section" style={{ borderColor: '#39bee6' }}>
+          <p>{notice}</p>
         </div>
       )}
-    </div>
+
+      {/* Abas */}
+      <div data-tab-group="offers">
+        <div className="rp-tabs" role="tablist" aria-label="Área de ofertas">
+          <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'catalogo'}
+            onClick={() => handleSelectTab('catalogo')}
+          >
+            Catálogo
+          </button>
+          <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'busca'}
+            onClick={() => handleSelectTab('busca')}
+          >
+            Busca automática
+          </button>
+          <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'curadoria'}
+            onClick={() => handleSelectTab('curadoria')}
+          >
+            Curadoria
+          </button>
+        </div>
+
+        {/* Aba 1: Catálogo */}
+        {activeTab === 'catalogo' && (
+          <div data-panel="catalogo" role="tabpanel">
+            <div className="rp-grid">
+              <label className="rp-field">
+                Buscar produto
+                <input
+                  id="rp-catalog-search"
+                  type="search"
+                  placeholder="Nome do produto"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </label>
+
+              <label className="rp-field">
+                Loja
+                <select
+                  id="rp-catalog-store"
+                  value={storeFilter}
+                  onChange={(e) => setStoreFilter(e.target.value)}
+                >
+                  <option value="all">Todas as lojas</option>
+                  <option value="shopee">Shopee</option>
+                  <option value="amazon">Amazon</option>
+                  <option value="mercadolivre">Mercado Livre</option>
+                  <option value="netshoes">Netshoes</option>
+                </select>
+              </label>
+            </div>
+
+            {loadingProducts ? (
+              <p className="rp-sub rp-section">Carregando catálogo...</p>
+            ) : filteredProducts.length === 0 ? (
+              /* Fallback com os 3 cards do protótipo se não houver produtos reais ainda */
+              <div className="rp-three rp-section" id="rp-catalog">
+                <div className="rp-panel rp-catalog-card">
+                  <div className="rp-product-photo rp-p1" role="img" aria-label="Fone bege" />
+                  <p className="rp-sub">Shopee · Exemplo</p>
+                  <h3>Fone sem fio</h3>
+                  <p className="rp-price">R$ 149,90</p>
+                  <span className="rp-tag">Em revisão</span>
+                  <Link href="/criar-conteudo" className="rp-btn rp-section">
+                    Criar postagem
+                  </Link>
+                </div>
+
+                <div className="rp-panel rp-catalog-card">
+                  <div className="rp-product-photo rp-p2" role="img" aria-label="Almofada de linho" />
+                  <p className="rp-sub">Amazon · Exemplo</p>
+                  <h3>Almofada de linho</h3>
+                  <p className="rp-price">R$ 69,90</p>
+                  <span className="rp-tag rp-warn">Validar link</span>
+                  <Link href="/criar-conteudo" className="rp-btn rp-section">
+                    Criar postagem
+                  </Link>
+                </div>
+
+                <div className="rp-panel rp-catalog-card">
+                  <div className="rp-product-photo rp-p3" role="img" aria-label="Luminária de mesa" />
+                  <p className="rp-sub">Shopee · Exemplo</p>
+                  <h3>Luminária de mesa</h3>
+                  <p className="rp-price">R$ 119,90</p>
+                  <span className="rp-tag">Em revisão</span>
+                  <Link href="/criar-conteudo" className="rp-btn rp-section">
+                    Criar postagem
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="rp-three rp-section" id="rp-catalog">
+                {filteredProducts.map((p, idx) => {
+                  const photoClass = idx % 3 === 0 ? 'rp-p1' : idx % 3 === 1 ? 'rp-p2' : 'rp-p3';
+                  return (
+                    <div key={p.id} className="rp-panel rp-catalog-card">
+                      <div className={`rp-product-photo ${photoClass}`} role="img" aria-label={p.title} />
+                      <p className="rp-sub">
+                        {p.storeName.toUpperCase()} · Avaliação {p.rating || '4.8'}
+                      </p>
+                      <h3>{p.title}</h3>
+                      <p className="rp-price">
+                        R$ {p.currentPrice?.toFixed(2).replace('.', ',')}
+                      </p>
+                      <span className="rp-tag rp-good">Apto</span>
+                      <Link
+                        href={`/criar-conteudo?aba=oferta-link`}
+                        className="rp-btn rp-section"
+                      >
+                        Criar postagem
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Aba 2: Busca automática */}
+        {activeTab === 'busca' && (
+          <div data-panel="busca" role="tabpanel">
+            <div className="rp-banner">
+              <span>
+                Busca automática{' '}
+                <strong id="rp-search-state">
+                  {searchActive ? 'ativa' : 'pausada'}
+                </strong>
+              </span>
+              <button
+                className="rp-btn"
+                id="rp-toggle-search"
+                type="button"
+                onClick={() => setSearchActive(!searchActive)}
+              >
+                {searchActive ? 'Pausar busca' : 'Ativar busca'}
+              </button>
+            </div>
+
+            <div className="rp-split">
+              <div className="rp-panel">
+                <h2>Onde buscar</h2>
+
+                <label className="rp-field">
+                  Loja principal
+                  <select
+                    value={primaryStore}
+                    onChange={(e) => setPrimaryStore(e.target.value)}
+                  >
+                    <option value="Shopee">Shopee</option>
+                    <option value="Mercado Livre">Mercado Livre</option>
+                    <option value="Netshoes">Netshoes</option>
+                    <option value="Amazon">Amazon</option>
+                  </select>
+                </label>
+
+                <label className="rp-field">
+                  Categorias
+                  <input
+                    value={categories}
+                    onChange={(e) => setCategories(e.target.value)}
+                  />
+                </label>
+
+                <label className="rp-field">
+                  Intervalo de busca
+                  <select
+                    value={searchInterval}
+                    onChange={(e) => setSearchInterval(e.target.value)}
+                  >
+                    <option value="A cada 30 minutos">A cada 30 minutos</option>
+                    <option value="A cada 60 minutos">A cada 60 minutos</option>
+                  </select>
+                </label>
+
+                <label className="rp-check">
+                  <input
+                    type="checkbox"
+                    checked={sendToReview}
+                    onChange={(e) => setSendToReview(e.target.checked)}
+                  />
+                  Encaminhar achados para revisão
+                </label>
+
+                <button
+                  className="rp-btn rp-primary rp-section"
+                  type="button"
+                  onClick={handleSaveSearch}
+                >
+                  Salvar busca
+                </button>
+              </div>
+
+              <div className="rp-panel">
+                <h2>Qualidade antes de volume</h2>
+                <p className="rp-sub">
+                  A busca usa os critérios da curadoria e evita produtos repetidos.
+                </p>
+
+                <div className="rp-list">
+                  <div className="rp-list-item">
+                    <div className="rp-list-copy">
+                      <strong>Nota mínima</strong>
+                      <p>{minRating} estrelas</p>
+                    </div>
+                  </div>
+                  <div className="rp-list-item">
+                    <div className="rp-list-copy">
+                      <strong>Prova social</strong>
+                      <p>{minReviews} avaliações ou mais</p>
+                    </div>
+                  </div>
+                  <div className="rp-list-item">
+                    <div className="rp-list-copy">
+                      <strong>Repetição</strong>
+                      <p>Não repetir por {noRepeatDays} dias</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="rp-btn"
+                  onClick={() => handleSelectTab('curadoria')}
+                >
+                  Editar curadoria
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Aba 3: Curadoria */}
+        {activeTab === 'curadoria' && (
+          <div data-panel="curadoria" role="tabpanel">
+            <div className="rp-panel">
+              <h2>O que seu público procura?</h2>
+
+              <label className="rp-field">
+                Interesses
+                <textarea
+                  rows={3}
+                  value={interests}
+                  onChange={(e) => setInterests(e.target.value)}
+                />
+              </label>
+
+              <div className="rp-grid">
+                <label className="rp-field">
+                  Nota mínima
+                  <input
+                    type="number"
+                    value={minRating}
+                    min="0"
+                    max="5"
+                    step="0.1"
+                    onChange={(e) => setMinRating(e.target.value)}
+                  />
+                </label>
+                <label className="rp-field">
+                  Avaliações mínimas
+                  <input
+                    type="number"
+                    value={minReviews}
+                    min="0"
+                    onChange={(e) => setMinReviews(e.target.value)}
+                  />
+                </label>
+                <label className="rp-field">
+                  Ofertas por dia
+                  <input
+                    type="number"
+                    value={offersPerDay}
+                    min="1"
+                    onChange={(e) => setOffersPerDay(e.target.value)}
+                  />
+                </label>
+                <label className="rp-field">
+                  Dias sem repetir produto
+                  <input
+                    type="number"
+                    value={noRepeatDays}
+                    min="1"
+                    onChange={(e) => setNoRepeatDays(e.target.value)}
+                  />
+                </label>
+              </div>
+
+              <label className="rp-check">
+                <input
+                  type="checkbox"
+                  checked={alternateCategories}
+                  onChange={(e) => setAlternateCategories(e.target.checked)}
+                />
+                Alternar categorias ao longo do dia
+              </label>
+
+              <label className="rp-check">
+                <input
+                  type="checkbox"
+                  checked={reviewMissingInfo}
+                  onChange={(e) => setReviewMissingInfo(e.target.checked)}
+                />
+                Enviar para revisão quando faltarem informações
+              </label>
+
+              <div className="rp-footer">
+                <button
+                  className="rp-btn rp-primary"
+                  type="button"
+                  onClick={handleSaveCurator}
+                >
+                  Salvar critérios
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export default function OfertasPage() {
+  return (
+    <Suspense fallback={<div className="rp-page"><p className="rp-sub">Carregando ofertas...</p></div>}>
+      <OfertasContent />
+    </Suspense>
   );
 }

@@ -1,0 +1,17 @@
+/* Paleta aprovada do protótipo. Adaptar à convenção de tokens do projeto. */
+:root {
+  --radar-background: #1a1d20;
+  --radar-sidebar: #171a1d;
+  --radar-panel: #24282c;
+  --radar-border: #363c41;
+  --radar-text: #f2f4f5;
+  --radar-muted: #aab2b7;
+  --radar-accent: #39bee6;
+  --radar-input: #1a2025;
+  --radar-primary-background: #e7edf0;
+  --radar-primary-text: #20262b;
+  --radar-font: Inter, "Segoe UI", Arial, sans-serif;
+  --radar-sidebar-width: 220px;
+  --radar-panel-radius: 12px;
+  --radar-control-radius: 8px;
+}

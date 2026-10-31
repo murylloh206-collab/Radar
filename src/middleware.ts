@@ -18,6 +18,31 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // 1.1 Redirecionamento de compatibilidade com rotas legadas (preservando parâmetros)
+  const LEGACY_ROUTES: Record<string, string> = {
+    '/gerar-postagem': '/criar-conteudo?aba=oferta-link',
+    '/mensagem-avulsa': '/criar-conteudo?aba=mensagem-livre',
+    '/stories': '/criar-conteudo?aba=story',
+    '/automacao': '/ofertas?aba=busca-automatica',
+    '/agenda': '/envios?aba=agenda',
+    '/analytics': '/resultados?aba=grupos',
+    '/relatorios': '/resultados?aba=vendas',
+    '/bio-link': '/pagina-publica',
+    '/conexao-whatsapp': '/conexoes?aba=whatsapp',
+    '/conectar-lojas': '/conexoes?aba=lojas',
+    '/ajustes': '/conexoes?aba=lojas',
+  };
+
+  if (LEGACY_ROUTES[pathname]) {
+    const targetUrl = new URL(LEGACY_ROUTES[pathname], req.url);
+    req.nextUrl.searchParams.forEach((val, key) => {
+      if (!targetUrl.searchParams.has(key)) {
+        targetUrl.searchParams.set(key, val);
+      }
+    });
+    return NextResponse.redirect(targetUrl);
+  }
+
   // 2. Extrair token de sessão do cookie ou header
   const token =
     req.cookies.get(SESSION_COOKIE_NAME)?.value ||
