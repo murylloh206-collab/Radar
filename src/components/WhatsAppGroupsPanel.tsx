@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import type { WhatsAppConnection, WhatsAppGroup } from '@/lib/types';
+import WhatsAppAvatar from '@/components/WhatsAppAvatar';
 import './whatsapp-groups.css';
 
 function dateLabel(value?: string | null) {
@@ -39,100 +40,6 @@ function phoneLabel(value?: string) {
 
 function normalize(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
-}
-
-function WhatsAppAvatar({
-  resource,
-  ownerJid,
-  accountKey,
-  name,
-  personal = false,
-  directUrl,
-}: {
-  resource?: string;
-  ownerJid?: string;
-  accountKey?: string;
-  name: string;
-  personal?: boolean;
-  directUrl?: string;
-}) {
-  const element = useRef<HTMLSpanElement>(null);
-  const [picture, setPicture] = useState<string | null>(directUrl || null);
-  const [photoError, setPhotoError] = useState<string | undefined>();
-
-  useEffect(() => {
-    if (directUrl) {
-      setPicture(directUrl);
-      return;
-    }
-    if (!resource || !ownerJid) return;
-
-    const controller = new AbortController();
-    let active = true;
-    let started = false;
-    setPicture(null);
-    setPhotoError(undefined);
-
-    async function load() {
-      if (started) return;
-      started = true;
-      try {
-        const response = await fetch(`${resource}&ownerJid=${encodeURIComponent(ownerJid || '')}`, {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          if (active) setPhotoError(typeof data.error === 'string' ? data.error : 'Não foi possível consultar a foto.');
-          return;
-        }
-        if (active && data.ok && typeof data.pictureUrl === 'string') setPicture(data.pictureUrl);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return;
-      }
-    }
-
-    const observer =
-      typeof IntersectionObserver === 'undefined'
-        ? null
-        : new IntersectionObserver(
-            (entries) => {
-              if (entries.some((entry) => entry.isIntersecting)) {
-                void load();
-                observer?.disconnect();
-              }
-            },
-            { rootMargin: '120px' }
-          );
-
-    if (observer && element.current) observer.observe(element.current);
-    else void load();
-
-    return () => {
-      active = false;
-      controller.abort();
-      observer?.disconnect();
-    };
-  }, [resource, ownerJid, accountKey, directUrl]);
-
-  return (
-    <span ref={element} title={photoError} className={`wa-avatar ${personal ? 'wa-avatar--account' : ''}`}>
-      {picture ? (
-        <img
-          src={picture}
-          alt={`Foto de ${name}`}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onError={() => setPicture(null)}
-        />
-      ) : personal ? (
-        <UserRound size={24} aria-hidden="true" />
-      ) : (
-        <Users size={21} aria-hidden="true" />
-      )}
-    </span>
-  );
 }
 
 export default function WhatsAppGroupsPanel() {
@@ -528,11 +435,12 @@ export default function WhatsAppGroupsPanel() {
                   <div className="wa-account-card-header">
                     <div className="wa-account-card-info">
                       <WhatsAppAvatar
+                        connectionId={conn.id}
                         ownerJid={conn.ownerJid}
-                        accountKey={`${conn.ownerJid}:${conn.lastPingAt}`}
                         name={conn.label}
                         personal
-                        directUrl={conn.profilePicUrl}
+                        accountCardMode
+                        initialUrl={conn.profilePicUrl}
                       />
                       <div className="wa-account-card-details">
                         <span className="wa-account-card-label">
@@ -688,10 +596,11 @@ export default function WhatsAppGroupsPanel() {
                 <li key={`${group.connectionId || 'd'}_${group.groupJid}`} className="wa-group-row">
                   <div className="wa-group-identity">
                     <WhatsAppAvatar
-                      resource={`/api/whatsapp/groups/photo?groupJid=${encodeURIComponent(group.groupJid)}`}
+                      connectionId={selectedConn.id}
                       ownerJid={selectedConn.ownerJid || ''}
-                      accountKey={accountKey}
+                      groupJid={group.groupJid}
                       name={group.name}
+                      initialUrl={group.pictureUrl}
                     />
                     <div className="wa-group-copy">
                       <h3>{group.name}</h3>

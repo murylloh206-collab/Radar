@@ -35,12 +35,20 @@ export async function GET(req: NextRequest) {
     }
     const group = account ? undefined : (await livePhotoGroups(config, owner)).find(candidate => candidate.id === jid);
     if (!account && !group) throw new WhatsAppPhotoError('GROUP_NOT_FOUND', 404, 'Grupo indisponível nesta conta.');
-    const metadataPicture = safeWhatsAppPictureUrl(group?.pictureUrl);
+    
+    const refresh = params.get('refresh') === '1';
+    const metadataPicture = !refresh ? safeWhatsAppPictureUrl(group?.pictureUrl) : null;
     if (metadataPicture) return NextResponse.json({ ok: true, pictureUrl: metadataPicture }, { headers });
+    
     const number = account ? owner : group!.id;
     const key = JSON.stringify([session.userId, photoConfigKey(config), owner, number]);
-    const cached = cache.get(key);
-    if (cached && cached.expires > Date.now()) return NextResponse.json({ ok: true, ...cached.picture }, { headers });
+    if (refresh) {
+      cache.delete(key);
+      pending.delete(key);
+    } else {
+      const cached = cache.get(key);
+      if (cached && cached.expires > Date.now()) return NextResponse.json({ ok: true, ...cached.picture }, { headers });
+    }
     let task = pending.get(key);
     if (!task) {
       task = fetchPicture(config, number);
