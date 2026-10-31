@@ -1778,45 +1778,525 @@ a {
 .cc-stores-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 13px;
 }
 
 .cc-store-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 157px;
+  text-align: left;
+  color: #eef3f5;
+  padding: 22px;
   border: 1px solid var(--rd-line);
   background: var(--rd-panel);
-  padding: 19px;
   border-radius: 13px;
-  display: flex;
-  flex-direction: column;
+  border-bottom: 2px solid transparent;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease;
+  text-decoration: none;
+  font: inherit;
+  box-sizing: border-box;
 }
 
-.cc-store-card-head {
+.cc-store-card:hover,
+.cc-store-card:focus-visible {
+  background: #283035;
+  border-bottom-color: #39bee6;
+  outline: none;
+}
+
+.cc-store-card .cc-store-head {
   display: flex;
   gap: 12px;
   align-items: center;
-  margin-bottom: 12px;
+  padding-right: 18px;
+  margin-bottom: 17px;
 }
 
-.cc-store-card h3 {
-  font-size: 15px;
+.cc-store-card .cc-mark {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+}
+
+.cc-store-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #f1f4f5;
+}
+
+.cc-store-card .cc-store-head small {
+  font-size: 10px;
+  color: #a6b4bd;
+  margin-top: 4px;
+  display: block;
+}
+
+.cc-store-description {
+  display: block;
+  font-size: 11px;
+  color: #aebbc4;
+  max-width: 90%;
+  line-height: 1.65;
+}
+
+.cc-store-corner {
+  position: absolute;
+  right: 19px;
+  bottom: 18px;
+  color: #8c9ea8;
+  opacity: .65;
+  transition: color .18s ease, opacity .18s ease;
+}
+
+.cc-store-card:hover .cc-store-corner {
+  color: #72d8f5;
+  opacity: 1;
+}
+
+.cc-card-connection {
+  position: absolute;
+  right: 18px;
+  top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+  background: #23282c;
+  border-radius: 20px;
+  padding: 3px 2px 3px 7px;
+}
+
+.cc-connected-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6ad6aa;
+  flex: none;
+}
+
+.cc-connected-label {
+  font-size: 10px;
+  font-weight: 400;
+  color: #a9e1c8;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width .2s ease, opacity .2s ease;
+}
+
+.cc-store-card:hover .cc-connected-label,
+.cc-store-card:focus-visible .cc-connected-label {
+  max-width: 75px;
+  opacity: 1;
+}
+
+.cc-guide-return {
+  display: flex;
+  justify-content: flex-end;
+  margin: -7px 0 13px;
+}
+
+.cc-guide-return button {
+  font-size: 11px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b7c4cb;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.cc-guide-return button:hover {
+  color: #72d8f5;
+}
+
+.cc-dismiss-guide {
+  font-size: 10px;
+  min-height: 30px;
+  padding: 5px 8px;
+  flex: none;
+  color: #9eafb9;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cc-dismiss-guide:hover {
+  color: #edf3f5;
+  border-color: #48555e;
+}
+
+/* Modal de Método do Mercado Livre */
+.cc-method-dialog {
+  width: min(520px, calc(100% - 30px));
+  background: #23292e;
+  color: #eef3f5;
+  border: 1px solid #46525b;
+  border-bottom: 2px solid #39bee6;
+  border-radius: 17px;
+  padding: 26px;
+  margin: auto;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+  animation: cc-fade-in 0.15s ease-out;
+}
+
+.cc-method-brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 25px;
+}
+
+.cc-method-brand h2 {
+  font-size: 18px;
+  margin: 0;
+  font-weight: 700;
+  color: #f1f4f5;
+}
+
+.cc-method-brand .cc-mark {
+  width: 51px;
+  height: 51px;
+}
+
+.cc-method-brand button.cc-close-btn {
+  margin-left: auto;
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 7px;
+  background: transparent;
+  border: none;
+  color: #9ca8af;
+  cursor: pointer;
+  border-radius: 7px;
+}
+
+.cc-method-brand button.cc-close-btn:hover {
+  color: #ffffff;
+}
+
+.cc-modal-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: #a9e1c8;
+  margin-top: 4px;
+}
+
+.cc-method-dialog h3 {
+  font-size: 21px;
+  letter-spacing: -.03em;
+  margin-bottom: 7px;
   font-weight: 600;
   color: #f1f4f5;
-  margin: 0;
 }
 
-.cc-store-card-head small {
-  font-size: 11px;
-  color: #aab7c0;
+.cc-method-options {
+  display: grid;
+  gap: 11px;
+  margin-top: 23px;
+}
+
+.cc-method-option {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  text-align: left;
+  border: 1px solid #414e57;
+  border-radius: 12px;
+  padding: 17px;
+  background: #293239;
+  color: #edf3f5;
+  cursor: pointer;
+  width: 100%;
+  font: inherit;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.cc-method-option:hover,
+.cc-method-option:focus-visible {
+  border-color: #54bad8;
+  background: #2d3a42;
+  outline: none;
+}
+
+.cc-method-icon {
+  display: grid;
+  place-items: center;
+  width: 37px;
+  height: 37px;
+  background: #35424b;
+  border: 1px solid #4a5b67;
+  border-radius: 10px;
+  flex: none;
+  color: #a5d7e5;
+}
+
+.cc-method-option strong {
   display: block;
-  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #f1f4f5;
 }
 
-.cc-store-card .cc-sub {
+.cc-method-option small {
+  display: block;
+  font-size: 11px;
+  color: #abbcc8;
+  line-height: 1.6;
+}
+
+.cc-method-option > .cc-option-arrow {
+  margin-left: auto;
+  color: #a4b9c7;
+  flex: none;
+}
+
+.cc-method-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-top: 1px solid #3b454d;
+  padding-top: 16px;
+  margin-top: 23px;
+}
+
+.cc-method-footer button {
+  font-size: 11px;
+}
+
+.cc-disconnect {
+  color: #aebbc5 !important;
+}
+
+.cc-disconnect:hover {
+  color: #ff9d9d !important;
+}
+
+/* Modal de Configuração Direta das Lojas */
+.cc-config-dialog {
+  width: min(510px, calc(100% - 30px));
+  padding: 26px;
+  margin: auto;
+  background: #23292e;
+  color: #eef3f5;
+  border: 1px solid #46525b;
+  border-bottom: 2px solid #39bee6;
+  border-radius: 17px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+  animation: cc-fade-in 0.15s ease-out;
+}
+
+.cc-config-head {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.cc-config-head .cc-mark {
+  width: 52px;
+  height: 52px;
+}
+
+.cc-config-head h2 {
+  font-size: 19px;
+  letter-spacing: -.025em;
+  margin: 0;
+  font-weight: 700;
+  color: #f1f4f5;
+}
+
+.cc-config-head .cc-kicker {
+  font-size: 9px;
+  margin-bottom: 4px;
+  color: #9eb4c1;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  display: block;
+}
+
+.cc-config-head > button.cc-close-btn {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 7px;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: #9ca8af;
+  cursor: pointer;
+  border-radius: 7px;
+}
+
+.cc-config-head > button.cc-close-btn:hover {
+  color: #ffffff;
+}
+
+.cc-config-description {
+  color: #aebdc7;
   font-size: 12px;
-  color: var(--rd-muted);
-  line-height: 1.55;
-  margin-bottom: 16px;
-  flex: 1;
+  line-height: 1.75;
+  margin-bottom: 22px;
+}
+
+.cc-config-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cc-config-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  color: #e3eaf0;
+  font-weight: 500;
+}
+
+.cc-config-fields input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 43px;
+  border: 1px solid #47545e;
+  border-radius: 9px;
+  padding: 11px 12px;
+  background: #1b2329;
+  color: #e1eaf0;
+  font: 12px/1.5 Inter, 'Segoe UI', sans-serif;
+  box-sizing: border-box;
+}
+
+.cc-config-fields input:focus {
+  outline: none;
+  border-color: #39bee6;
+  box-shadow: 0 0 0 2px rgba(57, 190, 230, 0.2);
+}
+
+.cc-config-fields input::placeholder {
+  color: #879aa7;
+  opacity: 1;
+}
+
+.cc-config-fields label small {
+  font-size: 10px;
+  line-height: 1.6;
+  color: #97aab7;
+  font-weight: normal;
+}
+
+.cc-config-help {
+  padding: 16px;
+  margin-top: 21px;
+  border: 1px solid #394a55;
+  background: #253039;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #b7c9d4;
+}
+
+.cc-config-help summary {
+  cursor: pointer;
+  color: #cfe0e9;
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.cc-config-help p {
+  font-size: 11px;
+  line-height: 1.75;
+  margin-top: 11px;
+  color: #aabfcb;
+}
+
+.cc-config-help a {
+  color: #7bd1ea;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  margin-top: 10px;
+  text-decoration: none;
+  border-bottom: 1px solid #487e8c;
+  padding-bottom: 2px;
+}
+
+.cc-config-help a:hover {
+  color: #9fe2f5;
+  border-color: #7bd1ea;
+}
+
+.cc-config-privacy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a3b5c0;
+  font-size: 10px;
+  margin: 18px 0 0;
+}
+
+.cc-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #3a454d;
+  margin-top: 23px;
+  padding-top: 19px;
+  flex-wrap: wrap;
+}
+
+.cc-config-actions button {
+  font-size: 11px;
+  min-height: 39px;
+}
+
+.cc-config-feedback {
+  margin-top: 15px;
+  padding: 11px 12px;
+  border: 1px solid #4c6b7b;
+  background: #293b46;
+  border-radius: 8px;
+  color: #c9e0ed;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.cc-config-feedback.error {
+  border-color: #8b3b3b;
+  background: #3a2222;
+  color: #ffd4d4;
+}
+
+.cc-config-feedback.success {
+  border-color: #3b8b64;
+  background: #1f382a;
+  color: #d4ffd8;
 }
 
 /* Modal do Tutorial */

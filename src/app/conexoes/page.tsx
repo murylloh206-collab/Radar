@@ -3,7 +3,8 @@
 import React, { Suspense, useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { WhatsAppGroup } from '@/lib/types';
+import { WhatsAppGroup, StoreName } from '@/lib/types';
+import { SafeVaultStatus } from '@/lib/server/credentials-vault';
 import { BrandLogo } from '@/components/BrandLogo';
 
 interface WhatsAppStatusData {
@@ -12,6 +13,13 @@ interface WhatsAppStatusData {
   profileName?: string;
   instanceName?: string;
   lastPingAt?: string;
+}
+
+interface StoreConfigForm {
+  appId: string;
+  appSecret: string;
+  affiliateTag: string;
+  userToken: string;
 }
 
 function ConexoesContent() {
@@ -44,48 +52,81 @@ function ConexoesContent() {
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Status real das lojas no cofre
+  const [vaultStores, setVaultStores] = useState<SafeVaultStatus[]>([]);
+
+  // Preferência da dica de instalação (persistida no localStorage)
+  const [hideGuide, setHideGuide] = useState<boolean>(false);
+
   // Modal do Tutorial de Instalação da Extensão
   const [showTutorialModal, setShowTutorialModal] = useState<boolean>(() => tutorialParam === '1');
   const [selectedBrowser, setSelectedBrowser] = useState<'chrome' | 'brave' | 'edge'>('chrome');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
-  // Modal de Configuração de Loja
-  const [selectedStoreModal, setSelectedStoreModal] = useState<string | null>(() => {
+  // Modal exclusivo de Escolha de Método do Mercado Livre
+  const [showMLMethodModal, setShowMLMethodModal] = useState<boolean>(false);
+
+  // Modal de Configuração Direta da Loja Selecionada
+  const [selectedStoreConfig, setSelectedStoreConfig] = useState<StoreName | null>(() => {
     if (configureParam) {
       const lower = configureParam.toLowerCase();
-      if (lower.includes('shopee')) return 'Shopee';
-      if (lower.includes('amazon')) return 'Amazon';
-      if (lower.includes('netshoes') || lower.includes('rakuten')) return 'Netshoes / Rakuten';
-      if (lower.includes('mercadolivre') || lower.includes('meli')) return 'Mercado Livre';
-      if (lower.includes('magalu')) return 'Magalu';
+      if (lower.includes('shopee')) return 'shopee';
+      if (lower.includes('amazon')) return 'amazon';
+      if (lower.includes('netshoes') || lower.includes('rakuten')) return 'netshoes';
+      if (lower.includes('mercadolivre') || lower.includes('meli')) return 'mercadolivre';
+      if (lower.includes('magalu')) return 'magalu';
     }
     return null;
   });
 
-  // Atualizar modal de loja se query param mudar
-  useEffect(() => {
-    if (configureParam) {
-      const lower = configureParam.toLowerCase();
-      if (lower.includes('shopee')) setSelectedStoreModal('Shopee');
-      else if (lower.includes('amazon')) setSelectedStoreModal('Amazon');
-      else if (lower.includes('netshoes') || lower.includes('rakuten')) setSelectedStoreModal('Netshoes / Rakuten');
-      else if (lower.includes('mercadolivre') || lower.includes('meli')) setSelectedStoreModal('Mercado Livre');
-      else if (lower.includes('magalu')) setSelectedStoreModal('Magalu');
-    }
-    if (tutorialParam === '1') {
-      setShowTutorialModal(true);
-    }
-  }, [configureParam, tutorialParam]);
+  // Campos do formulário de configuração direta
+  const [configForm, setConfigForm] = useState<StoreConfigForm>({
+    appId: '',
+    appSecret: '',
+    affiliateTag: '',
+    userToken: '',
+  });
 
-  // Carregar dados de WhatsApp e Grupos
-  const loadData = async () => {
+  // Feedback do modal de configuração (status, mensagem e loading)
+  const [configLoading, setConfigLoading] = useState<boolean>(false);
+  const [configFeedback, setConfigFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Carregar preferência salva no navegador para a dica de instalação
+  useEffect(() => {
     try {
-      const [resWa, resGroups] = await Promise.all([
+      const stored = localStorage.getItem('radar_hide_install_guide');
+      if (stored === 'true') {
+        setHideGuide(true);
+      }
+    } catch {}
+  }, []);
+
+  const handleDismissGuide = () => {
+    setHideGuide(true);
+    try {
+      localStorage.setItem('radar_hide_install_guide', 'true');
+    } catch {}
+  };
+
+  const handleRestoreGuide = () => {
+    setHideGuide(false);
+    try {
+      localStorage.removeItem('radar_hide_install_guide');
+    } catch {}
+  };
+
+  // Carregar dados de WhatsApp, Grupos e Lojas do cofre
+  const loadData = useCallback(async () => {
+    try {
+      const [resWa, resGroups, resVault] = await Promise.all([
         fetch('/api/whatsapp/connect'),
         fetch('/api/whatsapp/groups'),
+        fetch('/api/integrations/vault'),
       ]);
+
       const dataWa = await resWa.json().catch(() => ({}));
       const dataGroups = await resGroups.json().catch(() => ({}));
+      const dataVault = await resVault.json().catch(() => ({}));
 
       if (dataWa.ok) {
         setWaData(dataWa.whatsapp);
@@ -93,15 +134,168 @@ function ConexoesContent() {
       if (dataGroups.ok && Array.isArray(dataGroups.groups)) {
         setGroups(dataGroups.groups);
       }
+      if (dataVault.ok && Array.isArray(dataVault.stores)) {
+        setVaultStores(dataVault.stores);
+      }
     } catch {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  // Verificar se uma loja está realmente conectada e validada no cofre
+  const isStoreConnected = useCallback((storeName: StoreName): boolean => {
+    const found = vaultStores.find((s) => s.storeName === storeName);
+    return found?.connectionStatus === 'conectado';
+  }, [vaultStores]);
+
+  // Abrir modal de configuração direta populando campos se já existirem metadados
+  const handleOpenStoreConfig = (store: StoreName) => {
+    setShowMLMethodModal(false);
+    setConfigFeedback(null);
+    const existing = vaultStores.find((s) => s.storeName === store);
+
+    setConfigForm({
+      appId: existing?.appId || '',
+      appSecret: '',
+      affiliateTag: existing?.affiliateTag || existing?.tagIdentified || '',
+      userToken: '',
+    });
+
+    setSelectedStoreConfig(store);
+  };
+
+  // Tratar clique no card de uma loja
+  const handleCardClick = (store: StoreName) => {
+    if (store === 'mercadolivre') {
+      setShowMLMethodModal(true);
+    } else {
+      handleOpenStoreConfig(store);
+    }
+  };
+
+  // Desconectar loja via API
+  const handleDisconnectStore = async (store: StoreName) => {
+    setConfigLoading(true);
+    try {
+      const res = await fetch('/api/integrations/vault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disconnect', storeName: store }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        if (Array.isArray(data.stores)) {
+          setVaultStores(data.stores);
+        } else {
+          await loadData();
+        }
+        setShowMLMethodModal(false);
+        setSelectedStoreConfig(null);
+        setNotice(`Integração de ${store} desconectada.`);
+      } else {
+        setNotice(data.error || 'Falha ao desconectar loja.');
+      }
+    } catch {
+      setNotice('Erro de rede ao desconectar loja.');
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  // Testar integração no modal
+  const handleTestIntegration = async () => {
+    if (!selectedStoreConfig) return;
+    setConfigLoading(true);
+    setConfigFeedback(null);
+
+    try {
+      const res = await fetch('/api/integrations/vault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test',
+          storeName: selectedStoreConfig,
+          data: configForm,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        setConfigFeedback({
+          type: 'success',
+          message: data.message || 'Integração testada e validada com sucesso!',
+        });
+      } else {
+        setConfigFeedback({
+          type: 'error',
+          message: data.error || 'Falha na validação das credenciais.',
+        });
+      }
+    } catch {
+      setConfigFeedback({
+        type: 'error',
+        message: 'Erro de comunicação ao testar integração. Verifique a conexão.',
+      });
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  // Salvar integração no cofre via API
+  const handleSaveIntegration = async () => {
+    if (!selectedStoreConfig) return;
+    setConfigLoading(true);
+    setConfigFeedback(null);
+
+    try {
+      const res = await fetch('/api/integrations/vault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save',
+          storeName: selectedStoreConfig,
+          data: configForm,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        if (Array.isArray(data.stores)) {
+          setVaultStores(data.stores);
+        } else {
+          await loadData();
+        }
+
+        setConfigFeedback({
+          type: 'success',
+          message: data.message || 'Integração salva e conectada com sucesso!',
+        });
+
+        // Fechar modal suavemente após confirmação confirmada do servidor
+        setTimeout(() => {
+          setSelectedStoreConfig(null);
+          setConfigFeedback(null);
+        }, 1200);
+      } else {
+        setConfigFeedback({
+          type: 'error',
+          message: data.error || 'Falha ao salvar integração no cofre.',
+        });
+      }
+    } catch {
+      setConfigFeedback({
+        type: 'error',
+        message: 'Erro de rede ao salvar credenciais no servidor.',
+      });
+    } finally {
+      setConfigLoading(false);
+    }
+  };
 
   const handleSelectTab = (tab: 'whatsapp' | 'lojas') => {
     setActiveTab(tab);
@@ -186,12 +380,13 @@ function ConexoesContent() {
     setTimeout(() => setCopyFeedback(null), 4000);
   }, [browserExtensionAddress]);
 
-  // Fechar modal com tecla Escape
+  // Fechar modais com tecla Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowTutorialModal(false);
-        setSelectedStoreModal(null);
+        setShowMLMethodModal(false);
+        setSelectedStoreConfig(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -323,30 +518,17 @@ function ConexoesContent() {
               </label>
 
               <div className="rp-list">
-                {groups.length === 0 ? (
-                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '24px 16px' }}>
-                    <p className="rp-sub">
-                      Nenhum grupo sincronizado no momento. Clique em &quot;Atualizar grupos&quot; para carregar os grupos da sua conta do WhatsApp.
-                    </p>
-                  </div>
+                {loading ? (
+                  <p className="rp-sub">Carregando grupos...</p>
                 ) : filteredGroups.length === 0 ? (
-                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '20px 16px' }}>
-                    <p className="rp-sub">Nenhum grupo encontrado para &quot;{groupSearch}&quot;.</p>
-                  </div>
+                  <p className="rp-sub">Nenhum grupo encontrado.</p>
                 ) : (
                   filteredGroups.map((g) => (
-                    <div key={g.groupJid} className="rp-list-item">
-                      <div className="rp-list-copy">
+                    <div key={g.id} className="rp-item">
+                      <div>
                         <strong>{g.name}</strong>
-                        <p>
-                          {g.canPost
-                            ? 'Pode enviar mensagens'
-                            : 'Pode receber mensagens'}
-                        </p>
+                        <p className="rp-sub">ID: {g.groupJid || g.id}</p>
                       </div>
-                      <span className={`rp-tag ${g.canPost ? 'rp-good' : ''}`}>
-                        {g.canPost ? 'Publicação' : 'Leitura'}
-                      </span>
                       <Link href="/copiador" className="rp-btn">
                         Usar no Copiador
                       </Link>
@@ -374,199 +556,256 @@ function ConexoesContent() {
           </div>
         )}
 
-        {/* Aba 2: Lojas e afiliados (Desenho Aprovado) */}
+        {/* Aba 2: Lojas e afiliados (Desenho Aprovado Atualizado) */}
         {activeTab === 'lojas' && (
           <div data-panel="lojas" role="tabpanel">
-            {/* Bloco Onboard Aprovado: Seu navegador, conectado ao Radar */}
-            <section className="cc-onboard" aria-label="Primeiros passos do conector">
-              <div className="cc-onboard-top">
-                <div>
-                  <span className="cc-kicker">COMECE POR AQUI</span>
-                  <h2>Seu navegador, conectado ao Radar.</h2>
-                  <p>
-                    Instale o conector para vincular as lojas compatíveis. As demais integrações são configuradas aqui no painel.
-                  </p>
-                </div>
-                <span className="cc-pill">
+            {/* Botão de Restaurar Guia (Aparece quando a dica é ocultada) */}
+            {hideGuide && (
+              <div className="cc-guide-return">
+                <button type="button" onClick={handleRestoreGuide}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M19.439 7.85c0-2.68-2.17-4.85-4.85-4.85-1.57 0-2.97.74-3.87 1.89a4.85 4.85 0 0 0-3.87-1.89C4.17 3 2 5.17 2 7.85c0 1.57.74 2.97 1.89 3.87A4.85 4.85 0 0 0 2 15.59c0 2.68 2.17 4.85 4.85 4.85 1.57 0 2.97-.74 3.87-1.89 1.57 0 2.97.74 3.87 1.89 2.68 0 4.85-2.17 4.85-4.85 0-1.57-.74-2.97-1.89-3.87 1.15-.9 1.89-2.3 1.89-3.87z"></path>
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
                   </svg>
-                  Instalação manual
-                </span>
+                  Mostrar guia de instalação
+                </button>
               </div>
+            )}
 
-              <div className="cc-steps-mini">
-                <div>
-                  <span className="cc-number">1</span>
-                  <span>
-                    Instale a extensão
-                    <br />
-                    <small>Veja o passo a passo</small>
-                  </span>
+            {/* Bloco Onboard Aprovado: Dica de instalação ocultável */}
+            {!hideGuide && (
+              <section className="cc-onboard" aria-label="Primeiros passos do conector">
+                <div className="cc-onboard-top">
+                  <div>
+                    <span className="cc-kicker">COMECE POR AQUI</span>
+                    <h2>Seu navegador, conectado ao Radar.</h2>
+                    <p className="cc-sub">
+                      Instale o conector para vincular as lojas compatíveis. As demais integrações são configuradas aqui no painel.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="cc-dismiss-guide"
+                    onClick={handleDismissGuide}
+                    aria-label="Ocultar dica de instalação"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Ocultar dica
+                  </button>
                 </div>
-                <div>
-                  <span className="cc-number">2</span>
-                  <span>
-                    Entre na sua loja
-                    <br />
-                    <small>Use sua conta de afiliado</small>
-                  </span>
-                </div>
-                <div>
-                  <span className="cc-number">3</span>
-                  <span>
-                    Vincule ao Radar
-                    <br />
-                    <small>Confirme pelo conector</small>
-                  </span>
-                </div>
-              </div>
 
+                <div className="cc-steps-mini">
+                  <div>
+                    <span className="cc-number">1</span>
+                    <span>
+                      Instale a extensão
+                      <br />
+                      <small>Veja o passo a passo</small>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="cc-number">2</span>
+                    <span>
+                      Entre na sua loja
+                      <br />
+                      <small>Use sua conta de afiliado</small>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="cc-number">3</span>
+                    <span>
+                      Vincule ao Radar
+                      <br />
+                      <small>Confirme pelo conector</small>
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="rp-btn rp-quiet"
+                  onClick={() => setShowTutorialModal(true)}
+                  style={{ marginTop: 14, paddingLeft: 0, color: '#39bee6' }}
+                >
+                  Como instalar
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="7" y1="17" x2="17" y2="7"></line>
+                    <polyline points="7 7 17 7 17 17"></polyline>
+                  </svg>
+                </button>
+              </section>
+            )}
+
+            {/* Grid dos Cards de Lojas Inteiros Clicáveis */}
+            <div className="cc-stores-grid" role="region" aria-label="Lojas e afiliados disponíveis">
+              {/* Mercado Livre */}
               <button
                 type="button"
-                className="rp-btn rp-quiet"
-                onClick={() => setShowTutorialModal(true)}
-                style={{ marginTop: 14, paddingLeft: 0, color: '#39bee6' }}
+                className="cc-store-card"
+                onClick={() => handleCardClick('mercadolivre')}
+                aria-label={`Mercado Livre${isStoreConnected('mercadolivre') ? ', conectado' : ''}. Gerenciar integração`}
               >
-                Como instalar
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <line x1="7" y1="17" x2="17" y2="7"></line>
-                  <polyline points="7 7 17 7 17 17"></polyline>
-                </svg>
-              </button>
-            </section>
-
-            {/* Grid das Lojas Integradas */}
-            <div className="cc-stores-grid">
-              {/* Mercado Livre */}
-              <article className="cc-store-card">
-                <div className="cc-store-card-head">
-                  <BrandLogo brand="mercadolivre" variant="integracao" size={34} containerSize={48} />
-                  <div>
-                    <h3>Mercado Livre</h3>
-                    <small>Conexão pelo navegador</small>
-                  </div>
-                </div>
-                <p className="cc-sub">Vincule sua conta de afiliado usando o conector.</p>
-                <button
-                  type="button"
-                  className="rp-btn"
-                  onClick={() => setShowTutorialModal(true)}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  Conectar com a extensão
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {isStoreConnected('mercadolivre') && (
+                  <span className="cc-card-connection" aria-hidden="true">
+                    <span className="cc-connected-label">Conectado</span>
+                    <span className="cc-connected-dot"></span>
+                  </span>
+                )}
+                <span className="cc-store-head">
+                  <span className="cc-mark">
+                    <BrandLogo brand="mercadolivre" variant="integracao" size={38} containerSize={50} />
+                  </span>
+                  <span>
+                    <strong className="cc-store-name">Mercado Livre</strong>
+                    <small>Extensão ou configuração manual</small>
+                  </span>
+                </span>
+                <span className="cc-store-description">Sua conta de afiliado, do seu jeito.</span>
+                <span className="cc-store-corner" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="7" y1="17" x2="17" y2="7"></line>
                     <polyline points="7 7 17 7 17 17"></polyline>
                   </svg>
-                </button>
-              </article>
+                </span>
+              </button>
 
               {/* Shopee */}
-              <article className="cc-store-card">
-                <div className="cc-store-card-head">
-                  <BrandLogo brand="shopee" variant="integracao" size={34} containerSize={48} />
-                  <div>
-                    <h3>Shopee</h3>
-                    <small>Configuração pelo painel</small>
-                  </div>
-                </div>
-                <p className="cc-sub">Configure a integração da sua conta de afiliado.</p>
-                <button
-                  type="button"
-                  className="rp-btn"
-                  onClick={() => setSelectedStoreModal('Shopee')}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  Configurar integração
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <button
+                type="button"
+                className="cc-store-card"
+                onClick={() => handleCardClick('shopee')}
+                aria-label={`Shopee${isStoreConnected('shopee') ? ', conectado' : ''}. Configurar integração`}
+              >
+                {isStoreConnected('shopee') && (
+                  <span className="cc-card-connection" aria-hidden="true">
+                    <span className="cc-connected-label">Conectado</span>
+                    <span className="cc-connected-dot"></span>
+                  </span>
+                )}
+                <span className="cc-store-head">
+                  <span className="cc-mark">
+                    <BrandLogo brand="shopee" variant="integracao" size={38} containerSize={50} />
+                  </span>
+                  <span>
+                    <strong className="cc-store-name">Shopee</strong>
+                    <small>Programa de afiliados</small>
+                  </span>
+                </span>
+                <span className="cc-store-description">Gerencie os dados da sua integração.</span>
+                <span className="cc-store-corner" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="7" y1="17" x2="17" y2="7"></line>
                     <polyline points="7 7 17 7 17 17"></polyline>
                   </svg>
-                </button>
-              </article>
+                </span>
+              </button>
 
               {/* Amazon */}
-              <article className="cc-store-card">
-                <div className="cc-store-card-head">
-                  <BrandLogo brand="amazon" variant="integracao" size={34} containerSize={48} />
-                  <div>
-                    <h3>Amazon</h3>
-                    <small>Configuração pelo painel</small>
-                  </div>
-                </div>
-                <p className="cc-sub">Gerencie os dados da sua conta de associado.</p>
-                <button
-                  type="button"
-                  className="rp-btn"
-                  onClick={() => setSelectedStoreModal('Amazon')}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  Configurar integração
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <button
+                type="button"
+                className="cc-store-card"
+                onClick={() => handleCardClick('amazon')}
+                aria-label={`Amazon${isStoreConnected('amazon') ? ', conectado' : ''}. Configurar integração`}
+              >
+                {isStoreConnected('amazon') && (
+                  <span className="cc-card-connection" aria-hidden="true">
+                    <span className="cc-connected-label">Conectado</span>
+                    <span className="cc-connected-dot"></span>
+                  </span>
+                )}
+                <span className="cc-store-head">
+                  <span className="cc-mark">
+                    <BrandLogo brand="amazon" variant="integracao" size={38} containerSize={50} />
+                  </span>
+                  <span>
+                    <strong className="cc-store-name">Amazon</strong>
+                    <small>Programa de associados</small>
+                  </span>
+                </span>
+                <span className="cc-store-description">Conecte as oportunidades da sua conta.</span>
+                <span className="cc-store-corner" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="7" y1="17" x2="17" y2="7"></line>
                     <polyline points="7 7 17 7 17 17"></polyline>
                   </svg>
-                </button>
-              </article>
+                </span>
+              </button>
 
               {/* Netshoes */}
-              <article className="cc-store-card">
-                <div className="cc-store-card-head">
-                  <BrandLogo brand="netshoes" variant="integracao" size={34} containerSize={48} />
-                  <div>
-                    <h3>Netshoes</h3>
+              <button
+                type="button"
+                className="cc-store-card"
+                onClick={() => handleCardClick('netshoes')}
+                aria-label={`Netshoes${isStoreConnected('netshoes') ? ', conectado' : ''}. Configurar integração`}
+              >
+                {isStoreConnected('netshoes') && (
+                  <span className="cc-card-connection" aria-hidden="true">
+                    <span className="cc-connected-label">Conectado</span>
+                    <span className="cc-connected-dot"></span>
+                  </span>
+                )}
+                <span className="cc-store-head">
+                  <span className="cc-mark">
+                    <BrandLogo brand="netshoes" variant="integracao" size={38} containerSize={50} />
+                  </span>
+                  <span>
+                    <strong className="cc-store-name">Netshoes</strong>
                     <small>Integração Rakuten</small>
-                  </div>
-                </div>
-                <p className="cc-sub">Vincule seu programa de afiliados pelo painel.</p>
-                <button
-                  type="button"
-                  className="rp-btn"
-                  onClick={() => setSelectedStoreModal('Netshoes / Rakuten')}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  Configurar integração
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  </span>
+                </span>
+                <span className="cc-store-description">Seu programa de afiliados em um só lugar.</span>
+                <span className="cc-store-corner" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="7" y1="17" x2="17" y2="7"></line>
                     <polyline points="7 7 17 7 17 17"></polyline>
                   </svg>
-                </button>
-              </article>
+                </span>
+              </button>
 
               {/* Magalu */}
-              <article className="cc-store-card">
-                <div className="cc-store-card-head">
-                  <BrandLogo brand="magalu" variant="integracao" size={34} containerSize={48} />
-                  <div>
-                    <h3>Magalu</h3>
-                    <small>Configuração pelo painel</small>
-                  </div>
-                </div>
-                <p className="cc-sub">Configure a identificação da sua conta de parceiro.</p>
-                <button
-                  type="button"
-                  className="rp-btn"
-                  onClick={() => setSelectedStoreModal('Magalu')}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  Configurar integração
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <button
+                type="button"
+                className="cc-store-card"
+                onClick={() => handleCardClick('magalu')}
+                aria-label={`Magalu${isStoreConnected('magalu') ? ', conectado' : ''}. Configurar integração`}
+              >
+                {isStoreConnected('magalu') && (
+                  <span className="cc-card-connection" aria-hidden="true">
+                    <span className="cc-connected-label">Conectado</span>
+                    <span className="cc-connected-dot"></span>
+                  </span>
+                )}
+                <span className="cc-store-head">
+                  <span className="cc-mark">
+                    <BrandLogo brand="magalu" variant="integracao" size={38} containerSize={50} />
+                  </span>
+                  <span>
+                    <strong className="cc-store-name">Magalu</strong>
+                    <small>Magazine Você</small>
+                  </span>
+                </span>
+                <span className="cc-store-description">Conecte sua vitrine do Magazine Você ao Radar.</span>
+                <span className="cc-store-corner" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="7" y1="17" x2="17" y2="7"></line>
                     <polyline points="7 7 17 7 17 17"></polyline>
                   </svg>
-                </button>
-              </article>
+                </span>
+              </button>
             </div>
 
-            <p className="rp-sub" style={{ marginTop: 20, fontSize: 11, color: '#94a3ad' }}>
+            <p className="rp-sub" style={{ marginTop: 22, fontSize: 11, color: '#94a3ad' }}>
               Cada loja tem seu próprio processo de conexão. A validação do link acontece antes da publicação.
             </p>
           </div>
         )}
       </div>
 
-      {/* Modal Aprovado: Tutorial de Instalação Manual da Extensão */}
+      {/* Modal Aprovado: Tutorial de Instalação da Extensão */}
       {showTutorialModal && (
         <div
           className="cc-modal-backdrop"
@@ -721,67 +960,440 @@ function ConexoesContent() {
         </div>
       )}
 
-      {/* Modal de Configuração de Loja */}
-      {selectedStoreModal && (
+      {/* Modal Aprovado: Mercado Livre - Escolha entre dois métodos (#cc-method-dialog) */}
+      {showMLMethodModal && (
         <div
           className="cc-modal-backdrop"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="cc-method-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedStoreModal(null);
+            if (e.target === e.currentTarget) setShowMLMethodModal(false);
           }}
         >
-          <div className="rp-panel" style={{ maxWidth: 500, width: '100%', background: '#23292e', border: '1px solid #454f57' }}>
-            <div className="rp-row">
-              <h2 style={{ fontSize: 17 }}>Configurar · {selectedStoreModal}</h2>
+          <div className="cc-method-dialog">
+            <div className="cc-method-brand">
+              <span className="cc-mark">
+                <BrandLogo brand="mercadolivre" variant="integracao" size={38} containerSize={50} />
+              </span>
+              <div>
+                <h2>Mercado Livre</h2>
+                {isStoreConnected('mercadolivre') && (
+                  <span className="cc-modal-status">
+                    <span className="cc-connected-dot"></span>
+                    Conectado
+                  </span>
+                )}
+              </div>
               <button
-                className="rp-btn rp-quiet"
                 type="button"
-                onClick={() => setSelectedStoreModal(null)}
-                style={{ fontSize: 16, padding: '4px 8px', minHeight: 28 }}
+                className="cc-close-btn"
+                aria-label="Fechar opções do Mercado Livre"
+                onClick={() => setShowMLMethodModal(false)}
               >
                 ✕
               </button>
             </div>
 
-            <p className="rp-sub rp-section" style={{ fontSize: 12 }}>
-              Configuração oficial da conta de afiliado. As credenciais são criptografadas e mantidas seguras no servidor.
-            </p>
+            <h3 id="cc-method-title">Como deseja configurar?</h3>
+            <p className="cc-sub">Escolha como vincular sua conta de afiliado ao Radar.</p>
 
-            <label className="rp-field">
-              Identificação da conta / Tag de Afiliado
-              <input placeholder="Ex: sua-tag-20 ou ID oficial" />
-            </label>
-
-            <label className="rp-field">
-              Credencial de acesso / Token da API
-              <input type="password" placeholder="Chave da API ou Segredo" />
-            </label>
-
-            <div className="rp-banner rp-section" style={{ background: '#1c2227', borderColor: '#343e45' }}>
-              <span style={{ fontSize: 12 }}>Estado da integração</span>
-              <span className="rp-tag" style={{ background: '#2d363d', color: '#78cadf' }}>Pronta para configurar</span>
-            </div>
-
-            <div className="rp-footer" style={{ marginTop: 18, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <div className="cc-method-options">
+              {/* Opção 1: Pela extensão */}
               <button
-                className="rp-btn"
                 type="button"
-                onClick={() => setNotice(`Conexão com ${selectedStoreModal} testada com sucesso!`)}
-              >
-                Testar conexão
-              </button>
-              <button
-                className="rp-btn rp-primary"
-                type="button"
+                className="cc-method-option"
                 onClick={() => {
-                  setSelectedStoreModal(null);
-                  setNotice(`Configuração de ${selectedStoreModal} salva!`);
+                  setShowMLMethodModal(false);
+                  setShowTutorialModal(true);
                 }}
               >
-                Salvar
+                <span className="cc-method-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M19.439 7.85c0-2.68-2.17-4.85-4.85-4.85-1.57 0-2.97.74-3.87 1.89a4.85 4.85 0 0 0-3.87-1.89C4.17 3 2 5.17 2 7.85c0 1.57.74 2.97 1.89 3.87A4.85 4.85 0 0 0 2 15.59c0 2.68 2.17 4.85 4.85 4.85 1.57 0 2.97-.74 3.87-1.89 1.57 0 2.97.74 3.87 1.89 2.68 0 4.85-2.17 4.85-4.85 0-1.57-.74-2.97-1.89-3.87 1.15-.9 1.89-2.3 1.89-3.87z"></path>
+                  </svg>
+                </span>
+                <span>
+                  <strong>Pela extensão</strong>
+                  <small>Use sua conta aberta neste navegador.</small>
+                </span>
+                <span className="cc-option-arrow">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="7" y1="17" x2="17" y2="7"></line>
+                    <polyline points="7 7 17 7 17 17"></polyline>
+                  </svg>
+                </span>
+              </button>
+
+              {/* Opção 2: Configurar manualmente */}
+              <button
+                type="button"
+                className="cc-method-option"
+                onClick={() => {
+                  setShowMLMethodModal(false);
+                  handleOpenStoreConfig('mercadolivre');
+                }}
+              >
+                <span className="cc-method-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                  </svg>
+                </span>
+                <span>
+                  <strong>Configurar manualmente</strong>
+                  <small>Informe seus dados de afiliado no painel.</small>
+                </span>
+                <span className="cc-option-arrow">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </span>
               </button>
             </div>
+
+            <div className="cc-method-footer">
+              <button
+                type="button"
+                className="rp-btn rp-quiet"
+                onClick={() => {
+                  setShowMLMethodModal(false);
+                  setShowTutorialModal(true);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                Como instalar a extensão
+              </button>
+
+              {isStoreConnected('mercadolivre') && (
+                <button
+                  type="button"
+                  className="rp-btn rp-quiet cc-disconnect"
+                  onClick={() => handleDisconnectStore('mercadolivre')}
+                  disabled={configLoading}
+                >
+                  {configLoading ? 'Desconectando...' : 'Desconectar'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aprovado: Configuração Direta das Lojas (#cc-config-dialog) */}
+      {selectedStoreConfig && (
+        <div
+          className="cc-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cc-config-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !configLoading) setSelectedStoreConfig(null);
+          }}
+        >
+          <div className="cc-config-dialog">
+            <div className="cc-config-head">
+              <span className="cc-mark">
+                <BrandLogo brand={selectedStoreConfig} variant="integracao" size={38} containerSize={50} />
+              </span>
+              <div>
+                <span className="cc-kicker" id="cc-config-eyebrow">
+                  {selectedStoreConfig === 'amazon' ? 'PROGRAMA DE ASSOCIADOS' : 'CONTA DE AFILIADO'}
+                </span>
+                <h2 id="cc-config-title">
+                  {selectedStoreConfig === 'shopee' && 'Conectar Shopee'}
+                  {selectedStoreConfig === 'amazon' && 'Conectar Amazon'}
+                  {selectedStoreConfig === 'netshoes' && 'Conectar Netshoes'}
+                  {selectedStoreConfig === 'mercadolivre' && 'Configurar Mercado Livre'}
+                  {selectedStoreConfig === 'magalu' && 'Conectar Magalu'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="cc-close-btn"
+                aria-label="Fechar configuração"
+                onClick={() => setSelectedStoreConfig(null)}
+                disabled={configLoading}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="cc-config-description">
+              {selectedStoreConfig === 'shopee' &&
+                'A integração da Shopee utiliza a Open API oficial de afiliados com assinatura segura por App ID e App Secret.'}
+              {selectedStoreConfig === 'amazon' &&
+                'Insira o seu ID de rastreamento (Tag de associado) cadastrado no portal Amazon Associates Brasil.'}
+              {selectedStoreConfig === 'netshoes' &&
+                'A integração da Netshoes utiliza a rede Rakuten Advertising com seu ID de anunciante e Token da aplicação.'}
+              {selectedStoreConfig === 'mercadolivre' &&
+                'Configure sua identificação manual de afiliado para vincular seus links de divulgação do Mercado Livre.'}
+              {selectedStoreConfig === 'magalu' &&
+                'Informe o nome ou identificador da sua vitrine de divulgador no Magazine Você.'}
+            </p>
+
+            <div className="cc-config-fields">
+              {/* Campos Shopee */}
+              {selectedStoreConfig === 'shopee' && (
+                <>
+                  <label>
+                    App ID
+                    <input
+                      type="text"
+                      placeholder="Identificador da sua aplicação"
+                      value={configForm.appId}
+                      onChange={(e) => setConfigForm({ ...configForm, appId: e.target.value })}
+                      autoFocus
+                    />
+                    <small>Disponível na área de API do programa de afiliados Shopee.</small>
+                  </label>
+                  <label>
+                    App Secret
+                    <input
+                      type="password"
+                      placeholder="Chave secreta da integração"
+                      value={configForm.appSecret}
+                      onChange={(e) => setConfigForm({ ...configForm, appSecret: e.target.value })}
+                    />
+                    <small>A chave da API é diferente da senha da sua conta.</small>
+                  </label>
+                </>
+              )}
+
+              {/* Campos Amazon */}
+              {selectedStoreConfig === 'amazon' && (
+                <>
+                  <label>
+                    ID de rastreamento
+                    <input
+                      type="text"
+                      placeholder="ID vinculado à sua conta de associado (ex: suatag-20)"
+                      value={configForm.affiliateTag}
+                      onChange={(e) => setConfigForm({ ...configForm, affiliateTag: e.target.value })}
+                      autoFocus
+                    />
+                    <small>Use o identificador com o qual deseja gerar seus links.</small>
+                  </label>
+                  <label>
+                    Loja Amazon
+                    <input
+                      type="text"
+                      placeholder="Brasil · amazon.com.br"
+                      defaultValue="Brasil · amazon.com.br"
+                      readOnly
+                      style={{ opacity: 0.85 }}
+                    />
+                  </label>
+                </>
+              )}
+
+              {/* Campos Netshoes */}
+              {selectedStoreConfig === 'netshoes' && (
+                <>
+                  <label>
+                    ID do anunciante
+                    <input
+                      type="text"
+                      placeholder="Identificador da Netshoes no seu programa"
+                      value={configForm.appId}
+                      onChange={(e) => setConfigForm({ ...configForm, appId: e.target.value })}
+                      autoFocus
+                    />
+                    <small>Utilize o ID aprovado para a sua integração.</small>
+                  </label>
+                  <label>
+                    Token de acesso Rakuten
+                    <input
+                      type="password"
+                      placeholder="Token da sua aplicação"
+                      value={configForm.userToken}
+                      onChange={(e) => setConfigForm({ ...configForm, userToken: e.target.value })}
+                    />
+                    <small>Usado pela integração da API de deep links da Rakuten.</small>
+                  </label>
+                </>
+              )}
+
+              {/* Campos Mercado Livre Manual */}
+              {selectedStoreConfig === 'mercadolivre' && (
+                <>
+                  <label>
+                    ID da ferramenta
+                    <input
+                      type="text"
+                      placeholder="Identificador da sua ferramenta de afiliado"
+                      value={configForm.appId}
+                      onChange={(e) => setConfigForm({ ...configForm, appId: e.target.value })}
+                      autoFocus
+                    />
+                  </label>
+                  <label>
+                    Tag de rastreio
+                    <input
+                      type="text"
+                      placeholder="Tag da sua conta de afiliado"
+                      value={configForm.affiliateTag}
+                      onChange={(e) => setConfigForm({ ...configForm, affiliateTag: e.target.value })}
+                    />
+                    <small>Os dados serão conferidos no fluxo de conversão.</small>
+                  </label>
+                </>
+              )}
+
+              {/* Campos Magalu */}
+              {selectedStoreConfig === 'magalu' && (
+                <label>
+                  Nome ou código da sua loja
+                  <input
+                    type="text"
+                    placeholder="Nome da sua loja no Magazine Você (ex: sualoja)"
+                    value={configForm.affiliateTag}
+                    onChange={(e) => setConfigForm({ ...configForm, affiliateTag: e.target.value })}
+                    autoFocus
+                  />
+                  <small>Utilizado para compor o link de afiliado oficial do Magazine Você.</small>
+                </label>
+              )}
+            </div>
+
+            {/* Dica recolhível: Onde encontro esses dados? */}
+            <details className="cc-config-help">
+              <summary>Onde encontro esses dados?</summary>
+              {selectedStoreConfig === 'shopee' && (
+                <>
+                  <p>
+                    Acesse o console oficial de afiliados da Shopee no menu <strong>Open API</strong>. Lá você poderá visualizar ou gerar seu App ID e App Secret.
+                  </p>
+                  <a href="https://affiliate.shopee.com.br/open_api" target="_blank" rel="noopener noreferrer">
+                    <span>Abrir portal de afiliados</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="7" y1="17" x2="17" y2="7"></line>
+                      <polyline points="7 7 17 7 17 17"></polyline>
+                    </svg>
+                  </a>
+                </>
+              )}
+
+              {selectedStoreConfig === 'amazon' && (
+                <>
+                  <p>
+                    Faça login no portal do Programa de Associados da Amazon Brasil. No canto superior direito da tela, você encontra o seu ID de rastreamento ativo.
+                  </p>
+                  <a href="https://associados.amazon.com.br" target="_blank" rel="noopener noreferrer">
+                    <span>Abrir Amazon Associates</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="7" y1="17" x2="17" y2="7"></line>
+                      <polyline points="7 7 17 7 17 17"></polyline>
+                    </svg>
+                  </a>
+                </>
+              )}
+
+              {selectedStoreConfig === 'netshoes' && (
+                <>
+                  <p>
+                    No painel da Rakuten Advertising, acesse o <em>Developer Portal</em> para gerar seu Access Token e consultar o ID do anunciante da Netshoes.
+                  </p>
+                  <a href="https://rakutenadvertising.com" target="_blank" rel="noopener noreferrer">
+                    <span>Abrir Rakuten Advertising</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="7" y1="17" x2="17" y2="7"></line>
+                      <polyline points="7 7 17 7 17 17"></polyline>
+                    </svg>
+                  </a>
+                </>
+              )}
+
+              {selectedStoreConfig === 'mercadolivre' && (
+                <>
+                  <p>
+                    No portal de afiliados do Mercado Livre você localiza a sua tag de rastreio e os dados da sua aplicação de afiliado.
+                  </p>
+                  <a href="https://www.mercadolivre.com.br/afiliados" target="_blank" rel="noopener noreferrer">
+                    <span>Abrir Afiliados Mercado Livre</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="7" y1="17" x2="17" y2="7"></line>
+                      <polyline points="7 7 17 7 17 17"></polyline>
+                    </svg>
+                  </a>
+                </>
+              )}
+
+              {selectedStoreConfig === 'magalu' && (
+                <>
+                  <p>
+                    No seu painel do Magazine Você, copie o nome público ou identificador da sua vitrine de divulgador.
+                  </p>
+                  <a href="https://www.magazinevoce.com.br" target="_blank" rel="noopener noreferrer">
+                    <span>Abrir Magazine Você</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="7" y1="17" x2="17" y2="7"></line>
+                      <polyline points="7 7 17 7 17 17"></polyline>
+                    </svg>
+                  </a>
+                </>
+              )}
+            </details>
+
+            {/* Aviso de privacidade */}
+            <p className="cc-config-privacy">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              Você não precisa informar a senha da sua conta.
+            </p>
+
+            {/* Ações */}
+            <div className="cc-config-actions">
+              <button
+                type="button"
+                className="rp-btn rp-quiet"
+                onClick={() => setSelectedStoreConfig(null)}
+                disabled={configLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="rp-btn"
+                onClick={handleTestIntegration}
+                disabled={configLoading}
+              >
+                {configLoading ? 'Testando...' : 'Testar integração'}
+              </button>
+              <button
+                type="button"
+                className="rp-btn rp-primary"
+                onClick={handleSaveIntegration}
+                disabled={configLoading}
+              >
+                {configLoading ? 'Salvando...' : 'Salvar integração'}
+              </button>
+            </div>
+
+            {/* Feedback inline */}
+            {configFeedback && (
+              <div
+                className={`cc-config-feedback ${configFeedback.type}`}
+                role="status"
+                aria-live="polite"
+              >
+                {configFeedback.message}
+              </div>
+            )}
           </div>
         </div>
       )}
