@@ -165,6 +165,8 @@ export interface WhatsAppConnection {
   lastWorkerCycleAt?: string;
   lastRealWebhookAt?: string;
   groupsCount?: number;
+  sourcesCount?: number;
+  jobsCount?: number;
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;

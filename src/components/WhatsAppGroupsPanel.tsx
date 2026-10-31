@@ -149,7 +149,9 @@ export default function WhatsAppGroupsPanel() {
 
   // Estados do Modal "Adicionar WhatsApp"
   const [showAddModal, setShowAddModal] = useState(false);
-  const [modalStep, setModalStep] = useState<'label' | 'qrcode' | 'connected' | 'error'>('label');
+  const [modalStep, setModalStep] = useState<'label' | 'preparing' | 'qrcode' | 'expired' | 'connected' | 'error'>('label');
+  const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
+  const [canForceLocal, setCanForceLocal] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [creatingConnection, setCreatingConnection] = useState(false);
   const [activeNewConn, setActiveNewConn] = useState<WhatsAppConnection | null>(null);
@@ -292,7 +294,10 @@ export default function WhatsAppGroupsPanel() {
     if (!newLabel.trim()) return;
 
     setCreatingConnection(true);
+    setModalStep('preparing');
     setModalError(null);
+    setQrCodeBase64(null);
+    setQrCodeRaw(null);
 
     try {
       const res = await fetch('/api/whatsapp/connections', {
@@ -308,17 +313,21 @@ export default function WhatsAppGroupsPanel() {
         return;
       }
 
-      setActiveNewConn(data.connection);
-      if (data.qrcode?.base64) {
-        setQrCodeBase64(data.qrcode.base64);
-        setQrCodeRaw(data.qrcode.code || null);
-      }
-      setModalStep('qrcode');
+      const conn = data.connection || { id: data.connectionId, label: newLabel.trim() };
+      setActiveNewConn(conn);
 
-      // Iniciar pooling de verificação de pareamento a cada 2.5s
+      const qr = data.qrcode?.base64 || data.qrCodeBase64;
+      if (qr) {
+        setQrCodeBase64(qr);
+        setQrCodeRaw(data.qrcode?.code || null);
+        setModalStep('qrcode');
+      } else {
+        setModalStep('qrcode');
+      }
+
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       pollTimerRef.current = setInterval(() => {
-        pollPairingStatus(data.connection.id);
+        pollPairingStatus(conn.id);
       }, 2500);
     } catch {
       setModalError('Falha de conexão ao criar a instância. Tente novamente.');
@@ -338,31 +347,35 @@ export default function WhatsAppGroupsPanel() {
       });
       const data = await res.json();
 
-      if (data.ok && data.connected && data.connection) {
+      if (data.ok && (data.connected || data.status === 'connected')) {
         if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        setActiveNewConn(data.connection);
+        const finalConn = data.connection || activeNewConn;
+        if (finalConn) setActiveNewConn(finalConn);
         setModalStep('connected');
 
         // Recarregar lista de conexões e sincronizar grupos
         void loadInitialData();
-        setSelectedConnectionId(data.connection.id);
-      } else if (data.qrcode?.base64) {
-        // Atualiza QR code renovado se expirou
-        setQrCodeBase64(data.qrcode.base64);
-        setQrCodeRaw(data.qrcode.code || null);
+        setSelectedConnectionId(connId);
+      } else if (data.qrcode?.base64 || data.qrCodeBase64) {
+        const freshQr = data.qrcode?.base64 || data.qrCodeBase64;
+        if (freshQr) {
+          setQrCodeBase64(freshQr);
+          setQrCodeRaw(data.qrcode?.code || null);
+        }
       }
     } catch {
       // Ignora erro passageiro de poll
     }
   };
 
-  // Reconectar Conta Existente
+  // Conectar / Reconectar Conta Existente (Sem criar instâncias duplicadas)
   const handleReconnectConnection = async (conn: WhatsAppConnection) => {
     setActiveNewConn(conn);
     setNewLabel(conn.label);
-    setModalStep('qrcode');
+    setModalStep('preparing');
     setModalError(null);
     setQrCodeBase64(null);
+    setQrCodeRaw(null);
     setShowAddModal(true);
 
     try {
@@ -373,9 +386,18 @@ export default function WhatsAppGroupsPanel() {
       });
       const data = await res.json();
 
-      if (data.ok && data.qrcode?.base64) {
-        setQrCodeBase64(data.qrcode.base64);
-        setQrCodeRaw(data.qrcode.code || null);
+      if (data.ok && (data.alreadyConnected || data.connected || data.status === 'connected')) {
+        setActiveNewConn(data.connection || conn);
+        setModalStep('connected');
+        void loadInitialData();
+        return;
+      }
+
+      const qr = data.qrcode?.base64 || data.qrCodeBase64;
+      if (data.ok && qr) {
+        setQrCodeBase64(qr);
+        setQrCodeRaw(data.qrcode?.code || null);
+        setModalStep('qrcode');
 
         if (pollTimerRef.current) clearInterval(pollTimerRef.current);
         pollTimerRef.current = setInterval(() => {
@@ -386,28 +408,38 @@ export default function WhatsAppGroupsPanel() {
         setModalStep('error');
       }
     } catch {
-      setModalError('Erro ao solicitar reconexão.');
+      setModalError('Erro ao comunicar com o servidor do WhatsApp.');
       setModalStep('error');
     }
   };
 
   // Executar Desconexão ou Remoção confirmada
-  const handleConfirmAction = async () => {
+  const handleConfirmAction = async (forceLocalOnly = false) => {
     if (!confirmAction) return;
     setActionLoading(true);
+    setDeleteWarning(null);
 
     try {
       const actionType = confirmAction.type === 'disconnect' ? 'disconnect' : 'delete';
       const res = await fetch('/api/whatsapp/connections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: actionType, connectionId: confirmAction.connection.id }),
+        body: JSON.stringify({
+          action: actionType,
+          connectionId: confirmAction.connection.id,
+          forceLocalOnly,
+        }),
       });
       const data = await res.json();
 
       if (data.ok) {
         setConfirmAction(null);
+        setCanForceLocal(false);
+        setDeleteWarning(null);
         await loadInitialData();
+      } else if (data.canForceLocal) {
+        setCanForceLocal(true);
+        setDeleteWarning(data.error || 'O gateway remoto está indisponível.');
       } else {
         alert(data.error || 'Falha ao executar ação.');
       }
@@ -548,7 +580,7 @@ export default function WhatsAppGroupsPanel() {
                       style={{ color: '#39bee6' }}
                     >
                       <QrCode size={13} style={{ marginRight: 4, display: 'inline' }} />
-                      Reconectar
+                      Conectar WhatsApp
                     </button>
                   ) : (
                     <button
@@ -734,7 +766,7 @@ export default function WhatsAppGroupsPanel() {
         </details>
       )}
 
-      {/* MODAL: Adicionar Novo WhatsApp */}
+      {/* MODAL: Adicionar / Conectar WhatsApp */}
       {showAddModal && (
         <div
           className="wa-modal-backdrop"
@@ -742,7 +774,7 @@ export default function WhatsAppGroupsPanel() {
           aria-modal="true"
           aria-labelledby="add-wa-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget && modalStep !== 'qrcode') {
+            if (e.target === e.currentTarget && modalStep !== 'preparing') {
               setShowAddModal(false);
               if (pollTimerRef.current) clearInterval(pollTimerRef.current);
             }
@@ -753,6 +785,8 @@ export default function WhatsAppGroupsPanel() {
               <h3 id="add-wa-title">
                 {modalStep === 'label'
                   ? 'Adicionar nova conta de WhatsApp'
+                  : modalStep === 'preparing'
+                  ? 'Preparando conexão...'
                   : modalStep === 'qrcode'
                   ? 'Escaneie o QR Code'
                   : modalStep === 'connected'
@@ -817,6 +851,16 @@ export default function WhatsAppGroupsPanel() {
                 </form>
               )}
 
+              {modalStep === 'preparing' && (
+                <div style={{ textAlign: 'center', padding: '30px 10px' }}>
+                  <RefreshCw size={36} className="wa-spin" style={{ color: '#39bee6', margin: '0 auto 16px' }} />
+                  <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Preparando conexão com o WhatsApp</h4>
+                  <p style={{ fontSize: 12, color: '#8fa2af', margin: 0 }}>
+                    Consultando instância e gerando QR Code no gateway...
+                  </p>
+                </div>
+              )}
+
               {modalStep === 'qrcode' && (
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: 13, color: '#c5d5e2', margin: '0 0 16px' }}>
@@ -834,7 +878,7 @@ export default function WhatsAppGroupsPanel() {
                     )}
                   </div>
 
-                  <p style={{ fontSize: 11, color: '#8fa2af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <p style={{ fontSize: 11, color: '#8fa2af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px 0 0' }}>
                     <RefreshCw size={12} className="wa-spin" />
                     Aguardando leitura do código pelo aparelho celular...
                   </p>
@@ -862,7 +906,7 @@ export default function WhatsAppGroupsPanel() {
                     {activeNewConn.profileName || activeNewConn.label} ({phoneLabel(activeNewConn.phoneNumber)})
                   </p>
                   <p style={{ fontSize: 11, color: '#68d391' }}>
-                    Os grupos estão sendo sincronizados automaticamente.
+                    Identidade confirmada no gateway. Os grupos estão sendo sincronizados automaticamente.
                   </p>
                 </div>
               )}
@@ -870,16 +914,31 @@ export default function WhatsAppGroupsPanel() {
               {modalStep === 'error' && (
                 <div style={{ textAlign: 'center', padding: '12px 0' }}>
                   <CircleAlert size={36} style={{ color: '#ef4444', margin: '0 auto 12px' }} />
-                  <p style={{ fontSize: 13, color: '#fca5a5', margin: '0 0 16px' }}>
+                  <p style={{ fontSize: 13, color: '#fca5a5', margin: '0 0 16px', lineHeight: 1.5 }}>
                     {modalError || 'Ocorreu um erro ao comunicar com a Evolution API.'}
                   </p>
-                  <button
-                    type="button"
-                    className="wa-btn-primary"
-                    onClick={() => setModalStep('label')}
-                  >
-                    Tentar novamente
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+                    <button
+                      type="button"
+                      className="wa-button"
+                      onClick={() => setShowAddModal(false)}
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      type="button"
+                      className="wa-btn-primary"
+                      onClick={() => {
+                        if (activeNewConn) {
+                          void handleReconnectConnection(activeNewConn);
+                        } else {
+                          setModalStep('label');
+                        }
+                      }}
+                    >
+                      Tentar novamente
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -910,7 +969,7 @@ export default function WhatsAppGroupsPanel() {
           aria-modal="true"
           onClick={() => !actionLoading && setConfirmAction(null)}
         >
-          <div className="wa-modal" style={{ maxWidth: 420 }}>
+          <div className="wa-modal" style={{ maxWidth: 460 }}>
             <div className="wa-modal-header">
               <h3>
                 {confirmAction.type === 'disconnect' ? 'Desconectar WhatsApp' : 'Excluir WhatsApp'}
@@ -918,27 +977,56 @@ export default function WhatsAppGroupsPanel() {
               <button
                 type="button"
                 className="wa-modal-close"
-                onClick={() => !actionLoading && setConfirmAction(null)}
+                disabled={actionLoading}
+                onClick={() => setConfirmAction(null)}
               >
                 <X size={18} />
               </button>
             </div>
             <div className="wa-modal-body">
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: '#c6d5df', margin: 0 }}>
-                {confirmAction.type === 'disconnect' ? (
-                  <>
-                    Deseja desconectar a sessão de <strong>{confirmAction.connection.label}</strong> ({phoneLabel(confirmAction.connection.phoneNumber)})?
+              {confirmAction.type === 'disconnect' ? (
+                <p style={{ fontSize: 13, lineHeight: 1.6, color: '#c6d5df', margin: 0 }}>
+                  Deseja desconectar a sessão de <strong>{confirmAction.connection.label}</strong> ({phoneLabel(confirmAction.connection.phoneNumber)})?
+                  <br /><br />
+                  Os grupos cadastrados serão mantidos e você poderá reconectar a qualquer momento via QR Code.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <p style={{ fontSize: 13, lineHeight: 1.5, color: '#c6d5df', margin: 0 }}>
+                    Tem certeza de que deseja excluir permanentemente o cadastro de <strong>{confirmAction.connection.label}</strong>?
                     <br />
-                    Os grupos cadastrados serão mantidos e você poderá reconectar a qualquer momento via QR Code.
-                  </>
-                ) : (
-                  <>
-                    Tem certeza de que deseja excluir permanentemente o WhatsApp <strong>{confirmAction.connection.label}</strong>?
-                    <br />
-                    A instância será excluída e as regras associadas a esta conta serão desativadas.
-                  </>
-                )}
-              </p>
+                    <span style={{ color: '#8fa2af', fontSize: 12 }}>
+                      Número: {phoneLabel(confirmAction.connection.phoneNumber)}
+                    </span>
+                  </p>
+
+                  {/* Vínculos Afetados */}
+                  <div style={{ background: '#161b1f', border: '1px solid #2e383f', borderRadius: 8, padding: 12, fontSize: 12 }}>
+                    <div style={{ fontWeight: 600, color: '#a0b3c2', marginBottom: 6 }}>Vínculos afetados:</div>
+                    <ul style={{ margin: 0, paddingLeft: 18, color: '#8fa2af', lineHeight: 1.6 }}>
+                      <li><strong>{confirmAction.connection.groupsCount ?? 0}</strong> grupos vinculados serão removidos.</li>
+                      <li><strong>{confirmAction.connection.sourcesCount ?? 0}</strong> regras de envio serão <span style={{ color: '#fca5a5' }}>pausadas</span> para impedir novos disparos.</li>
+                      <li><strong>{confirmAction.connection.jobsCount ?? 0}</strong> mensagens e postagens do histórico serão <span style={{ color: '#86efac' }}>preservadas</span>.</li>
+                    </ul>
+                  </div>
+
+                  {confirmAction.connection.isDefault && (
+                    <div style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 8, padding: 10, fontSize: 12, color: '#fef08a' }}>
+                      ⚠️ <strong>Atenção:</strong> Esta é a sua conexão padrão. Suas regras não serão atribuídas automaticamente a outro número. Você deverá selecionar uma nova conexão explicitamente nas regras se desejar.
+                    </div>
+                  )}
+
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                    Esta ação também encerrará a sessão do WhatsApp e removerá a instância no gateway Evolution.
+                  </p>
+
+                  {deleteWarning && (
+                    <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: 8, padding: 10, fontSize: 12, color: '#fca5a5' }}>
+                      {deleteWarning}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="wa-modal-footer">
               <button
@@ -949,14 +1037,31 @@ export default function WhatsAppGroupsPanel() {
               >
                 Cancelar
               </button>
-              <button
-                type="button"
-                className={confirmAction.type === 'disconnect' ? 'wa-button' : 'wa-btn-danger'}
-                disabled={actionLoading}
-                onClick={handleConfirmAction}
-              >
-                {actionLoading ? 'Processando...' : confirmAction.type === 'disconnect' ? 'Desconectar' : 'Excluir conta'}
-              </button>
+
+              {canForceLocal && confirmAction.type === 'delete' ? (
+                <button
+                  type="button"
+                  className="wa-btn-danger"
+                  disabled={actionLoading}
+                  onClick={() => handleConfirmAction(true)}
+                  title="Remove o cadastro apenas do painel local"
+                >
+                  {actionLoading ? 'Removendo...' : 'Confirmar remoção apenas do painel'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={confirmAction.type === 'disconnect' ? 'wa-button' : 'wa-btn-danger'}
+                  disabled={actionLoading}
+                  onClick={() => handleConfirmAction(false)}
+                >
+                  {actionLoading
+                    ? 'Processando...'
+                    : confirmAction.type === 'disconnect'
+                    ? 'Desconectar'
+                    : 'Excluir conta'}
+                </button>
+              )}
             </div>
           </div>
         </div>

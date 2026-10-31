@@ -690,7 +690,7 @@ export function readDatabase(): DatabaseSchema {
 
     const content = fs.readFileSync(dbFile, 'utf-8');
     const parsed = JSON.parse(content) as DatabaseSchema;
-    if (!Array.isArray(parsed.connections) || parsed.connections.length === 0) {
+    if (!Array.isArray(parsed.connections)) {
       parsed.connections = [{
         id: parsed.whatsapp?.id || 'conn_default_01',
         userId: parsed.whatsapp?.userId || DEFAULT_USER_ID,
@@ -1454,27 +1454,135 @@ export function listWhatsAppConnections(userId: string = DEFAULT_USER_ID): Whats
 }
 
 /**
+ * Consulta conexões de forma assíncrona usando Supabase como fonte de verdade em produção
+ */
+export async function listWhatsAppConnectionsAsync(userId: string = DEFAULT_USER_ID): Promise<WhatsAppConnection[]> {
+  const effectiveUserId = ensureValidUuid(userId || DEFAULT_USER_ID);
+
+  if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
+    try {
+      // 1. Tentar tabela oficial whatsapp_connections
+      const { data: connsData, error: connsErr } = await supabase
+        .from('whatsapp_connections')
+        .select('*')
+        .eq('user_id', effectiveUserId)
+        .order('created_at', { ascending: true });
+
+      if (!connsErr && Array.isArray(connsData)) {
+        const mapped: WhatsAppConnection[] = connsData.map(c => ({
+          id: c.id,
+          userId: c.user_id,
+          label: c.label || 'Meu WhatsApp',
+          instanceName: c.instance_name,
+          baseUrl: process.env.EVOLUTION_BASE_URL || process.env.WHATSAPP_GATEWAY_URL || '',
+          apiKey: process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || '',
+          status: (c.status as any) || 'disconnected',
+          phoneNumber: c.phone_number || undefined,
+          profileName: c.profile_name || undefined,
+          profilePicUrl: c.profile_pic_url || undefined,
+          ownerJid: c.owner_jid || undefined,
+          lastPingAt: c.last_ping_at || undefined,
+          lastVerificationStatus: c.last_verification_status || undefined,
+          lastVerificationError: c.last_verification_error || undefined,
+          webhookUrl: c.webhook_url || undefined,
+          webhookSecret: c.webhook_secret || undefined,
+          isDefault: Boolean(c.is_default),
+          createdAt: c.created_at || new Date().toISOString(),
+          updatedAt: c.updated_at || new Date().toISOString(),
+        }));
+
+        // Sincronizar cache local com o Supabase compartilhado
+        const db = readDatabase();
+        const otherUserConns = (db.connections || []).filter(c => !isSameUser(c.userId, effectiveUserId));
+        db.connections = [...otherUserConns, ...mapped];
+        writeDatabase(db);
+
+        return mapped;
+      }
+
+      // 2. Fallback resiliente caso a migration 05 ainda não tenha sido rodada no Supabase
+      if (connsErr && (connsErr.code === 'PGRST202' || connsErr.message?.includes('not find the table'))) {
+        const { data: iwData, error: iwErr } = await supabase
+          .from('integrations_whatsapp')
+          .select('*')
+          .eq('user_id', effectiveUserId)
+          .limit(1)
+          .maybeSingle();
+
+        if (!iwErr && iwData) {
+          const mappedFallback: WhatsAppConnection[] = [{
+            id: iwData.id,
+            userId: iwData.user_id,
+            label: 'WhatsApp Principal',
+            instanceName: iwData.instance_name,
+            baseUrl: iwData.base_url || process.env.EVOLUTION_BASE_URL || '',
+            apiKey: iwData.api_key || process.env.EVOLUTION_API_KEY || '',
+            status: (iwData.status as any) || 'disconnected',
+            phoneNumber: iwData.phone_number || undefined,
+            profileName: iwData.profile_name || undefined,
+            batteryLevel: iwData.battery_level || undefined,
+            qrCodeBase64: iwData.qr_code_base64 || undefined,
+            webhookSecret: iwData.webhook_secret || undefined,
+            lastPingAt: iwData.last_ping_at || undefined,
+            isDefault: true,
+            createdAt: iwData.created_at || new Date().toISOString(),
+            updatedAt: iwData.updated_at || new Date().toISOString(),
+          }];
+
+          const db = readDatabase();
+          const otherUserConns = (db.connections || []).filter(c => !isSameUser(c.userId, effectiveUserId));
+          db.connections = [...otherUserConns, ...mappedFallback];
+          writeDatabase(db);
+
+          return mappedFallback;
+        }
+      }
+    } catch (err) {
+      console.error('[Supabase listWhatsAppConnectionsAsync] Erro ao consultar conexões:', err);
+    }
+  }
+
+  return listWhatsAppConnections(userId);
+}
+
+/**
  * Obtém uma conexão WhatsApp específica pelo ID
+ * REGRA SAAS: Se um connectionId for especificado, busca ESTRITAMENTE aquela conexão do usuário.
+ * NUNCA faz fallback silencioso para a primeira da lista ou conexão padrão quando um ID foi fornecido!
  */
 export function getWhatsAppConnection(connectionId?: string, userId?: string): WhatsAppConnection | null {
   const db = readDatabase();
   const effectiveUserId = userId || DEFAULT_USER_ID;
-  const list = db.connections || [];
+  const list = (db.connections || []).filter(c => isSameUser(c.userId, effectiveUserId));
   
   if (connectionId) {
-    const found = list.find(c => c.id === connectionId && (isSameUser(c.userId, effectiveUserId)));
-    if (found) return found;
+    const found = list.find(c => c.id === connectionId);
+    // Se connectionId foi informado e não pertence ao usuário/não existe, retorna null estritamente.
+    return found || null;
   }
 
-  // Fallback para a conexão padrão
-  const def = list.find(c => c.isDefault && (isSameUser(c.userId, effectiveUserId)));
+  // Fallback apenas quando connectionId NÃO foi informado na requisição
+  const def = list.find(c => c.isDefault);
   if (def) return def;
 
   return list[0] || null;
 }
 
 /**
- * Salva ou atualiza uma conexão WhatsApp no banco
+ * Versão assíncrona de consulta estrita de conexão (Supabase como fonte de verdade)
+ */
+export async function getWhatsAppConnectionAsync(connectionId?: string, userId?: string): Promise<WhatsAppConnection | null> {
+  const conns = await listWhatsAppConnectionsAsync(userId);
+  if (connectionId) {
+    const found = conns.find(c => c.id === connectionId);
+    return found || null;
+  }
+  const def = conns.find(c => c.isDefault);
+  return def || conns[0] || null;
+}
+
+/**
+ * Salva ou atualiza uma conexão WhatsApp no banco persistido (Supabase + cache)
  */
 export async function saveWhatsAppConnection(conn: WhatsAppConnection): Promise<void> {
   const db = readDatabase();
@@ -1487,19 +1595,19 @@ export async function saveWhatsAppConnection(conn: WhatsAppConnection): Promise<
   if (idx >= 0) {
     db.connections[idx] = { ...db.connections[idx], ...conn };
   } else {
-    // Se for a primeira conexão, marca como padrão
-    if (db.connections.length === 0) {
+    if (db.connections.filter(c => isSameUser(c.userId, conn.userId)).length === 0) {
       conn.isDefault = true;
     }
     db.connections.push(conn);
   }
 
-  // Se esta for marcada como padrão, desmarca as outras
   if (conn.isDefault) {
     db.connections.forEach(c => {
-      if (c.id !== conn.id) c.isDefault = false;
+      if (isSameUser(c.userId, conn.userId) && c.id !== conn.id) {
+        c.isDefault = false;
+      }
     });
-    // Sincroniza db.whatsapp para compatibilidade com partes antigas
+
     db.whatsapp = {
       ...db.whatsapp,
       id: conn.id,
@@ -1520,10 +1628,65 @@ export async function saveWhatsAppConnection(conn: WhatsAppConnection): Promise<
   }
 
   writeDatabase(db);
+
+  // Persistência em produção no Supabase compartilhado
+  if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
+    try {
+      const userUuid = ensureValidUuid(conn.userId);
+      const connUuid = ensureValidUuid(conn.id);
+
+      // 1. Tentar salvar na tabela whatsapp_connections
+      const { error: upsertErr } = await supabase.from('whatsapp_connections').upsert({
+        id: connUuid,
+        user_id: userUuid,
+        instance_name: conn.instanceName,
+        label: conn.label || 'WhatsApp',
+        status: conn.status,
+        phone_number: conn.phoneNumber || null,
+        profile_name: conn.profileName || null,
+        profile_pic_url: conn.profilePicUrl || null,
+        owner_jid: conn.ownerJid || null,
+        last_ping_at: conn.lastPingAt || null,
+        last_verification_status: conn.lastVerificationStatus || null,
+        last_verification_error: conn.lastVerificationError || null,
+        webhook_url: conn.webhookUrl || null,
+        webhook_secret: conn.webhookSecret || null,
+        is_default: Boolean(conn.isDefault),
+        updated_at: now,
+      });
+
+      if (!upsertErr) {
+        if (conn.isDefault) {
+          await supabase
+            .from('whatsapp_connections')
+            .update({ is_default: false })
+            .eq('user_id', userUuid)
+            .neq('id', connUuid);
+        }
+      } else if (upsertErr.code === 'PGRST202' || upsertErr.message?.includes('not find the table')) {
+        // Fallback em integrations_whatsapp se a tabela whatsapp_connections ainda não existir
+        await supabase.from('integrations_whatsapp').upsert({
+          id: connUuid,
+          user_id: userUuid,
+          instance_name: conn.instanceName,
+          base_url: conn.baseUrl || '',
+          api_key: conn.apiKey || '',
+          status: conn.status,
+          phone_number: conn.phoneNumber || null,
+          profile_name: conn.profileName || null,
+          last_ping_at: conn.lastPingAt || null,
+          webhook_secret: conn.webhookSecret || null,
+          updated_at: now,
+        });
+      }
+    } catch (err) {
+      console.error('[saveWhatsAppConnection] Erro de persistência no Supabase:', err);
+    }
+  }
 }
 
 /**
- * Remove uma conexão WhatsApp e seus vínculos
+ * Remove uma conexão WhatsApp, pausando regras de envio e preservando dados históricos
  */
 export async function deleteWhatsAppConnection(connectionId: string, userId: string): Promise<boolean> {
   const db = readDatabase();
@@ -1533,19 +1696,95 @@ export async function deleteWhatsAppConnection(connectionId: string, userId: str
   const idx = db.connections.findIndex(c => c.id === connectionId && (isSameUser(c.userId, effectiveUserId)));
   if (idx < 0) return false;
 
-  const wasDefault = db.connections[idx].isDefault;
+  const removed = db.connections[idx];
+  const wasDefault = removed.isDefault;
   db.connections.splice(idx, 1);
 
-  // Se removeu a padrão, define a primeira restante como padrão
+  // REGRA SAAS: Se era a conexão padrão, define uma nova como padrão para novos envios,
+  // MAS NÃO transfere silenciosamente regras existentes de cópia/envio.
   if (wasDefault && db.connections.length > 0) {
-    db.connections[0].isDefault = true;
+    const userRemaining = db.connections.filter(c => isSameUser(c.userId, effectiveUserId));
+    if (userRemaining.length > 0) {
+      userRemaining[0].isDefault = true;
+    }
   }
 
-  // Remove grupos e regras vinculadas a esta conexão
+  // 1. Pausar regras de cópia vinculadas à conexão removida (impedir novos envios não autorizados)
+  db.sources = (db.sources || []).map(s => {
+    if (s.connectionId === connectionId) {
+      return { ...s, isActive: false, connectionId: undefined };
+    }
+    return s;
+  });
+
+  // 2. Preservar histórico de publicações e mensagens recebidas (desvinculando connectionId sem deletar registros)
+  db.jobs = (db.jobs || []).map(j => {
+    if (j.connectionId === connectionId) {
+      return { ...j, connectionId: undefined };
+    }
+    return j;
+  });
+
+  db.incomingMessages = (db.incomingMessages || []).map(m => {
+    if (m.connectionId === connectionId) {
+      return { ...m, connectionId: undefined };
+    }
+    return m;
+  });
+
+  // 3. Remover grupos pertencentes à conexão removida
   db.groups = (db.groups || []).filter(g => g.connectionId !== connectionId);
-  db.sources = (db.sources || []).filter(s => s.connectionId !== connectionId);
 
   writeDatabase(db);
+
+  // Sincronizar exclusão e preservação no Supabase compartilhado
+  if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
+    try {
+      const userUuid = ensureValidUuid(userId);
+      const connUuid = ensureValidUuid(connectionId);
+
+      // Deletar da tabela whatsapp_connections
+      await supabase
+        .from('whatsapp_connections')
+        .delete()
+        .eq('id', connUuid)
+        .eq('user_id', userUuid);
+
+      // Limpar integrations_whatsapp se for o mesmo id
+      await supabase
+        .from('integrations_whatsapp')
+        .delete()
+        .eq('id', connUuid)
+        .eq('user_id', userUuid);
+
+      // Pausar regras vinculadas no Supabase
+      await supabase
+        .from('copy_sources')
+        .update({ is_active: false, connection_id: null })
+        .eq('connection_id', connUuid);
+
+      // Preservar jobs históricos desvinculando o connection_id
+      await supabase
+        .from('publication_jobs')
+        .update({ connection_id: null })
+        .eq('connection_id', connUuid);
+
+      // Preservar mensagens desvinculando o connection_id
+      await supabase
+        .from('incoming_messages')
+        .update({ connection_id: null })
+        .eq('connection_id', connUuid);
+
+      // Remover grupos vinculados
+      await supabase
+        .from('whatsapp_groups')
+        .delete()
+        .eq('connection_id', connUuid);
+    } catch (err) {
+      console.error('[deleteWhatsAppConnection] Erro ao sincronizar remoção no Supabase:', err);
+    }
+  }
+
   return true;
 }
 
@@ -1563,13 +1802,33 @@ export async function setDefaultWhatsAppConnection(connectionId: string, userId:
     if (c.id === connectionId && (isSameUser(c.userId, effectiveUserId))) {
       c.isDefault = true;
       found = true;
-    } else {
+    } else if (isSameUser(c.userId, effectiveUserId)) {
       c.isDefault = false;
     }
   });
 
   if (found) {
     writeDatabase(db);
+
+    if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
+      try {
+        const userUuid = ensureValidUuid(userId);
+        const connUuid = ensureValidUuid(connectionId);
+
+        await supabase
+          .from('whatsapp_connections')
+          .update({ is_default: false })
+          .eq('user_id', userUuid);
+
+        await supabase
+          .from('whatsapp_connections')
+          .update({ is_default: true })
+          .eq('id', connUuid)
+          .eq('user_id', userUuid);
+      } catch (err) {
+        console.error('[setDefaultWhatsAppConnection] Erro no Supabase:', err);
+      }
+    }
   }
   return found;
 }
