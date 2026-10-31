@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readDatabase, listWhatsAppConnections, getActiveEvolutionConfig } from '@/lib/server/storage';
+import { getSessionFromRequest } from '@/lib/server/auth';
+import { copierConnections } from '@/lib/server/copier-group-catalog';
+import { scopedCopierRules } from '@/lib/server/copier-scoped-rules';
+import { readDatabase, getActiveEvolutionConfig } from '@/lib/server/storage';
 import { getSystemReadiness } from '@/lib/server/readiness';
-import { WhatsAppConnection, WhatsAppGroup } from '@/lib/types';
+import { WhatsAppGroup } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
+  const session = getSessionFromRequest(req);
+  if (!session) return NextResponse.json({ ok: false, error: 'Sessão necessária.' }, { status: 401 });
   try {
     const db = readDatabase();
     const now = new Date();
@@ -11,35 +16,15 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const requestedConnId = searchParams.get('connectionId')?.trim();
 
-    // 1. Conexões disponíveis e conexão ativa
-    const connections = listWhatsAppConnections();
-    let activeConn: WhatsAppConnection | undefined;
-
-    if (requestedConnId) {
-      activeConn = connections.find((c) => c.id === requestedConnId);
-    }
-    if (!activeConn) {
-      activeConn = connections.find((c) => c.isDefault) || connections[0];
-    }
-
-    // Se ainda não houver conexões na lista, usa fallback de db.whatsapp
-    const connState = activeConn || {
-      id: 'default',
-      userId: 'default_user',
-      instanceName: db.whatsapp.instanceName || 'radar_default',
-      label: 'WhatsApp Principal',
-      status: db.whatsapp.status,
-      phoneNumber: db.whatsapp.phoneNumber,
-      profileName: db.whatsapp.profileName,
-      profilePicUrl: (db.whatsapp as any).profilePicUrl,
-      ownerJid: db.whatsapp.ownerJid,
-      lastPingAt: db.whatsapp.lastPingAt,
-      lastVerificationStatus: db.whatsapp.lastVerificationStatus,
-      lastVerificationError: db.whatsapp.lastVerificationError,
-      isDefault: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    const scoped = await scopedCopierRules(session, requestedConnId);
+    const connections = await copierConnections(session);
+    const activeConn = scoped.connection;
+    const connState = activeConn;
+    db.sources = scoped.sources;
+    db.destinations = scoped.destinations;
+    db.groups = db.groups.filter(group => group.userId === session.userId && (group.connectionId === activeConn.id || (!group.connectionId && activeConn.isDefault)));
+    db.incomingMessages = db.incomingMessages.filter(message => message.userId === session.userId && (message.connectionId === activeConn.id || (!message.connectionId && activeConn.isDefault)));
+    db.jobs = db.jobs.filter(job => job.userId === session.userId && (job.connectionId === activeConn.id || (!job.connectionId && activeConn.isDefault)));
 
     const config = getActiveEvolutionConfig(connState as any);
 

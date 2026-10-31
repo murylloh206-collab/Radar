@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   CopySource,
   CopyDestination,
-  PublicationJob,
   WhatsAppGroup,
 } from '@/lib/types';
+import CopierGroupPicker, { CopierGroupPhoto } from '@/components/CopierGroupPicker';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
   Activity,
@@ -34,6 +34,7 @@ import {
 
 interface ConnectionInfo {
   id: string;
+  ownerJid?: string;
   label: string;
   phoneNumber?: string;
   profileName?: string;
@@ -146,73 +147,89 @@ function CopierContent() {
   const [allowedStores, setAllowedStores] = useState<string[]>(['shopee', 'mercadolivre', 'amazon', 'netshoes']);
   const [isActiveRule, setIsActiveRule] = useState(false);
 
-  // Carregar dados de status e grupos
-  const loadData = useCallback(async (connId?: string) => {
-    try {
-      const targetConnId = connId || selectedConnectionId;
-      const queryParam = targetConnId ? `?connectionId=${encodeURIComponent(targetConnId)}` : '';
+  const [picker, setPicker] = useState<'origin' | 'destinations' | null>(null);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const requestVersion = useRef(0);
+  const selectionEdited = useRef(false);
+  const accountIdentity = useRef('');
+  const currentConnection = useRef(paramConnId);
 
-      const [resStatus, resGroups, resSources] = await Promise.all([
-        fetch(`/api/copier/status${queryParam}`, { cache: 'no-store' }),
-        fetch(`/api/whatsapp/groups${queryParam}`, { cache: 'no-store' }),
-        fetch('/api/copier/sources', { cache: 'no-store' }),
-      ]);
-
-      const dataStatus: CopierStatusResponse = await resStatus.json().catch(() => ({ ok: false }));
-      const dataGroups = await resGroups.json().catch(() => ({ groups: [] }));
-      const dataSources = await resSources.json().catch(() => ({ sources: [], destinations: [] }));
-
-      if (dataStatus.ok) {
-        setStatusData(dataStatus);
-        if (dataStatus.activeConnection) {
-          setActiveConnection(dataStatus.activeConnection);
-          if (!targetConnId) {
-            setSelectedConnectionId(dataStatus.activeConnection.id);
-          }
-        }
-        if (Array.isArray(dataStatus.connections)) {
-          setConnections(dataStatus.connections as any);
-        }
-      }
-
-      if (dataGroups.ok && Array.isArray(dataGroups.groups)) {
-        setGroups(dataGroups.groups);
-      }
-
-      if (dataSources.ok && Array.isArray(dataSources.sources)) {
-        const found = dataSources.sources.find((s: CopySource) => s.isActive) || dataSources.sources[0];
-        if (found) {
-          setActiveRuleId(found.id);
-          if (!paramOriginJid) {
-            setSelectedOriginJid(found.groupJid);
-          }
-          const linkedDests = (dataSources.destinations || [])
-            .filter((d: CopyDestination) => d.sourceId === found.id && d.isActive)
-            .map((d: CopyDestination) => d.groupJid);
-          setSelectedDestJids(linkedDests);
-          setOperationMode(found.operationMode || 'revisao_manual');
-          if (Array.isArray(found.allowedStores) && found.allowedStores.length > 0) {
-            setAllowedStores(found.allowedStores);
-          }
-          setIsActiveRule(Boolean(found.isActive));
-        }
-      }
-    } catch {
-      setFeedback({ type: 'error', message: 'Não foi possível carregar as informações do Copiador.' });
-    } finally {
-      setLoading(false);
+  const loadData = useCallback(async (requestedId?: string, refresh = false) => {
+    const version = ++requestVersion.current;
+    const target = requestedId ?? currentConnection.current;
+    const switched = target !== currentConnection.current;
+    currentConnection.current = target;
+    if (switched) {
+      selectionEdited.current = false;
+      setGroups([]); setActiveConnection(null); setStatusData(null); setPicker(null);
+      setSelectedOriginJid(''); setSelectedDestJids([]); setActiveRuleId(null); setIsActiveRule(false);
     }
-  }, [selectedConnectionId, paramOriginJid]);
+    setGroupsLoading(true); setGroupError(null);
+    const query = new URLSearchParams();
+    if (target) query.set('connectionId', target);
+    if (refresh) query.set('refresh', 'true');
+    try {
+      const response = await fetch('/api/copier/group-catalog?' + query, { cache: 'no-store' });
+      const catalog = await response.json();
+      if (version !== requestVersion.current) return;
+      if (Array.isArray(catalog.connections)) setConnections(catalog.connections);
+      if (!response.ok && catalog.connection) {
+        setActiveConnection(catalog.connection); setSelectedConnectionId(catalog.connection.id);
+        currentConnection.current = catalog.connection.id;
+      }
+      if (!response.ok || !catalog.ok) throw new Error(catalog.error || 'Não foi possível consultar os grupos.');
+      const connection: ConnectionInfo = catalog.connection;
+      const identity = connection.id + ':' + connection.ownerJid;
+      if (accountIdentity.current && accountIdentity.current !== identity) {
+        setSelectedOriginJid(''); setSelectedDestJids([]); setActiveRuleId(null); setIsActiveRule(false);
+        selectionEdited.current = true;
+      }
+      accountIdentity.current = identity;
+      currentConnection.current = connection.id;
+      setSelectedConnectionId(connection.id); setActiveConnection(connection);
+      setConnections(catalog.connections); setGroups(catalog.groups); setSyncedAt(catalog.syncedAt);
+      setGroupsLoading(false); setLoading(false);
+      const scopedQuery = '?connectionId=' + encodeURIComponent(connection.id);
+      await Promise.allSettled([
+        fetch('/api/copier/status' + scopedQuery, { cache: 'no-store' }).then(async response => {
+          const status = await response.json();
+          if (version === requestVersion.current && response.ok && status.ok) setStatusData(status);
+        }),
+        fetch('/api/copier/sources' + scopedQuery, { cache: 'no-store' }).then(async response => {
+          const rules = await response.json();
+          if (version !== requestVersion.current || !response.ok || !rules.ok) return;
+          const found: CopySource | undefined = rules.sources.find((source: CopySource) => source.isActive) || rules.sources[0];
+          if (!found) { setActiveRuleId(null); setIsActiveRule(false); return; }
+          setActiveRuleId(found.id);
+          if (!refresh && !selectionEdited.current) {
+            setSelectedOriginJid(paramOriginJid || found.groupJid);
+            setSelectedDestJids((rules.destinations || []).filter((destination: CopyDestination) => destination.sourceId === found.id && destination.isActive).map((destination: CopyDestination) => destination.groupJid));
+            setOperationMode(found.operationMode || 'revisao_manual');
+            if (found.allowedStores?.length) setAllowedStores(found.allowedStores);
+          }
+          setIsActiveRule(!!found.isActive);
+        }),
+      ]);
+    } catch (error) {
+      if (version !== requestVersion.current) return;
+      setGroupError(error instanceof Error ? error.message : 'Não foi possível consultar os grupos.');
+      if (switched) setActiveConnection(previous => previous?.id === currentConnection.current ? previous : null);
+      else setActiveConnection(previous => previous ? { ...previous, state: 'unreachable', statusLabel: 'Não foi possível verificar agora' } : null);
+    } finally {
+      if (version === requestVersion.current) { setLoading(false); setGroupsLoading(false); }
+    }
+  }, [paramOriginJid]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    void loadData(paramConnId);
+    return () => { requestVersion.current++; };
+  }, [loadData, paramConnId]);
 
-  // Alterar WhatsApp no Seletor
   const handleSelectConnection = (newId: string) => {
     setSelectedConnectionId(newId);
-    setLoading(true);
-    loadData(newId);
+    void loadData(newId);
   };
 
   // Mapa de grupos
@@ -225,22 +242,21 @@ function CopierContent() {
   // Origem selecionada
   const originGroupName = useMemo(() => {
     if (!selectedOriginJid) return 'Selecione uma origem';
-    return groupsMap.get(selectedOriginJid)?.name || selectedOriginJid;
+    return groupsMap.get(selectedOriginJid)?.name || 'Grupo de origem a confirmar';
   }, [selectedOriginJid, groupsMap]);
 
   // Destino selecionado
   const destinationGroupName = useMemo(() => {
     if (selectedDestJids.length === 0) return 'Selecione um destino';
-    return selectedDestJids.map((jid) => groupsMap.get(jid)?.name || jid).join(', ');
+    return selectedDestJids.map((jid) => groupsMap.get(jid)?.name || 'Grupo de destino a confirmar').join(', ');
   }, [selectedDestJids, groupsMap]);
-
-  // Grupos disponíveis para destino
-  const availableDestGroups = useMemo(() => {
-    return groups.filter((g) => g.groupJid !== selectedOriginJid);
-  }, [groups, selectedOriginJid]);
 
   // Salvar / Alternar Ativação do Copiador (Passo 4)
   const handleToggleCopier = async () => {
+    if (!isActiveRule && (groupsLoading || groupError || !groupsMap.has(selectedOriginJid) || selectedDestJids.some(jid => !groupsMap.has(jid)))) {
+      setFeedback({ type: 'warning', message: 'Atualize os grupos e confirme a origem e os destinos desta conta antes de ativar.' });
+      return;
+    }
     if (!selectedOriginJid) {
       setFeedback({ type: 'warning', message: 'Passo 1 incompleto: escolha o grupo de origem antes de ativar.' });
       return;
@@ -302,7 +318,7 @@ function CopierContent() {
   const isQueueActive = statusData?.queue?.status === 'processando';
 
   return (
-    <section className="rp-page" aria-label="Modo Copiador">
+    <section className="rp-page copier-page" aria-label="Modo Copiador">
       {/* Topo: WhatsApp Selecionado, Seletor de Contas e Ações */}
       <div className="rp-head" style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
@@ -369,10 +385,10 @@ function CopierContent() {
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <strong style={{ fontSize: 15, color: '#edf2f5' }}>
-                {activeConnection?.label || 'WhatsApp Principal'}
+                {activeConnection?.label || 'Selecione seu WhatsApp'}
               </strong>
               <span className={`rp-tag ${isConnected ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10, padding: '2px 8px' }}>
-                {activeConnection?.statusLabel || (isConnected ? 'Conectado agora' : 'Desconectado')}
+                {activeConnection?.statusLabel || (loading ? 'Consultando conexão…' : 'Conexão não confirmada')}
               </span>
               {activeConnection?.isDefault && (
                 <span style={{ fontSize: 9, background: '#254452', color: '#74dbf7', padding: '1px 6px', borderRadius: 4, border: '1px solid #356073' }}>
@@ -437,7 +453,7 @@ function CopierContent() {
             </span>
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {activeConnection?.statusLabel || 'Desconectado'}
+            {activeConnection?.statusLabel || 'Não verificada'}
           </div>
           <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
             {activeConnection?.phoneNumber ? formatPhone(activeConnection.phoneNumber) : 'Sem número'}
@@ -496,8 +512,15 @@ function CopierContent() {
         </div>
       )}
 
+      {picker && <CopierGroupPicker key={selectedConnectionId + ':' + picker} mode={picker} groups={groups}
+        selected={picker === 'origin' ? (selectedOriginJid ? [selectedOriginJid] : []) : selectedDestJids}
+        excludedJid={selectedOriginJid} connectionId={selectedConnectionId} ownerJid={activeConnection?.ownerJid}
+        accountLabel={(activeConnection?.label || 'WhatsApp selecionado') + ' · ' + formatPhone(activeConnection?.phoneNumber)}
+        loading={groupsLoading} error={groupError} onRefresh={() => void loadData(selectedConnectionId, true)} onClose={() => setPicker(null)}
+        onConfirm={selection => { selectionEdited.current = true; if (picker === 'origin') { setSelectedOriginJid(selection[0]); setSelectedDestJids(previous => previous.filter(jid => jid !== selection[0])); } else setSelectedDestJids(selection); setPicker(null); }} />}
+
       {/* Resumo do Fluxo Principal */}
-      <div className="rp-flow" style={{ marginBottom: 20 }}>
+      <div className="rp-flow copier-flow" style={{ marginBottom: 20 }}>
         <div className="rp-flow-part">
           <small>1. Copiar de</small>
           <strong>{originGroupName}</strong>
@@ -526,27 +549,13 @@ function CopierContent() {
               Escolha o grupo de onde o Radar capturará as promoções enviadas por concorrentes ou parceiros.
             </p>
 
-            <label className="rp-field">
-              Grupo de origem (monitorado)
-              <select
-                id="rp-source"
-                value={selectedOriginJid}
-                onChange={(e) => setSelectedOriginJid(e.target.value)}
-              >
-                <option value="">Selecione um grupo para monitorar...</option>
-                {groups.map((g) => (
-                  <option key={g.groupJid} value={g.groupJid}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <button type="button" className="copier-choose" onClick={() => setPicker('origin')} aria-haspopup="dialog">
+              {groupsMap.get(selectedOriginJid) ? <CopierGroupPhoto group={groupsMap.get(selectedOriginJid)!} connectionId={selectedConnectionId} ownerJid={activeConnection?.ownerJid} /> : <span className="cgp-avatar"><Users size={22} /></span>}
+              <span className="copier-choose-copy"><strong>{originGroupName}</strong><small>Escolher pela foto e pelo nome do grupo</small></span><ChevronRight size={18} />
+            </button>
+            <div className="copier-group-tools"><span>{groupsLoading ? 'Atualizando grupos…' : syncedAt ? groups.length + ' grupos sincronizados' : 'Sincronize esta conexão'}</span><button type="button" onClick={() => void loadData(selectedConnectionId, true)} disabled={groupsLoading}><RefreshCw size={13} />Atualizar</button></div>
+            {groupError && <p className="copier-group-notice" role="status">{groupError} <Link href="/conexoes?aba=whatsapp">Gerenciar WhatsApps</Link></p>}
 
-            {groups.length === 0 && (
-              <p style={{ fontSize: 11, color: '#d97736', marginTop: 8 }}>
-                Nenhum grupo carregado para esta conta. Acesse <strong>Conexões &gt; WhatsApp</strong> para sincronizar.
-              </p>
-            )}
           </div>
 
           {/* PASSO 2: Para quais grupos enviar? */}
@@ -557,24 +566,10 @@ function CopierContent() {
               Selecione o canal ou grupo oficial onde você administra e deseja que as ofertas sejam divulgadas.
             </p>
 
-            <label className="rp-field">
-              Grupo de destino (publicação)
-              <select
-                id="rp-destination"
-                value={selectedDestJids[0] || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedDestJids(val ? [val] : []);
-                }}
-              >
-                <option value="">Selecione o grupo para publicar...</option>
-                {availableDestGroups.map((g) => (
-                  <option key={g.groupJid} value={g.groupJid}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <button type="button" className="copier-choose" onClick={() => setPicker('destinations')} aria-haspopup="dialog">
+              {groupsMap.get(selectedDestJids[0]) ? <CopierGroupPhoto group={groupsMap.get(selectedDestJids[0])!} connectionId={selectedConnectionId} ownerJid={activeConnection?.ownerJid} /> : <span className="cgp-avatar"><Users size={22} /></span>}
+              <span className="copier-choose-copy"><strong>{selectedDestJids.length > 1 ? selectedDestJids.length + ' grupos selecionados' : destinationGroupName}</strong><small>{selectedDestJids.length > 1 ? destinationGroupName : 'Selecionar um ou vários grupos de destino'}</small></span><ChevronRight size={18} />
+            </button>
 
             <p className="rp-sub" style={{ fontSize: 11, margin: '6px 0 0' }}>
               A conta conectada precisa ter permissão de envio (administrador ou grupo aberto a todos).

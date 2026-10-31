@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CopyDestination, CopySource } from '@/lib/types';
 import { readDatabase, writeDatabase, ensureValidUuid } from '@/lib/server/storage';
-import { requireAdminAuth } from '@/lib/server/auth';
+import { copierGroupCatalog } from '@/lib/server/copier-group-catalog';
+import { scopedCopierRules } from '@/lib/server/copier-scoped-rules';
+import { WhatsAppPhotoError } from '@/lib/server/whatsapp-photo-context';
+import { getSessionFromRequest, requireAdminAuth } from '@/lib/server/auth';
 import { isSupabaseConfigured, isTestIsolationActive, supabase } from '@/lib/supabase';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const session = getSessionFromRequest(req);
+  if (!session) return NextResponse.json({ ok: false, error: 'Sessão necessária.' }, { status: 401 });
   try {
-    const db = readDatabase();
-    return NextResponse.json({
-      ok: true,
-      sources: db.sources,
-      destinations: db.destinations,
-      groups: db.groups,
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    const rules = await scopedCopierRules(session, req.nextUrl.searchParams.get('connectionId') || undefined);
+    return NextResponse.json({ ok: true, sources: rules.sources, destinations: rules.destinations }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof WhatsAppPhotoError ? error.message : 'Não foi possível consultar as regras.' }, { status: error instanceof WhatsAppPhotoError ? error.status : 503 });
   }
 }
 
@@ -53,8 +52,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const session = auth.session!;
+    const saved = await scopedCopierRules(session, body.connectionId);
+    const connection = saved.connection;
+    const savedSource = saved.sources.find(source => id ? source.id === id : source.groupJid === groupJid);
+    if (id && !savedSource) return NextResponse.json({ ok: false, error: 'Regra não autorizada nesta conexão.' }, { status: 403 });
+    const pausing = body.isActive === false && !!savedSource;
+    const live = pausing ? null : await copierGroupCatalog(session, { connectionId: connection.id, refresh: true, permissions: true });
+    if (live) db.groups = [...db.groups.filter(group => group.connectionId !== connection.id), ...live.groups];
+    db.sources = [...db.sources.filter(source => !saved.sources.some(stored => stored.id === source.id)), ...saved.sources];
+    const trustedGroups = live?.groups || db.groups.filter(group => group.userId === session.userId && group.connectionId === connection.id);
+    if (body.isActive && (!Array.isArray(destinationJids) || destinationJids.some((jid: string) => {
+      const group = trustedGroups.find(candidate => candidate.groupJid === jid);
+      return jid === groupJid || !group || group.canPost !== true;
+    }))) return NextResponse.json({ ok: false, error: 'Confirme os destinos: cada grupo deve pertencer a esta conexão e ter permissão de envio verificada.' }, { status: 400 });
+
     // Buscar nome oficial do grupo se não fornecido
-    const originGroup = (db.groups || []).find((g) => g.groupJid === groupJid);
+    const originGroup = trustedGroups.find(group => group.groupJid === groupJid) || (pausing && savedSource?.groupJid === groupJid ? { name: savedSource.name } : undefined);
     if (!originGroup) {
       return NextResponse.json(
         { ok: false, error: 'O grupo de origem selecionado não pertence aos grupos conectados da sua conta.' },
@@ -63,8 +77,8 @@ export async function POST(req: NextRequest) {
     }
     const sourceName = name || originGroup?.name || 'Grupo de Origem';
 
-    const sourceId = ensureValidUuid(id);
-    const existingIndex = db.sources.findIndex((s) => s.id === sourceId || s.groupJid === groupJid);
+    const sourceId = ensureValidUuid(savedSource?.id || id);
+    const existingIndex = db.sources.findIndex(source => source.userId === session.userId && (source.connectionId === connection.id || (!source.connectionId && connection.isDefault)) && (source.id === sourceId || source.groupJid === groupJid));
 
     let ruleIsActive = false;
     if (typeof body.isActive === 'boolean') {
@@ -83,7 +97,8 @@ export async function POST(req: NextRequest) {
 
     const updatedSource: CopySource = {
       id: sourceId,
-      userId: db.settings.userId || '00000000-0000-0000-0000-000000000001',
+      userId: session.userId,
+      connectionId: connection.id,
       groupJid,
       name: sourceName,
       operationMode,
@@ -106,6 +121,7 @@ export async function POST(req: NextRequest) {
         {
           id: sourceId,
           user_id: ensureValidUuid(updatedSource.userId),
+          ...(connection.persistence === 'multi' ? { connection_id: connection.id } : {}),
           source_jid: updatedSource.groupJid,
           source_name: updatedSource.name,
           is_active: updatedSource.isActive,
@@ -169,7 +185,7 @@ export async function POST(req: NextRequest) {
         // Prevenção de loop: a origem nunca pode ser destino de si mesma
         if (destJid === groupJid) return;
 
-        const matchingGroup = (db.groups || []).find((g) => g.groupJid === destJid);
+        const matchingGroup = trustedGroups.find(group => group.groupJid === destJid);
         // Validar permissão de postagem no destino
         if (matchingGroup && matchingGroup.canPost === false) {
           return; // ignora grupo somente leitura para prevenir falhas
@@ -205,8 +221,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err instanceof WhatsAppPhotoError ? err.message : 'Não foi possível salvar a regra do Copiador.' }, { status: err instanceof WhatsAppPhotoError ? err.status : 500 });
   }
 }
 

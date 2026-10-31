@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { copierConnection } from '@/lib/server/copier-group-catalog';
 import { getSessionFromRequest } from '@/lib/server/auth';
 import { safeWhatsAppPictureUrl } from '@/lib/server/whatsapp-picture';
 import {
@@ -26,7 +27,8 @@ export async function GET(req: NextRequest) {
     return failure('INVALID_IDENTITY', 'Atualize a lista de grupos para consultar as fotos.', 400);
   }
   try {
-    const config = await photoGatewayConfig(session);
+    const connectionId = params.get('connectionId');
+    const config = connectionId ? (await copierConnection(session, connectionId)).connection : await photoGatewayConfig(session);
     const owner = await livePhotoOwner(config);
     if (owner !== canonicalPhotoOwner(expectedOwner)) {
       throw new WhatsAppPhotoError('ACCOUNT_CHANGED', 409, 'A conta conectada mudou. Atualize a lista de grupos.');
