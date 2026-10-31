@@ -145,6 +145,7 @@ export interface WhatsAppGroup {
   userId: string;
   groupJid: string;
   name: string;
+  pictureUrl?: string;
   participantCount: number;
   isAdmin: boolean;
   canPost?: boolean;

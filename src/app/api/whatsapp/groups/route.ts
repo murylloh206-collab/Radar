@@ -1,3 +1,4 @@
+import { safeWhatsAppPictureUrl } from '@/lib/server/whatsapp-picture';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   readDatabase,
@@ -176,6 +177,7 @@ export async function GET(req: NextRequest) {
                   userId: existing?.userId || db.settings.userId || '00000000-0000-0000-0000-000000000001',
                   groupJid,
                   name,
+                  pictureUrl: safeWhatsAppPictureUrl(rg.pictureUrl) || undefined,
                   participantCount,
                   isAdmin,
                   canPost,
@@ -227,6 +229,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       groups: sanitizedGroups,
+      accountJid: db.whatsapp.groupsOwnerJid,
       total: sanitizedGroups.length,
       isLive,
       cached: !isLive,

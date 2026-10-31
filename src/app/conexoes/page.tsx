@@ -1,19 +1,11 @@
 'use client';
 
 import React, { Suspense, useEffect, useState, useMemo, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { WhatsAppGroup, StoreName } from '@/lib/types';
+import { StoreName } from '@/lib/types';
+import WhatsAppGroupsPanel from '@/components/WhatsAppGroupsPanel';
 import { SafeVaultStatus } from '@/lib/server/credentials-vault';
 import { BrandLogo } from '@/components/BrandLogo';
-
-interface WhatsAppStatusData {
-  status: 'connected' | 'connecting' | 'disconnected';
-  phoneNumber?: string;
-  profileName?: string;
-  instanceName?: string;
-  lastPingAt?: string;
-}
 
 interface StoreConfigForm {
   appId: string;
@@ -44,12 +36,6 @@ function ConexoesContent() {
     }
   }, [initialTabParam]);
 
-  const [waData, setWaData] = useState<WhatsAppStatusData | null>(null);
-  const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
-  const [groupSearch, setGroupSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [verifying, setVerifying] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Status real das lojas no cofre
@@ -115,31 +101,14 @@ function ConexoesContent() {
     } catch {}
   };
 
-  // Carregar dados de WhatsApp, Grupos e Lojas do cofre
   const loadData = useCallback(async () => {
     try {
-      const [resWa, resGroups, resVault] = await Promise.all([
-        fetch('/api/whatsapp/connect'),
-        fetch('/api/whatsapp/groups'),
-        fetch('/api/integrations/vault'),
-      ]);
-
-      const dataWa = await resWa.json().catch(() => ({}));
-      const dataGroups = await resGroups.json().catch(() => ({}));
-      const dataVault = await resVault.json().catch(() => ({}));
-
-      if (dataWa.ok) {
-        setWaData(dataWa.whatsapp);
-      }
-      if (dataGroups.ok && Array.isArray(dataGroups.groups)) {
-        setGroups(dataGroups.groups);
-      }
-      if (dataVault.ok && Array.isArray(dataVault.stores)) {
-        setVaultStores(dataVault.stores);
-      }
+      const response = await fetch('/api/integrations/vault', { cache: 'no-store' });
+      const data = await response.json();
+      if (response.ok && data.ok && Array.isArray(data.stores)) setVaultStores(data.stores);
+      else setNotice(data.error || 'Não foi possível carregar as integrações de lojas.');
     } catch {
-    } finally {
-      setLoading(false);
+      setNotice('Não foi possível carregar as integrações de lojas.');
     }
   }, []);
 
@@ -302,57 +271,6 @@ function ConexoesContent() {
     router.replace(`/conexoes?aba=${tab}`, { scroll: false });
   };
 
-  const handleVerifyConnection = async () => {
-    setVerifying(true);
-    setNotice(null);
-    try {
-      const res = await fetch('/api/whatsapp/connect', { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) {
-        setWaData(data.whatsapp);
-        setNotice('Conexão verificada com sucesso!');
-      } else {
-        setNotice(data.error || 'Falha ao verificar conexão.');
-      }
-    } catch {
-      setNotice('Erro de rede ao verificar conexão.');
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const handleSyncGroups = async () => {
-    setSyncing(true);
-    setNotice(null);
-    try {
-      const res = await fetch('/api/whatsapp/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'sync' }),
-      });
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.groups)) {
-        setGroups(data.groups);
-        setNotice(`${data.groups.length} grupos sincronizados com sucesso!`);
-      } else {
-        setNotice(data.error || 'Não foi possível sincronizar os grupos.');
-      }
-    } catch {
-      setNotice('Erro de rede ao sincronizar grupos.');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const filteredGroups = useMemo(() => {
-    return groups.filter((g) => {
-      if (!groupSearch.trim()) return true;
-      return g.name.toLowerCase().includes(groupSearch.toLowerCase().trim());
-    });
-  }, [groups, groupSearch]);
-
-  const isConnected = waData?.status === 'connected';
-
   // Endereço de extensões conforme o navegador selecionado
   const browserExtensionAddress = useMemo(() => {
     switch (selectedBrowser) {
@@ -448,111 +366,10 @@ function ConexoesContent() {
           </button>
         </div>
 
-        {/* Aba 1: WhatsApp e grupos */}
+        {/* Dados e fotografias consultados na conta real do WhatsApp. */}
         {activeTab === 'whatsapp' && (
           <div data-panel="whatsapp" role="tabpanel">
-            {/* Painel da conta */}
-            <div className="rp-panel">
-              <div className="rp-row">
-                <div className="rp-inline" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <BrandLogo brand="whatsapp" variant="whatsapp-conta" size={38} containerSize={48} preferFormat="png" />
-                  <div>
-                    <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>{waData?.profileName || 'Radar de Ofertas'}</h2>
-                    <p className="rp-sub" style={{ margin: 0, marginTop: 4 }}>
-                      {isConnected
-                        ? `Conta conectada · ${waData?.phoneNumber || 'WhatsApp verificado'}`
-                        : 'Conta desconectada · Configure para iniciar as publicações'}
-                    </p>
-                  </div>
-                </div>
-                <span className={`rp-tag ${isConnected ? 'rp-good' : 'rp-warn'}`}>
-                  {isConnected ? 'Conectado' : 'Desconectado'}
-                </span>
-              </div>
-
-              <div className="rp-actions rp-section">
-                <button
-                  className="rp-btn"
-                  type="button"
-                  onClick={handleVerifyConnection}
-                  disabled={verifying}
-                >
-                  {verifying ? 'Verificando...' : 'Verificar conexão'}
-                </button>
-                <button
-                  className="rp-btn"
-                  type="button"
-                  onClick={handleSyncGroups}
-                  disabled={syncing}
-                >
-                  {syncing ? 'Atualizando...' : 'Atualizar grupos'}
-                </button>
-                <button
-                  className="rp-btn rp-quiet"
-                  type="button"
-                  onClick={() => setNotice('Ação de desconexão requer confirmação de segurança.')}
-                >
-                  Desconectar
-                </button>
-              </div>
-            </div>
-
-            {/* Painel de grupos */}
-            <div className="rp-panel rp-section">
-              <div className="rp-row">
-                <h2>Grupos da conta</h2>
-                <span className="rp-tag">
-                  {groups.length} {groups.length === 1 ? 'grupo' : 'grupos'}
-                </span>
-              </div>
-
-              <label className="rp-field">
-                Buscar grupo
-                <input
-                  type="search"
-                  id="rp-groups-search"
-                  placeholder="Nome do grupo"
-                  value={groupSearch}
-                  onChange={(e) => setGroupSearch(e.target.value)}
-                />
-              </label>
-
-              <div className="rp-list">
-                {loading ? (
-                  <p className="rp-sub">Carregando grupos...</p>
-                ) : filteredGroups.length === 0 ? (
-                  <p className="rp-sub">Nenhum grupo encontrado.</p>
-                ) : (
-                  filteredGroups.map((g) => (
-                    <div key={g.id} className="rp-item">
-                      <div>
-                        <strong>{g.name}</strong>
-                        <p className="rp-sub">ID: {g.groupJid || g.id}</p>
-                      </div>
-                      <Link href="/copiador" className="rp-btn">
-                        Usar no Copiador
-                      </Link>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Diagnóstico avançado */}
-            <details className="rp-details">
-              <summary>Diagnóstico avançado</summary>
-              <div style={{ marginTop: 12 }}>
-                <p className="rp-sub">
-                  Instância: <strong>{waData?.instanceName || 'radar-principal'}</strong>
-                </p>
-                <p className="rp-sub">
-                  Endpoint do Webhook: <strong>/api/webhook/evolution</strong>
-                </p>
-                <p className="rp-sub">
-                  Última resposta do servidor: <strong>{waData?.lastPingAt ? new Date(waData.lastPingAt).toLocaleString('pt-BR') : 'Ativo'}</strong>
-                </p>
-              </div>
-            </details>
+            <WhatsAppGroupsPanel />
           </div>
         )}
 
