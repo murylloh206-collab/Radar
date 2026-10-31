@@ -1,0 +1,64 @@
+.radar-brand {
+  --brand-box: 44px;
+  --brand-mark: 32px;
+  display: inline-grid;
+  place-items: center;
+  width: var(--brand-box);
+  height: var(--brand-box);
+  flex: 0 0 var(--brand-box);
+  border-radius: 13px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: #fff;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.radar-brand > img {
+  display: block;
+  width: var(--brand-mark);
+  height: var(--brand-mark);
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.radar-brand--integracao { --brand-box: 58px; --brand-mark: 44px; border-radius: 16px; }
+.radar-brand--grupo { --brand-box: 46px; --brand-mark: 34px; border-radius: 50%; }
+.radar-brand--mercadolivre { --brand-mark: 38px; }
+.radar-brand--mercadolivre.radar-brand--integracao { --brand-mark: 48px; }
+.radar-brand--whatsapp { background: #182e26; border-color: #29483a; }
+.radar-brand--whatsapp-destaque { --brand-box: 50px; --brand-mark: 34px; border-radius: 15px; }
+.radar-brand--whatsapp-conta { --brand-box: 52px; --brand-mark: 36px; border-radius: 16px; }
+.radar-brand__missing { color: #68737b; font: 16px system-ui, sans-serif; }
+.radar-brand-stack { display: inline-flex; align-items: center; flex-shrink: 0; isolation: isolate; padding-inline: 2px; }
+.radar-brand-stack > .radar-brand { border: 2px solid #24282c; box-shadow: 0 2px 7px #0002; }
+.radar-brand-stack > .radar-brand + .radar-brand { margin-left: -5px; }
+.radar-brand-stack > .radar-brand:nth-child(1) { z-index: 3; }
+.radar-brand-stack > .radar-brand:nth-child(2) { z-index: 2; }
+.radar-brand-stack > .radar-brand:nth-child(3) { z-index: 1; }
+.rdv3-slide-brands { gap: 14px; }
+.rdv3-stores-card .radar-brand-stack { margin-left: auto; }
+.radar-integrations { max-width: 1060px; }
+.radar-integrations-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.radar-integrations-grid .rp-store {
+  padding: 24px;
+  gap: 18px;
+  background: #22272c;
+  border: 1px solid #373e44;
+  border-radius: 16px;
+}
+.radar-integrations-grid .rp-store > .rp-row { gap: 16px; align-items: flex-start; }
+.radar-integrations-grid .rp-inline { gap: 16px; flex-wrap: nowrap; min-width: 0; }
+.radar-integrations-grid .rp-store h2 { font: 600 16px/1.3 Inter, "Segoe UI", sans-serif; letter-spacing: -.02em; }
+.radar-integrations-grid .rp-store .rp-sub { margin: 0; color: #aeb7be; font-size: 13px; line-height: 1.65; min-height: 42px; max-width: 39ch; }
+.radar-integrations-grid .rp-store .rp-tag { font-size: 11px; padding: 6px 9px; background: #2b3237; color: #bbc7ce; border: 1px solid #424c53; }
+.radar-integrations-grid .rp-store > .rp-btn { min-height: 40px; margin-top: 0; padding: 10px 14px; font-size: 12px; background: #2c3339; border-color: #48535c; border-radius: 9px; }
+.radar-integrations-grid .rp-store > .rp-btn:hover { background: #303c42; border-color: #39bee6; color: #8fe3f9; }
+.radar-integrations-grid .rp-store > .rp-btn:focus-visible { outline: 2px solid #39bee6; outline-offset: 3px; }
+@media (max-width: 1000px) {
+  .radar-integrations-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .radar-brand--grupo { --brand-box: 42px; --brand-mark: 31px; }
+  .radar-integrations-grid .rp-store { padding: 20px; }
+  .radar-integrations-grid .rp-store > .rp-btn { min-height: 44px; }
+  .rdv3-stores-card .radar-brand-stack { margin-left: 0; }
+}
