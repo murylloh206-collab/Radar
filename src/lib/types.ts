@@ -140,7 +140,33 @@ export interface StoreCoupon {
   isActive: boolean;
 }
 
+export interface WhatsAppConnection {
+  id: string;
+  userId: string;
+  label: string;
+  instanceName: string;
+  baseUrl: string;
+  apiKey: string;
+  status: 'connected' | 'connecting' | 'disconnected' | 'qrcode';
+  phoneNumber?: string;
+  ownerJid?: string;
+  profileName?: string;
+  profilePicUrl?: string;
+  batteryLevel?: number;
+  qrCodeBase64?: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  lastPingAt?: string;
+  lastSyncedAt?: string;
+  lastWorkerCycleAt?: string;
+  lastRealWebhookAt?: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WhatsAppGroup {
+  connectionId?: string;
   id: string;
   userId: string;
   groupJid: string;
@@ -159,6 +185,7 @@ export interface WhatsAppGroup {
 }
 
 export interface CopySource {
+  connectionId?: string;
   id: string;
   userId: string;
   groupJid: string;
@@ -191,6 +218,7 @@ export interface CopyDestination {
 }
 
 export interface IncomingMessage {
+  connectionId?: string;
   id: string;
   userId: string;
   messageId: string;
@@ -254,6 +282,8 @@ export interface OfferEvaluation {
 }
 
 export interface PublicationJob {
+  connectionId?: string;
+  lockedAt?: string;
   id: string;
   userId: string;
   originType: 'manual' | 'copiador' | 'fila' | 'lista' | 'curador';

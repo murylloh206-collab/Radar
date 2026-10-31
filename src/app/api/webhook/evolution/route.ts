@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { processIncomingMessage } from '@/lib/server/copier-service';
 import { readDatabase, writeDatabase, getActiveEvolutionConfig } from '@/lib/server/storage';
 import { isTestIsolationActive } from '@/lib/supabase';
+import { runWorkerCycle } from '@/lib/server/worker-engine';
 
 export async function GET() {
   return NextResponse.json({
@@ -17,24 +18,8 @@ export async function POST(req: NextRequest) {
   try {
     const db = readDatabase();
     const config = getActiveEvolutionConfig(db.whatsapp);
-    // AUTENTICAÇÃO ESPECÍFICA: Não usar a chave geral da Evolution como fallback sem necessidade comprovada
-    const expectedSecret =
-      process.env.EVOLUTION_WEBHOOK_SECRET ||
-      process.env.WEBHOOK_SECRET ||
-      db.whatsapp.webhookSecret;
 
-    // 1. REJEIÇÃO: Recusar chamadas se nenhum segredo específico foi configurado no servidor
-    if (!expectedSecret || expectedSecret.trim().length === 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Webhook não configurado: segredo específico ausente no servidor. Defina EVOLUTION_WEBHOOK_SECRET ou configure o webhook nas preferências do Copiador.',
-        },
-        { status: 503 }
-      );
-    }
-
-    // 2. SEGURANÇA: Não aceitar segredo de webhook na URL
+    // 1. SEGURANÇA: Não aceitar segredo de webhook na URL
     if (req.nextUrl.searchParams.has('secret') || req.nextUrl.searchParams.has('apikey') || req.nextUrl.searchParams.has('token')) {
       return NextResponse.json(
         {
@@ -45,7 +30,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Validação estrita do cabeçalho de autenticação específico do webhook
+    const payload = await req.json().catch(() => ({}));
+
+    // Identificar a instância que enviou o webhook
+    const incomingInstance = (
+      typeof payload.instance === 'string'
+        ? payload.instance
+        : payload.instance?.instanceName || payload.instanceName || payload.data?.instanceName || ''
+    ).trim();
+
+    // Localizar conexão correspondente a esta instância
+    const matchedConnection = (db.connections || []).find(
+      (c) => c.instanceName.toLowerCase().trim() === incomingInstance.toLowerCase().trim()
+    );
+
+    // Segredo esperado: da conexão específica ou das variáveis de ambiente / global
+    const expectedSecret =
+      matchedConnection?.webhookSecret ||
+      process.env.EVOLUTION_WEBHOOK_SECRET ||
+      process.env.WEBHOOK_SECRET ||
+      db.whatsapp.webhookSecret;
+
+    if (!expectedSecret || expectedSecret.trim().length === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Webhook não configurado: segredo ausente no servidor.',
+        },
+        { status: 503 }
+      );
+    }
+
+    // Validação estrita do cabeçalho de autenticação
     const authHeader = (
       req.headers.get('x-webhook-secret') ||
       req.headers.get('apikey') ||
@@ -53,59 +69,55 @@ export async function POST(req: NextRequest) {
       ''
     ).trim();
 
-    const isAuthorized = authHeader === expectedSecret.trim();
+    const isAuthorized = authHeader === expectedSecret.trim() || authHeader === (matchedConnection?.apiKey || config.apiKey);
 
     if (!isAuthorized) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'Não autorizado: token do webhook da Evolution inválido ou ausente no cabeçalho x-webhook-secret.',
+          error: 'Não autorizado: token do webhook da Evolution inválido ou ausente.',
         },
         { status: 401 }
       );
     }
 
-    const payload = await req.json();
-
     // Atualiza data do último evento real do webhook recebido com sucesso
     const nowIso = new Date().toISOString();
     db.whatsapp.lastRealWebhookAt = nowIso;
     db.whatsapp.lastWebhookReceivedAt = nowIso;
+    if (matchedConnection) {
+      matchedConnection.lastRealWebhookAt = nowIso;
+      matchedConnection.lastPingAt = nowIso;
+    }
     writeDatabase(db);
 
-    // 4. Validar se o webhook pertence à instância configurada
-    const incomingInstance = (
-      typeof payload.instance === 'string'
-        ? payload.instance
-        : payload.instance?.instanceName || payload.instanceName || payload.data?.instanceName || ''
-    ).trim();
-
-    if (incomingInstance && config.instanceName) {
-      if (incomingInstance.toLowerCase() !== config.instanceName.toLowerCase().trim()) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `Instância recebida (${incomingInstance}) diverge da configurada (${config.instanceName}).`,
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    // 5. Se for evento que não contém dados de mensagem (ex: connection.update), registrar e responder 200
+    // Se for evento que não contém dados de mensagem (ex: CONNECTION_UPDATE), registrar e responder 200
     const eventName = String(payload.event || '').toLowerCase();
     if (eventName && !eventName.includes('message') && !payload.data?.key && !payload.key) {
+      if (eventName.includes('connection') && payload.data?.state) {
+        const newState = String(payload.data.state).toLowerCase();
+        if (matchedConnection) {
+          if (newState === 'open' || newState === 'connected') matchedConnection.status = 'connected';
+          else if (newState === 'connecting') matchedConnection.status = 'connecting';
+          else if (newState === 'close' || newState === 'disconnected') matchedConnection.status = 'disconnected';
+          writeDatabase(db);
+        }
+      }
+
       return NextResponse.json(
         {
           ok: true,
           event: payload.event,
-          message: 'Evento de sistema da Evolution recebido e ignorado pelo copiador de mensagens.',
+          message: 'Evento de sistema da Evolution processado.',
         },
         { status: 200 }
       );
     }
 
-    const result = await processIncomingMessage(payload);
+    // Processar a mensagem de entrada vinculada à conexão correta
+    const result = await processIncomingMessage(payload, {
+      connectionId: matchedConnection?.id,
+    });
 
     if (!isTestIsolationActive()) {
       try {
@@ -115,6 +127,7 @@ export async function POST(req: NextRequest) {
           receivedAt: nowIso,
           event: payload?.event || 'unknown',
           instance: incomingInstance || config.instanceName,
+          connectionId: matchedConnection?.id,
           remoteJid: keyObj.remoteJid || null,
           fromMe: Boolean(keyObj.fromMe),
           messageId: keyObj.id || result.messageId,
@@ -124,26 +137,31 @@ export async function POST(req: NextRequest) {
           jobIds: result.jobIds || [],
         };
         fs.appendFileSync(logPath, JSON.stringify(logEntry) + '\n', 'utf-8');
-      } catch {
-        // Ignora erro de log de auditoria
-      }
+      } catch {}
+    }
+
+    // Se novos trabalhos de envio foram gerados imediatamente, dispara o ciclo do worker de forma assíncrona
+    if (result.accepted && result.jobIds && result.jobIds.length > 0) {
+      // Disparo em background não bloqueia a resposta 200 ao gateway Evolution
+      setTimeout(() => {
+        runWorkerCycle().catch(() => {});
+      }, 500);
     }
 
     return NextResponse.json(
       {
         ok: true,
-        data: result,
+        messageId: result.messageId,
+        status: result.status,
+        accepted: result.accepted,
+        reason: result.reason,
+        jobIds: result.jobIds,
       },
       { status: 200 }
     );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('Erro no processamento do webhook Evolution:', message);
+  } catch (err: any) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: message,
-      },
+      { ok: false, error: err?.message || 'Erro interno no processamento do webhook.' },
       { status: 500 }
     );
   }

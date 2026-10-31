@@ -1,70 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/server/auth';
-import { getActiveEvolutionConfig, isValidGatewayUrl, readDatabase } from '@/lib/server/storage';
 import { safeWhatsAppPictureUrl } from '@/lib/server/whatsapp-picture';
+import {
+  canonicalPhotoOwner, livePhotoGroups, livePhotoOwner, photoConfigKey,
+  photoGatewayConfig, photoGatewayRequest, WhatsAppPhotoError,
+} from '@/lib/server/whatsapp-photo-context';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 type Picture = { pictureUrl: string | null };
-const cache = new Map<string, { value: Picture; expires: number }>();
+const cache = new Map<string, { picture: Picture; expires: number }>();
 const pending = new Map<string, Promise<Picture>>();
 const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie' };
 
 export async function GET(req: NextRequest) {
   const session = getSessionFromRequest(req);
-  if (!session) return NextResponse.json({ ok: false, error: 'Sessão necessária.' }, { status: 401, headers });
-  const db = readDatabase();
-  if (session.role !== 'admin' && session.userId !== db.whatsapp.userId) {
-    return NextResponse.json({ ok: false, error: 'Conta não autorizada.' }, { status: 403, headers });
+  if (!session) return failure('SESSION_REQUIRED', 'Sessão necessária.', 401);
+  const params = req.nextUrl.searchParams;
+  const account = params.get('account') === '1';
+  const jid = params.get('groupJid');
+  const expectedOwner = params.get('ownerJid');
+  if ((!account && (!jid || !/^\d{5,30}@g\.us$/.test(jid))) || (account && jid) ||
+      !expectedOwner || !/^\d{5,30}(?::\d+)?@s\.whatsapp\.net$/.test(expectedOwner)) {
+    return failure('INVALID_IDENTITY', 'Atualize a lista de grupos para consultar as fotos.', 400);
   }
-
-  const account = req.nextUrl.searchParams.get('account') === '1';
-  const jid = req.nextUrl.searchParams.get('groupJid');
-  if ((!account && (!jid || !/^\d{5,30}@g\.us$/.test(jid))) || (account && jid)) {
-    return NextResponse.json({ ok: false, error: 'Identificação inválida.' }, { status: 400, headers });
-  }
-  const owner = db.whatsapp.ownerJid;
-  if (!owner || db.whatsapp.status !== 'connected') {
-    return NextResponse.json({ ok: false, error: 'Confirme a conta conectada primeiro.' }, { status: 409, headers });
-  }
-  const group = account ? undefined : db.groups.find(item => item.groupJid === jid);
-  if (!account && (!group || db.whatsapp.groupsOwnerJid !== owner ||
-      (session.role !== 'admin' && group.userId !== session.userId))) {
-    return NextResponse.json({ ok: false, error: 'Grupo indisponível nesta conta.' }, { status: 404, headers });
-  }
-
-  const config = getActiveEvolutionConfig(db.whatsapp);
-  if (!config.baseUrl || !config.apiKey || !config.instanceName || !isValidGatewayUrl(config.baseUrl).valid) {
-    return NextResponse.json({ ok: false, error: 'Integração não configurada.' }, { status: 409, headers });
-  }
-  const number = account ? owner : group!.groupJid;
-  const key = JSON.stringify([session.userId, config.baseUrl, config.instanceName, owner, number,
-    account ? db.whatsapp.lastPingAt : group!.lastSyncedAt]);
-  const cached = cache.get(key);
-  if (cached && cached.expires > Date.now()) return NextResponse.json({ ok: true, ...cached.value }, { headers });
-  const metadataPicture = safeWhatsAppPictureUrl(group?.pictureUrl);
-  if (metadataPicture) return NextResponse.json({ ok: true, pictureUrl: metadataPicture }, { headers });
-
   try {
+    const config = await photoGatewayConfig(session);
+    const owner = await livePhotoOwner(config);
+    if (owner !== canonicalPhotoOwner(expectedOwner)) {
+      throw new WhatsAppPhotoError('ACCOUNT_CHANGED', 409, 'A conta conectada mudou. Atualize a lista de grupos.');
+    }
+    const group = account ? undefined : (await livePhotoGroups(config, owner)).find(candidate => candidate.id === jid);
+    if (!account && !group) throw new WhatsAppPhotoError('GROUP_NOT_FOUND', 404, 'Grupo indisponível nesta conta.');
+    const metadataPicture = safeWhatsAppPictureUrl(group?.pictureUrl);
+    if (metadataPicture) return NextResponse.json({ ok: true, pictureUrl: metadataPicture }, { headers });
+    const number = account ? owner : group!.id;
+    const key = JSON.stringify([session.userId, photoConfigKey(config), owner, number]);
+    const cached = cache.get(key);
+    if (cached && cached.expires > Date.now()) return NextResponse.json({ ok: true, ...cached.picture }, { headers });
     let task = pending.get(key);
     if (!task) {
-      task = (async (): Promise<Picture> => {
-        const response = await fetch(`${config.baseUrl.replace(/\/+$/, '')}/chat/fetchProfilePictureUrl/${encodeURIComponent(config.instanceName)}`, {
-          method: 'POST', headers: { apikey: config.apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ number }), signal: AbortSignal.timeout(8000), cache: 'no-store',
-        });
-        if (response.status === 400 || response.status === 404) return { pictureUrl: null };
-        if (!response.ok) throw new Error('Foto indisponível no provedor.');
-        const data = await response.json();
-        return { pictureUrl: safeWhatsAppPictureUrl(data.profilePictureUrl) };
-      })();
+      task = fetchPicture(config, number);
       pending.set(key, task);
     }
-    const picture = await task;
-    cache.set(key, { value: picture, expires: Date.now() + (picture.pictureUrl ? 10 * 60_000 : 60_000) });
+    let picture: Picture;
+    try { picture = await task; }
+    finally { if (pending.get(key) === task) pending.delete(key); }
+    cache.set(key, { picture, expires: Date.now() + (picture.pictureUrl ? 600000 : 60000) });
     while (cache.size > 500) cache.delete(cache.keys().next().value!);
     return NextResponse.json({ ok: true, ...picture }, { headers });
-  } catch {
-    return NextResponse.json({ ok: false, error: 'Não foi possível obter a foto agora.' }, { status: 502, headers });
-  } finally {
-    pending.delete(key);
+  } catch (error) {
+    if (error instanceof WhatsAppPhotoError) return failure(error.code, error.message, error.status);
+    return failure('PHOTO_UNAVAILABLE', 'Não foi possível obter a foto agora.', 502);
   }
+}
+
+async function fetchPicture(config: Awaited<ReturnType<typeof photoGatewayConfig>>, number: string): Promise<Picture> {
+  const response = await photoGatewayRequest(config, `/chat/fetchProfilePictureUrl/${encodeURIComponent(config.instanceName)}`, { number });
+  if (response.status === 400 || response.status === 404) return { pictureUrl: null };
+  if (!response.ok) throw new WhatsAppPhotoError('PHOTO_UNAVAILABLE', 502, 'Foto indisponível no provedor.');
+  const payload = await response.json();
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new WhatsAppPhotoError('INVALID_PHOTO_RESPONSE', 502, 'Resposta inválida ao consultar a foto.');
+  }
+  return { pictureUrl: safeWhatsAppPictureUrl(payload.profilePictureUrl) };
+}
+
+function failure(code: string, error: string, status: number) {
+  return NextResponse.json({ ok: false, code, error }, { status, headers });
 }

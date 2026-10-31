@@ -1,5 +1,5 @@
 import { PublicationJob } from '../types';
-import { readDatabase, writeDatabase, atomicReserveJob, savePublicationJob, getActiveEvolutionConfig } from './storage';
+import { readDatabase, writeDatabase, atomicReserveJob, savePublicationJob, getActiveEvolutionConfig, recoverStaleJobs, getWhatsAppConnection } from './storage';
 import { processAutomationCampaigns } from './automation-engine';
 import { validateJobForDispatch } from './job-validator';
 
@@ -181,6 +181,9 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
       console.error('Erro na avaliação de automação:', autoErr);
     }
 
+    // Recuperar trabalhos abandonados por timeout de processos anteriores (> 5 min)
+    recoverStaleJobs();
+
     const db = readDatabase();
     db.whatsapp.lastWorkerCycleAt = now.toISOString();
     writeDatabase(db);
@@ -277,11 +280,16 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
       job.attempts = (job.attempts || 0) + 1;
       job.updatedAt = new Date().toISOString();
 
-      const evoConfig = getActiveEvolutionConfig(db.whatsapp);
+      const defaultEvo = getActiveEvolutionConfig(db.whatsapp);
+      const jobConn = getWhatsAppConnection(job.connectionId, job.userId);
+      const targetBaseUrl = jobConn?.baseUrl || defaultEvo.baseUrl;
+      const targetApiKey = jobConn?.apiKey || defaultEvo.apiKey;
+      const targetInstance = jobConn?.instanceName || defaultEvo.instanceName;
+
       const sendRes = await sendToEvolutionApi(
-        evoConfig.baseUrl,
-        evoConfig.apiKey,
-        evoConfig.instanceName,
+        targetBaseUrl,
+        targetApiKey,
+        targetInstance,
         job
       );
 

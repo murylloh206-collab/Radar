@@ -1,4 +1,3 @@
-import { safeWhatsAppPictureUrl } from '@/lib/server/whatsapp-picture';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   readDatabase,
@@ -6,295 +5,217 @@ import {
   ensureValidUuid,
   isValidGatewayUrl,
   getActiveEvolutionConfig,
-  compareWhatsAppIds,
+  getWhatsAppConnection,
   normalizeWhatsAppPhone,
+  saveWhatsAppConnection,
 } from '@/lib/server/storage';
 import { WhatsAppGroup } from '@/lib/types';
+import { checkApiAuth } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = checkApiAuth(req);
+    const userId = auth.authorized && auth.session ? auth.session.userId : undefined;
+
     const db = readDatabase();
-    const shouldRefresh = req.nextUrl.searchParams.get('refresh') === 'true';
+    const connectionIdParam = req.nextUrl.searchParams.get('connectionId') || undefined;
+    const shouldSync = req.nextUrl.searchParams.get('refresh') === 'true' || req.nextUrl.searchParams.get('sync') === 'true';
 
-    const config = getActiveEvolutionConfig(db.whatsapp);
+    // Obter a conexão WhatsApp alvo
+    const conn = getWhatsAppConnection(connectionIdParam, userId);
+    const activeConnectionId = conn?.id;
 
+    // 1. CARREGAMENTO IMEDIATO DO BANCO
+    // Filtra os grupos pertencentes à conexão solicitada (ou legados da conexão padrão)
+    const storedGroups = (db.groups || []).filter((g) => {
+      if (activeConnectionId && g.connectionId) {
+        return g.connectionId === activeConnectionId;
+      }
+      // Grupos legados sem connectionId pertencem à conexão padrão
+      return conn?.isDefault;
+    });
+
+    const lastSyncedAt = conn?.lastSyncedAt || storedGroups[0]?.lastSyncedAt || undefined;
+
+    // Se NÃO foi solicitado sync, responde instantaneamente com os dados em cache/banco
+    if (!shouldSync) {
+      return NextResponse.json({
+        ok: true,
+        groups: storedGroups,
+        total: storedGroups.length,
+        lastSyncedAt,
+        connectionId: activeConnectionId,
+        isLive: false,
+      });
+    }
+
+    // 2. ATUALIZAÇÃO RÁPIDA EM SEGUNDO PLANO / SOB DEMANDA
+    if (!conn) {
+      return NextResponse.json({
+        ok: true,
+        groups: storedGroups,
+        total: storedGroups.length,
+        lastSyncedAt,
+        syncWarning: 'Nenhuma conexão WhatsApp configurada.',
+      });
+    }
+
+    const config = {
+      baseUrl: conn.baseUrl || getActiveEvolutionConfig().baseUrl,
+      apiKey: conn.apiKey || getActiveEvolutionConfig().apiKey,
+      instanceName: conn.instanceName,
+    };
+
+    if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+      return NextResponse.json({
+        ok: true,
+        groups: storedGroups,
+        total: storedGroups.length,
+        lastSyncedAt,
+        syncWarning: 'Instância da Evolution API não configurada para esta conta.',
+      });
+    }
+
+    const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
     let isLive = false;
     let syncWarning: string | undefined = undefined;
 
-    // Se solicitado refresh e a Evolution estiver configurada, busca ao vivo
-    if (shouldRefresh && config.baseUrl && config.apiKey && config.instanceName) {
-      const urlCheck = isValidGatewayUrl(config.baseUrl);
-      if (urlCheck.valid) {
-        try {
-          const cleanBaseUrl = config.baseUrl.replace(/\/+$/, '');
-
-          // Confirma a identidade da conta a cada sincronização; a instância pode
-          // continuar com o mesmo nome depois de parear outro número.
-          let ownerJid = '';
-          let myPhone = '';
-
-          try {
-            const instRes = await fetch(
-              `${cleanBaseUrl}/instance/fetchInstances?instanceName=${encodeURIComponent(config.instanceName)}`,
-              { headers: { apikey: config.apiKey } }
-            );
-            if (instRes.ok) {
-              const instData = await instRes.json();
-              const instances = Array.isArray(instData) ? instData : [instData];
-              const instObj = instances.find((item) =>
-                item?.name === config.instanceName || item?.instanceName === config.instanceName
-              );
-              if (instObj) {
-                const confirmedOwner = String(instObj.ownerJid || '').trim();
-                if (confirmedOwner) {
-                  ownerJid = confirmedOwner;
-                  myPhone = normalizeWhatsAppPhone(confirmedOwner);
-                  db.whatsapp.ownerJid = ownerJid;
-                  db.whatsapp.phoneNumber = myPhone;
-                }
-                db.whatsapp.profileName = String(instObj.profileName || '').trim();
-              }
+    try {
+      // 2.1 Confirmar identidade da conta (para invalidação segura se houver troca de chip)
+      let ownerJid = conn.ownerJid || '';
+      try {
+        const instRes = await fetch(
+          `${cleanBaseUrl}/instance/fetchInstances?instanceName=${encodeURIComponent(config.instanceName)}`,
+          { headers: { apikey: config.apiKey } }
+        );
+        if (instRes.ok) {
+          const instData = await instRes.json();
+          const list = Array.isArray(instData) ? instData : [instData];
+          const found = list.find((i) => i.name === config.instanceName || i.instanceName === config.instanceName);
+          if (found && found.ownerJid) {
+            const confirmedOwner = String(found.ownerJid).trim();
+            // Se o chip foi trocado (ownerJid diferente do anterior), limpa grupos antigos imediatamente!
+            if (conn.ownerJid && conn.ownerJid !== confirmedOwner) {
+              db.groups = (db.groups || []).filter((g) => g.connectionId !== conn.id);
             }
-          } catch {
-            // A lista ao vivo ainda pode ser consultada; permissões ficam não verificadas.
+            conn.ownerJid = confirmedOwner;
+            conn.phoneNumber = normalizeWhatsAppPhone(confirmedOwner);
+            conn.profileName = String(found.profileName || conn.profileName || '').trim();
+            ownerJid = confirmedOwner;
           }
-
-          let res: Response | null = null;
-          for (let attempt = 1; attempt <= 2; attempt++) {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 30000);
-            try {
-              res = await fetch(
-                `${cleanBaseUrl}/group/fetchAllGroups/${encodeURIComponent(config.instanceName)}?getParticipants=true`,
-                {
-                  headers: { apikey: config.apiKey },
-                  signal: controller.signal,
-                }
-              );
-              clearTimeout(timeout);
-              if (res.ok) break;
-            } catch (err) {
-              clearTimeout(timeout);
-              if (attempt === 2) throw err;
-            }
-            if (attempt === 1) {
-              await new Promise((r) => setTimeout(r, 2500));
-            }
-          }
-
-          // Fallback se getParticipants=true retornar HTTP 500 por sobrecarga de memória no gateway
-          if (!res || !res.ok) {
-            const controllerFallback = new AbortController();
-            const timeoutFallback = setTimeout(() => controllerFallback.abort(), 25000);
-            try {
-              const fallbackRes = await fetch(
-                `${cleanBaseUrl}/group/fetchAllGroups/${encodeURIComponent(config.instanceName)}?getParticipants=false`,
-                {
-                  headers: { apikey: config.apiKey },
-                  signal: controllerFallback.signal,
-                }
-              );
-              clearTimeout(timeoutFallback);
-              if (fallbackRes.ok) {
-                res = fallbackRes;
-              }
-            } catch {
-              clearTimeout(timeoutFallback);
-            }
-          }
-
-          if (res && res.ok) {
-            const rawGroups = await res.json();
-            if (Array.isArray(rawGroups)) {
-              isLive = true;
-              const existingMap = new Map<string, WhatsAppGroup>();
-              if (ownerJid && (!db.whatsapp.groupsOwnerJid || db.whatsapp.groupsOwnerJid === ownerJid)) {
-                (db.groups || []).forEach((g) => existingMap.set(g.groupJid, g));
-              }
-
-              const nowIso = new Date().toISOString();
-
-              const updatedGroups: WhatsAppGroup[] = rawGroups.map((rg: Record<string, unknown>) => {
-                const groupJid = String(rg.id || rg.jid || '');
-                const name = String(rg.subject || rg.name || 'Grupo sem nome');
-                const existing = existingMap.get(groupJid);
-
-                const participants = Array.isArray(rg.participants) ? rg.participants : [];
-                const participantCount = Number(rg.size) || participants.length || 0;
-                const isAnnounce = Boolean(rg.announce);
-
-                // Determina o papel da conta no grupo sem usar includes parcial
-                let isAdmin = false;
-                let canPost = true;
-                let permissionStatus: 'verified_admin' | 'verified_member' | 'unverified' | 'restricted_readonly' = 'unverified';
-                let roleDescription = 'Permissão não verificada';
-
-                // Busca o participante correspondente à conta conectada
-                const me = participants.find((p: Record<string, unknown>) => {
-                  const pId = String(p.id || '');
-                  const pPhone = String(p.phoneNumber || '');
-                  return compareWhatsAppIds(ownerJid || myPhone, pId, pPhone);
-                });
-
-                if (me) {
-                  if (me.admin === 'admin' || me.admin === 'superadmin') {
-                    isAdmin = true;
-                    canPost = true;
-                    permissionStatus = 'verified_admin';
-                    roleDescription = me.admin === 'superadmin' ? 'Administrador Criador' : 'Administrador';
-                  } else if (isAnnounce) {
-                    isAdmin = false;
-                    canPost = false;
-                    permissionStatus = 'restricted_readonly';
-                    roleDescription = 'Somente Leitura (Restrito)';
-                  } else {
-                    isAdmin = false;
-                    canPost = true;
-                    permissionStatus = 'verified_member';
-                    roleDescription = 'Membro (envio liberado)';
-                  }
-                } else if (existing && existing.permissionStatus === 'verified_admin') {
-                  isAdmin = true;
-                  canPost = true;
-                  permissionStatus = 'verified_admin';
-                  roleDescription = existing.roleDescription || 'Administrador';
-                } else {
-                  // Conta não listada como admin ou participantes retornados apenas com @lid
-                  isAdmin = false;
-                  if (isAnnounce) {
-                    canPost = false;
-                    permissionStatus = 'restricted_readonly';
-                    roleDescription = 'Somente Leitura (Restrito a Admins)';
-                  } else {
-                    canPost = true;
-                    permissionStatus = 'verified_member';
-                    roleDescription = 'Membro (envio liberado)';
-                  }
-                }
-
-                return {
-                  id: existing?.id || ensureValidUuid(),
-                  userId: existing?.userId || db.settings.userId || '00000000-0000-0000-0000-000000000001',
-                  groupJid,
-                  name,
-                  pictureUrl: safeWhatsAppPictureUrl(rg.pictureUrl) || undefined,
-                  participantCount,
-                  isAdmin,
-                  canPost,
-                  permissionStatus,
-                  isAnnounce,
-                  roleDescription,
-                  isOrigin: existing?.isOrigin || false,
-                  isDestination: existing?.isDestination || false,
-                  isTestGroup: existing?.isTestGroup || false,
-                  lastSyncedAt: nowIso,
-                };
-              });
-
-              db.groups = updatedGroups;
-              db.whatsapp.groupsOwnerJid = ownerJid || undefined;
-              writeDatabase(db);
-            }
-          } else {
-            syncWarning = `Gateway retornou código ${res?.status || 500}. Exibindo dados locais em cache.`;
-          }
-        } catch (fetchErr) {
-          syncWarning = 'Não foi possível conectar ao gateway no momento. Exibindo grupos locais em cache.';
-          console.warn('Falha ao sincronizar grupos da Evolution API:', fetchErr);
         }
+      } catch {}
+
+      // 2.2 Buscar grupos de forma RÁPIDA (getParticipants=false evita sobrecarga de memória e timeouts)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+
+      const res = await fetch(
+        `${cleanBaseUrl}/group/fetchAllGroups/${encodeURIComponent(config.instanceName)}?getParticipants=false`,
+        {
+          headers: { apikey: config.apiKey },
+          signal: controller.signal,
+        }
+      );
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const rawGroups = await res.json();
+        if (Array.isArray(rawGroups)) {
+          isLive = true;
+          const nowIso = new Date().toISOString();
+
+          // Mapear grupos existentes para preservar preferências (origem, destino, etc)
+          const existingMap = new Map<string, WhatsAppGroup>();
+          storedGroups.forEach((g) => existingMap.set(g.groupJid, g));
+
+          const updatedList: WhatsAppGroup[] = rawGroups.map((rg: Record<string, any>) => {
+            const groupJid = String(rg.id || rg.jid || '');
+            const name = String(rg.subject || rg.name || 'Grupo sem nome');
+            const existing = existingMap.get(groupJid);
+
+            return {
+              id: existing?.id || ensureValidUuid(),
+              userId: conn.userId,
+              connectionId: conn.id,
+              groupJid,
+              name,
+              pictureUrl: rg.pictureUrl || rg.profilePictureUrl || existing?.pictureUrl,
+              participantCount: Number(rg.size || rg.participantsCount || existing?.participantCount || 0),
+              isAdmin: Boolean(existing?.isAdmin),
+              canPost: existing?.canPost !== undefined ? existing.canPost : true,
+              isAnnounce: Boolean(rg.announce || existing?.isAnnounce),
+              permissionStatus: existing?.permissionStatus || 'unverified',
+              isOrigin: Boolean(existing?.isOrigin),
+              isDestination: Boolean(existing?.isDestination),
+              isTestGroup: Boolean(existing?.isTestGroup),
+              lastSyncedAt: nowIso,
+            };
+          });
+
+          // Atualizar no banco
+          const otherGroups = (db.groups || []).filter((g) => g.connectionId !== conn.id);
+          db.groups = [...otherGroups, ...updatedList];
+
+          conn.lastSyncedAt = nowIso;
+          conn.lastPingAt = nowIso;
+          await saveWhatsAppConnection(conn);
+          writeDatabase(db);
+
+          return NextResponse.json({
+            ok: true,
+            groups: updatedList,
+            total: updatedList.length,
+            lastSyncedAt: nowIso,
+            connectionId: conn.id,
+            isLive: true,
+          });
+        }
+      } else {
+        syncWarning = `Servidor WhatsApp retornou status ${res.status}. Dados em cache mantidos.`;
       }
+    } catch (err: any) {
+      syncWarning = 'A sincronização com a Evolution API atingiu o tempo limite. Dados anteriores preservados.';
     }
 
-    const cacheBelongsToAccount = Boolean(
-      db.whatsapp.status === 'connected' &&
-      (!db.whatsapp.ownerJid ||
-        !db.whatsapp.groupsOwnerJid ||
-        db.whatsapp.groupsOwnerJid === db.whatsapp.ownerJid)
-    );
-    const visibleGroups = isLive || cacheBelongsToAccount ? db.groups || [] : [];
-    const sanitizedGroups = visibleGroups.map((g) => ({
-      ...g,
-      canPost: typeof g.canPost === 'boolean' ? g.canPost : Boolean(g.isAdmin || !g.isAnnounce),
-      roleDescription: g.roleDescription || (g.isAdmin ? 'Administrador' : 'Permissão não verificada'),
-      permissionStatus: g.permissionStatus || (g.isAdmin ? 'verified_admin' : 'unverified'),
-    }));
-
-    // Determina a data do cache mais recente
-    const mostRecentSync = visibleGroups.reduce<string | null>((latest, g) => {
-      if (!g.lastSyncedAt) return latest;
-      if (!latest) return g.lastSyncedAt;
-      return new Date(g.lastSyncedAt) > new Date(latest) ? g.lastSyncedAt : latest;
-    }, null);
-
+    // Se a sincronização falhou, preserva os dados existentes sem apagá-los
     return NextResponse.json({
       ok: true,
-      groups: sanitizedGroups,
-      accountJid: db.whatsapp.groupsOwnerJid,
-      total: sanitizedGroups.length,
-      isLive,
-      cached: !isLive,
-      cachedAt: mostRecentSync,
-      warning: syncWarning,
+      groups: storedGroups,
+      total: storedGroups.length,
+      lastSyncedAt,
+      connectionId: activeConnectionId,
+      isLive: false,
+      syncWarning,
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message || 'Erro ao consultar grupos do WhatsApp.' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = checkApiAuth(req);
+    const userId = auth.authorized && auth.session ? auth.session.userId : undefined;
+
     const body = await req.json().catch(() => ({}));
-    const { action, groupJid, isTestGroup, isOrigin, isDestination } = body;
-    const db = readDatabase();
+    const connectionId = body.connectionId;
+    const action = body.action || 'sync';
 
-    if (!groupJid) {
-      return NextResponse.json({ ok: false, error: 'Identificador do grupo ausente.' }, { status: 400 });
+    if (action === 'sync') {
+      // Redireciona internamente para o fluxo de sync do GET
+      const url = new URL(req.url);
+      url.searchParams.set('refresh', 'true');
+      if (connectionId) url.searchParams.set('connectionId', connectionId);
+      const fakeReq = new NextRequest(url.toString(), { headers: req.headers });
+      return GET(fakeReq);
     }
 
-    const group = (db.groups || []).find((g) => g.groupJid === groupJid);
-    if (!group) {
-      return NextResponse.json({ ok: false, error: 'Grupo não encontrado.' }, { status: 404 });
-    }
-
-    // 1. Marcar como Grupo de Teste Homologado
-    if (action === 'set_test_group') {
-      db.groups.forEach((g) => {
-        g.isTestGroup = g.groupJid === groupJid;
-      });
-      writeDatabase(db);
-      return NextResponse.json({
-        ok: true,
-        message: `Grupo "${group.name}" definido como grupo de teste oficial.`,
-        groups: db.groups,
-      });
-    }
-
-    // 2. Alternar Origem/Destino
-    if (action === 'toggle_role') {
-      if (typeof isOrigin === 'boolean') group.isOrigin = isOrigin;
-      if (typeof isDestination === 'boolean') {
-        if (isDestination && group.canPost === false) {
-          return NextResponse.json(
-            { ok: false, error: 'Este grupo não permite envio por não-administradores e não pode ser destino.' },
-            { status: 400 }
-          );
-        }
-        group.isDestination = isDestination;
-      }
-      writeDatabase(db);
-      return NextResponse.json({ ok: true, group, groups: db.groups });
-    }
-
-    // 3. Atualizar propriedades genéricas
-    if (typeof isTestGroup === 'boolean') {
-      group.isTestGroup = isTestGroup;
-    }
-    writeDatabase(db);
-
-    return NextResponse.json({ ok: true, group, groups: db.groups });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'Ação não suportada.' }, { status: 400 });
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err?.message || 'Erro ao processar requisição.' }, { status: 500 });
   }
 }

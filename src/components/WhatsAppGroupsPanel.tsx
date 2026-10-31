@@ -36,24 +36,29 @@ function normalize(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
 }
 
-function WhatsAppAvatar({ resource, accountKey, name, personal = false }: {
-  resource: string; accountKey: string; name: string; personal?: boolean;
+function WhatsAppAvatar({ resource, ownerJid, accountKey, name, personal = false }: {
+  resource: string; ownerJid: string; accountKey: string; name: string; personal?: boolean;
 }) {
   const element = useRef<HTMLSpanElement>(null);
   const [picture, setPicture] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | undefined>();
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     let started = false;
     setPicture(null);
+    setPhotoError(undefined);
     async function load() {
       if (started) return;
       started = true;
       try {
-        const response = await fetch(resource, { cache: 'no-store', signal: controller.signal });
-        if (!response.ok) return;
+        const response = await fetch(`${resource}&ownerJid=${encodeURIComponent(ownerJid)}`, { cache: 'no-store', signal: controller.signal });
         const data = await response.json();
+        if (!response.ok) {
+          if (active) setPhotoError(typeof data.error === 'string' ? data.error : 'Não foi possível consultar a foto.');
+          return;
+        }
         if (active && data.ok && typeof data.pictureUrl === 'string') setPicture(data.pictureUrl);
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return;
@@ -66,9 +71,9 @@ function WhatsAppAvatar({ resource, accountKey, name, personal = false }: {
     if (observer && element.current) observer.observe(element.current);
     else void load();
     return () => { active = false; controller.abort(); observer?.disconnect(); };
-  }, [resource, accountKey]);
+  }, [resource, ownerJid, accountKey]);
 
-  return <span ref={element} className={`wa-avatar ${personal ? 'wa-avatar--account' : ''}`}>
+  return <span ref={element} title={photoError} className={`wa-avatar ${personal ? 'wa-avatar--account' : ''}`}>
     {picture ? <img src={picture} alt={`Foto de ${name}`} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setPicture(null)} /> :
       personal ? <UserRound size={24} aria-hidden="true" /> : <Users size={21} aria-hidden="true" />}
   </span>;
@@ -155,7 +160,7 @@ export default function WhatsAppGroupsPanel() {
     <section className="wa-account" aria-label="Conta WhatsApp">
       <div className="wa-account-top">
         <div className="wa-account-identity">
-          {account?.ownerJid && connected ? <WhatsAppAvatar resource="/api/whatsapp/groups/photo?account=1" accountKey={accountKey} name={accountName} personal /> :
+          {account?.ownerJid && connected ? <WhatsAppAvatar resource="/api/whatsapp/groups/photo?account=1" ownerJid={account.ownerJid} accountKey={accountKey} name={accountName} personal /> :
             <span className="wa-avatar wa-avatar--account"><UserRound size={24} aria-hidden="true" /></span>}
           <div className="wa-account-copy"><span className="wa-eyebrow"><img src="/brands/whatsapp-original.png" alt="" width={14} height={14} />WHATSAPP</span><h2>{loading ? 'Consultando sua conta…' : accountName}</h2><p>{loading ? 'Buscando a identificação real da conta.' : phoneLabel(account?.phoneNumber)}</p></div>
         </div>
@@ -175,7 +180,7 @@ export default function WhatsAppGroupsPanel() {
       {loading ? <div className="wa-empty" role="status"><RefreshCw size={22} className="wa-spin" aria-hidden="true" /><h3>Buscando seus grupos</h3><p>A lista será preenchida com os dados da conta conectada.</p></div> :
         filtered.length === 0 ? <div className="wa-empty"><Users size={25} aria-hidden="true" /><h3>{search ? 'Nenhum grupo com esse nome' : groupsError ? 'Seus grupos ainda não foram carregados' : 'Nenhum grupo disponível'}</h3><p>{search ? 'Tente outro termo para encontrar o grupo.' : 'Atualize a conexão para consultar os grupos reais do WhatsApp.'}</p></div> :
         <ul className="wa-group-list">{filtered.slice(0, limit).map(group => <li key={group.groupJid} className="wa-group-row">
-          <div className="wa-group-identity"><WhatsAppAvatar resource={`/api/whatsapp/groups/photo?groupJid=${encodeURIComponent(group.groupJid)}`} accountKey={accountKey} name={group.name} />
+          <div className="wa-group-identity"><WhatsAppAvatar resource={`/api/whatsapp/groups/photo?groupJid=${encodeURIComponent(group.groupJid)}`} ownerJid={account?.ownerJid || ''} accountKey={accountKey} name={group.name} />
             <div className="wa-group-copy"><h3>{group.name}</h3><div className="wa-group-meta">{group.participantCount > 0 && <span>{group.participantCount} participantes</span>}
               <span>{group.permissionStatus === 'verified_admin' ? 'Você administra' : group.permissionStatus === 'restricted_readonly' ? 'Somente leitura' : group.permissionStatus === 'verified_member' ? 'Membro' : 'Permissão não verificada'}</span>
               {group.isOrigin && <span className="wa-role">Origem</span>}{group.isDestination && <span className="wa-role">Destino</span>}</div>

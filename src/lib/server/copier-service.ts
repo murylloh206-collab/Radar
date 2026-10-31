@@ -284,6 +284,7 @@ export function extractOfferDetailsFromWhatsAppText(
 
 export interface ProcessIncomingOptions {
   isSimulation?: boolean;
+  connectionId?: string;
 }
 
 /**
@@ -702,6 +703,7 @@ export async function processIncomingMessage(
   const incomingRecord: IncomingMessage = {
     id: ensureValidUuid(),
     userId: authorizedSource.userId,
+    connectionId: authorizedSource.connectionId || options?.connectionId,
     messageId,
     instanceName,
     remoteJid,
@@ -862,6 +864,7 @@ export async function processIncomingMessage(
     const job: PublicationJob = {
       id: ensureValidUuid(),
       userId: authorizedSource.userId,
+      connectionId: authorizedSource.connectionId || options?.connectionId,
       originType: 'copiador',
       sourceId: authorizedSource.id,
       incomingMessageId: incomingRecord.id,

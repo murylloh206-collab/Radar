@@ -1169,12 +1169,27 @@ export async function saveDatabase(data: DatabaseSchema): Promise<void> {
 export async function atomicReserveJob(jobId: string): Promise<boolean> {
   const db = readDatabase();
   const job = db.jobs.find((j) => j.id === jobId);
-  if (!job || job.status !== 'agendado') {
+  if (!job) {
+    return false;
+  }
+
+  const now = new Date();
+  const nowMs = now.getTime();
+  const STALE_LEASE_MS = 5 * 60 * 1000; // 5 minutos
+
+  // Aceita reservar se estiver 'agendado' OU se foi uma reserva 'enviando' abandonada por timeout (> 5 min)
+  const isStaleSending =
+    job.status === 'enviando' &&
+    ((job.lockedAt && nowMs - new Date(job.lockedAt).getTime() > STALE_LEASE_MS) ||
+     (!job.lockedAt && nowMs - new Date(job.updatedAt).getTime() > STALE_LEASE_MS));
+
+  if (job.status !== 'agendado' && !isStaleSending) {
     return false;
   }
 
   job.status = 'enviando';
-  job.updatedAt = new Date().toISOString();
+  job.lockedAt = now.toISOString();
+  job.updatedAt = now.toISOString();
   writeDatabase(db);
 
   if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
@@ -1186,17 +1201,13 @@ export async function atomicReserveJob(jobId: string): Promise<boolean> {
           status: 'enviando',
           updated_at: job.updatedAt,
         })
-        .eq('id', validId)
-        .eq('status', 'agendado');
+        .eq('id', validId);
     } catch {}
   }
 
   return true;
 }
 
-/**
- * Salva ou atualiza um Job de publicação de forma verificada
- */
 export async function savePublicationJob(job: PublicationJob): Promise<void> {
   const db = readDatabase();
   const idx = db.jobs.findIndex((j) => j.id === job.id);
@@ -1376,4 +1387,167 @@ export async function saveIncomingMessageRecord(msg: IncomingMessage): Promise<v
       console.warn(`[Storage] Exceção ao registrar incoming_message no Supabase: ${errorMsg}`);
     }
   }
+}
+
+// -----------------------------------------------------------------------------
+// GERENCIAMENTO MULTI-WHATSAPP E RESERVA ATÔMICA COM LEASE TIMEOUT
+// -----------------------------------------------------------------------------
+
+/**
+ * Lista todas as conexões WhatsApp do usuário autenticado
+ */
+export function listWhatsAppConnections(userId: string): WhatsAppConnection[] {
+  const db = readDatabase();
+  const effectiveUserId = userId || DEFAULT_USER_ID;
+  const list = (db.connections || []).filter(c => c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID);
+  return list;
+}
+
+/**
+ * Obtém uma conexão WhatsApp específica pelo ID
+ */
+export function getWhatsAppConnection(connectionId?: string, userId?: string): WhatsAppConnection | null {
+  const db = readDatabase();
+  const effectiveUserId = userId || DEFAULT_USER_ID;
+  const list = db.connections || [];
+  
+  if (connectionId) {
+    const found = list.find(c => c.id === connectionId && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID));
+    if (found) return found;
+  }
+
+  // Fallback para a conexão padrão
+  const def = list.find(c => c.isDefault && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID));
+  if (def) return def;
+
+  return list[0] || null;
+}
+
+/**
+ * Salva ou atualiza uma conexão WhatsApp no banco
+ */
+export async function saveWhatsAppConnection(conn: WhatsAppConnection): Promise<void> {
+  const db = readDatabase();
+  if (!db.connections) db.connections = [];
+
+  const now = new Date().toISOString();
+  conn.updatedAt = now;
+
+  const idx = db.connections.findIndex(c => c.id === conn.id);
+  if (idx >= 0) {
+    db.connections[idx] = { ...db.connections[idx], ...conn };
+  } else {
+    // Se for a primeira conexão, marca como padrão
+    if (db.connections.length === 0) {
+      conn.isDefault = true;
+    }
+    db.connections.push(conn);
+  }
+
+  // Se esta for marcada como padrão, desmarca as outras
+  if (conn.isDefault) {
+    db.connections.forEach(c => {
+      if (c.id !== conn.id) c.isDefault = false;
+    });
+    // Sincroniza db.whatsapp para compatibilidade com partes antigas
+    db.whatsapp = {
+      ...db.whatsapp,
+      id: conn.id,
+      userId: conn.userId,
+      instanceName: conn.instanceName,
+      baseUrl: conn.baseUrl,
+      apiKey: conn.apiKey,
+      status: conn.status,
+      phoneNumber: conn.phoneNumber,
+      ownerJid: conn.ownerJid,
+      profileName: conn.profileName,
+      qrCodeBase64: conn.qrCodeBase64,
+      webhookSecret: conn.webhookSecret,
+      webhookUrl: conn.webhookUrl,
+      lastPingAt: conn.lastPingAt,
+      updatedAt: now,
+    };
+  }
+
+  writeDatabase(db);
+}
+
+/**
+ * Remove uma conexão WhatsApp e seus vínculos
+ */
+export async function deleteWhatsAppConnection(connectionId: string, userId: string): Promise<boolean> {
+  const db = readDatabase();
+  if (!db.connections) return false;
+
+  const effectiveUserId = userId || DEFAULT_USER_ID;
+  const idx = db.connections.findIndex(c => c.id === connectionId && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID));
+  if (idx < 0) return false;
+
+  const wasDefault = db.connections[idx].isDefault;
+  db.connections.splice(idx, 1);
+
+  // Se removeu a padrão, define a primeira restante como padrão
+  if (wasDefault && db.connections.length > 0) {
+    db.connections[0].isDefault = true;
+  }
+
+  // Remove grupos e regras vinculadas a esta conexão
+  db.groups = (db.groups || []).filter(g => g.connectionId !== connectionId);
+  db.sources = (db.sources || []).filter(s => s.connectionId !== connectionId);
+
+  writeDatabase(db);
+  return true;
+}
+
+/**
+ * Define uma conexão como a padrão do usuário
+ */
+export async function setDefaultWhatsAppConnection(connectionId: string, userId: string): Promise<boolean> {
+  const db = readDatabase();
+  if (!db.connections) return false;
+
+  const effectiveUserId = userId || DEFAULT_USER_ID;
+  let found = false;
+
+  db.connections.forEach(c => {
+    if (c.id === connectionId && (c.userId === effectiveUserId || c.userId === DEFAULT_USER_ID)) {
+      c.isDefault = true;
+      found = true;
+    } else {
+      c.isDefault = false;
+    }
+  });
+
+  if (found) {
+    writeDatabase(db);
+  }
+  return found;
+}
+
+/**
+ * Recupera trabalhos de publicação que ficaram presos em 'enviando' por mais de 5 minutos (lease timeout)
+ */
+export function recoverStaleJobs(): number {
+  const db = readDatabase();
+  const now = Date.now();
+  const STALE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
+  let recoveredCount = 0;
+
+  (db.jobs || []).forEach(j => {
+    if (j.status === 'enviando') {
+      const lockTime = j.lockedAt ? new Date(j.lockedAt).getTime() : new Date(j.updatedAt).getTime();
+      if (now - lockTime > STALE_TIMEOUT_MS) {
+        // Reserva abandonada por queda de processo ou timeout -> recupera para 'agendado'
+        j.status = 'agendado';
+        j.errorDetails = 'Recuperado de reserva abandonada (lease timeout > 5 min).';
+        j.updatedAt = new Date().toISOString();
+        recoveredCount++;
+      }
+    }
+  });
+
+  if (recoveredCount > 0) {
+    writeDatabase(db);
+  }
+  return recoveredCount;
 }
