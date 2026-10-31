@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#0086FF"/>
+  <text x="50" y="55" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="24" fill="#FFFFFF" text-anchor="middle" letter-spacing="-0.5">magalu</text>
+  <!-- Barra colorida clássica da Magalu -->
+  <rect x="22" y="62" width="13" height="4" rx="2" fill="#00D4FF"/>
+  <rect x="36" y="62" width="14" height="4" rx="2" fill="#FFCC00"/>
+  <rect x="51" y="62" width="14" height="4" rx="2" fill="#FF0077"/>
+  <rect x="66" y="62" width="12" height="4" rx="2" fill="#00E676"/>
+</svg>

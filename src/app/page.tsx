@@ -12,13 +12,25 @@ import {
   Tag,
   Check,
 } from 'lucide-react';
-import { OverlappingStoreLogos } from '@/components/BrandLogo';
+import { BrandLogo, OverlappingStoreLogos } from '@/components/BrandLogo';
 
 export default function HomePage() {
   const [slide, setSlide] = useState<number>(0);
 
-  // Navegação por teclado para o carrossel (setas esquerda/direita)
+  // Navegação por teclado para o carrossel (setas esquerda/direita) e query params
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('slide');
+      if (s === '1') setSlide(1);
+      if (s === '0') setSlide(0);
+      if (params.get('modal') === 'lojas') {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('open-stores-dialog'));
+        }, 150);
+      }
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') {
         setSlide((prev) => (prev + 1) % 2);
@@ -76,9 +88,9 @@ export default function HomePage() {
             <span className="rdv3-kicker">Explore suas lojas</span>
             <h1>A próxima descoberta começa por aqui.</h1>
             <p>Acesse as lojas, encontre produtos e traga novas oportunidades para seus grupos.</p>
-            <div className="rdv3-slide-brands">
-              <OverlappingStoreLogos size={24} containerSize={32} />
-              <span>Shopee · Netshoes · Amazon</span>
+            <div className="rdv3-slide-brands" style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 14 }}>
+              <OverlappingStoreLogos containerSizeDesktop={46} overlap={5} />
+              <span style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500 }}>Shopee · Netshoes · Amazon</span>
             </div>
             <button
               className="rdv3-carousel-link"
@@ -142,11 +154,8 @@ export default function HomePage() {
           {/* Copiador */}
           <Link className="rdv3-quick-card" id="card-copiador" href="/copiador">
             <div className="rdv3-quick-top">
-              <span className="rdv3-quick-icon">
-                {/* Ícone oficial WhatsApp em vetor SVG */}
-                <svg className="w-4 h-4 fill-current text-[#4ade80]" viewBox="0 0 24 24">
-                  <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86.173.086.275.072.376-.044.101-.116.433-.506.549-.68.116-.173.231-.145.39-.086s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824z" />
-                </svg>
+              <span className="rdv3-quick-icon" style={{ background: 'transparent', padding: 0 }}>
+                <BrandLogo brand="whatsapp" variant="whatsapp-destaque" size={32} containerSize={40} />
               </span>
               <span className="rdv3-arrow">↗</span>
             </div>
@@ -193,16 +202,18 @@ export default function HomePage() {
       </section>
 
       {/* Cartão de Lojas */}
-      <Link className="rdv3-stores-card" href="/conexoes?aba=lojas">
-        <div>
+      <Link className="rdv3-stores-card" href="/conexoes?aba=lojas" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ flex: '1 1 260px' }}>
           <h3>Suas lojas em um só lugar</h3>
           <p>Configure suas integrações de afiliados e gere seus links.</p>
-          <p>Shopee · Netshoes · Amazon</p>
+          <p style={{ marginTop: 4, color: '#94a3b8', fontSize: 11, fontWeight: 500 }}>Shopee · Netshoes · Amazon</p>
         </div>
-        <OverlappingStoreLogos size={28} containerSize={40} />
-        <span className="rdv3-arrow" aria-hidden="true">
-          ↗
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <OverlappingStoreLogos containerSizeDesktop={46} overlap={5} />
+          <span className="rdv3-arrow" aria-hidden="true">
+            ↗
+          </span>
+        </div>
       </Link>
 
       {/* Seção Recursos para Explorar */}

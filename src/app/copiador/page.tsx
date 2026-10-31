@@ -237,8 +237,8 @@ export default function CopierPage() {
       {/* Banner de status unificado do WhatsApp */}
       <div className="rp-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {/* Suporte de 44-48px com ícone oficial de 28-32px conforme especificado */}
-          <BrandLogo brand="whatsapp" size={32} containerSize={46} />
+          {/* Suporte oficial de 48px com imagem autêntica de 32px */}
+          <BrandLogo brand="whatsapp" variant="whatsapp-destaque" size={32} containerSize={48} />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <strong>WhatsApp {isConnected ? 'Conectado' : 'Desconectado'}</strong>

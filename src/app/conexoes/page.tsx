@@ -174,11 +174,11 @@ function ConexoesContent() {
             {/* Painel da conta */}
             <div className="rp-panel">
               <div className="rp-row">
-                <div className="rp-inline">
-                  <BrandLogo brand="whatsapp" size={30} containerSize={46} />
+                <div className="rp-inline" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <BrandLogo brand="whatsapp" variant="whatsapp-conta" size={38} containerSize={48} preferFormat="png" />
                   <div>
-                    <h2>{waData?.profileName || 'Radar de Ofertas'}</h2>
-                    <p className="rp-sub">
+                    <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>{waData?.profileName || 'Radar de Ofertas'}</h2>
+                    <p className="rp-sub" style={{ margin: 0, marginTop: 4 }}>
                       {isConnected
                         ? `Conta conectada · ${waData?.phoneNumber || 'WhatsApp verificado'}`
                         : 'Conta desconectada · Configure para iniciar as publicações'}
@@ -291,17 +291,20 @@ function ConexoesContent() {
 
         {/* Aba 2: Lojas e afiliados */}
         {activeTab === 'lojas' && (
-          <div data-panel="lojas" role="tabpanel">
-            <div className="rp-grid">
+          <div data-panel="lojas" role="tabpanel" style={{ maxWidth: 960 }}>
+            <div className="rp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
               <div className="rp-panel rp-store">
                 <div className="rp-row">
-                  <div className="rp-inline">
-                    <BrandLogo brand="mercadolivre" size={28} containerSize={44} withBackground />
-                    <h2>Mercado Livre</h2>
+                  <div className="rp-inline" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <BrandLogo brand="mercadolivre" variant="integracao" size={34} containerSize={52} />
+                    <div>
+                      <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>Mercado Livre</h2>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Aperto de mãos</span>
+                    </div>
                   </div>
                   <span className="rp-tag">Configurar</span>
                 </div>
-                <p className="rp-sub">Conecte sua conta para converter os links das ofertas.</p>
+                <p className="rp-sub" style={{ minHeight: 36, marginBottom: 14 }}>Conecte sua conta para converter os links das ofertas.</p>
                 <button
                   className="rp-btn"
                   type="button"
@@ -313,13 +316,16 @@ function ConexoesContent() {
 
               <div className="rp-panel rp-store">
                 <div className="rp-row">
-                  <div className="rp-inline">
-                    <BrandLogo brand="shopee" size={28} containerSize={44} withBackground />
-                    <h2>Shopee</h2>
+                  <div className="rp-inline" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <BrandLogo brand="shopee" variant="integracao" size={34} containerSize={52} />
+                    <div>
+                      <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>Shopee</h2>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Sacola laranja com S</span>
+                    </div>
                   </div>
                   <span className="rp-tag">Configurar</span>
                 </div>
-                <p className="rp-sub">Integração de afiliados e confirmação dos seus links.</p>
+                <p className="rp-sub" style={{ minHeight: 36, marginBottom: 14 }}>Integração de afiliados e confirmação dos seus links.</p>
                 <button
                   className="rp-btn"
                   type="button"
@@ -331,13 +337,16 @@ function ConexoesContent() {
 
               <div className="rp-panel rp-store">
                 <div className="rp-row">
-                  <div className="rp-inline">
-                    <BrandLogo brand="netshoes" size={28} containerSize={44} withBackground />
-                    <h2>Netshoes</h2>
+                  <div className="rp-inline" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <BrandLogo brand="netshoes" variant="integracao" size={34} containerSize={52} />
+                    <div>
+                      <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>Netshoes</h2>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Símbolo N</span>
+                    </div>
                   </div>
                   <span className="rp-tag">Configurar</span>
                 </div>
-                <p className="rp-sub">Programa de afiliados através da Rakuten.</p>
+                <p className="rp-sub" style={{ minHeight: 36, marginBottom: 14 }}>Programa de afiliados através da Rakuten.</p>
                 <button
                   className="rp-btn"
                   type="button"
@@ -349,13 +358,16 @@ function ConexoesContent() {
 
               <div className="rp-panel rp-store">
                 <div className="rp-row">
-                  <div className="rp-inline">
-                    <BrandLogo brand="amazon" size={28} containerSize={44} withBackground />
-                    <h2>Amazon</h2>
+                  <div className="rp-inline" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <BrandLogo brand="amazon" variant="integracao" size={34} containerSize={52} />
+                    <div>
+                      <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>Amazon</h2>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Símbolo a + sorriso</span>
+                    </div>
                   </div>
                   <span className="rp-tag">Configurar</span>
                 </div>
-                <p className="rp-sub">Configure a identificação da sua conta de associado.</p>
+                <p className="rp-sub" style={{ minHeight: 36, marginBottom: 14 }}>Configure a identificação da sua conta de associado.</p>
                 <button
                   className="rp-btn"
                   type="button"
@@ -367,13 +379,16 @@ function ConexoesContent() {
 
               <div className="rp-panel rp-store">
                 <div className="rp-row">
-                  <div className="rp-inline">
-                    <BrandLogo brand="magalu" size={28} containerSize={44} withBackground />
-                    <h2>Magalu</h2>
+                  <div className="rp-inline" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <BrandLogo brand="magalu" variant="integracao" size={34} containerSize={52} />
+                    <div>
+                      <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>Magalu</h2>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Identidade Magalu</span>
+                    </div>
                   </div>
                   <span className="rp-tag">Configurar</span>
                 </div>
-                <p className="rp-sub">Acompanhe a configuração da sua conta de parceiro.</p>
+                <p className="rp-sub" style={{ minHeight: 36, marginBottom: 14 }}>Acompanhe a configuração da sua conta de parceiro.</p>
                 <button
                   className="rp-btn"
                   type="button"

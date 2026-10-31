@@ -353,6 +353,7 @@ export function AppShell({ children }: AppShellProps) {
         <dialog
           className="rdv3-shop-dialog"
           open
+          style={{ position: 'fixed', inset: 0, margin: 'auto', zIndex: 9999 }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowStoresDialog(false);
           }}
@@ -375,30 +376,30 @@ export function AppShell({ children }: AppShellProps) {
             Os links abrem o site da loja em uma nova aba.
           </p>
           <div className="rdv3-store-options">
-            <a href="https://shopee.com.br" target="_blank" rel="noopener noreferrer">
-              <BrandLogo brand="shopee" size={20} containerSize={28} withBackground />
-              Shopee
-              <span>↗</span>
+            <a href="https://shopee.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <BrandLogo brand="shopee" size={24} containerSize={36} />
+              <span style={{ fontWeight: 500 }}>Shopee</span>
+              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
             </a>
-            <a href="https://www.netshoes.com.br" target="_blank" rel="noopener noreferrer">
-              <BrandLogo brand="netshoes" size={20} containerSize={28} withBackground />
-              Netshoes
-              <span>↗</span>
+            <a href="https://www.netshoes.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <BrandLogo brand="netshoes" size={24} containerSize={36} />
+              <span style={{ fontWeight: 500 }}>Netshoes</span>
+              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
             </a>
-            <a href="https://www.amazon.com.br" target="_blank" rel="noopener noreferrer">
-              <BrandLogo brand="amazon" size={20} containerSize={28} withBackground />
-              Amazon
-              <span>↗</span>
+            <a href="https://www.amazon.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <BrandLogo brand="amazon" size={24} containerSize={36} />
+              <span style={{ fontWeight: 500 }}>Amazon</span>
+              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
             </a>
-            <a href="https://www.mercadolivre.com.br" target="_blank" rel="noopener noreferrer">
-              <BrandLogo brand="mercadolivre" size={20} containerSize={28} withBackground />
-              Mercado Livre
-              <span>↗</span>
+            <a href="https://www.mercadolivre.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <BrandLogo brand="mercadolivre" size={24} containerSize={36} />
+              <span style={{ fontWeight: 500 }}>Mercado Livre</span>
+              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
             </a>
-            <a href="https://www.magazineluiza.com.br" target="_blank" rel="noopener noreferrer">
-              <BrandLogo brand="magalu" size={20} containerSize={28} withBackground />
-              Magalu
-              <span>↗</span>
+            <a href="https://www.magazineluiza.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <BrandLogo brand="magalu" size={24} containerSize={36} />
+              <span style={{ fontWeight: 500 }}>Magalu</span>
+              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
             </a>
           </div>
         </dialog>

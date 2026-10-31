@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
-    <rect width="48" height="48" rx="10" fill="#5A2D82"/>
-    <path d="M12 36V12L25 28V12H36V36L23 20V36H12Z" fill="#FFFFFF"/>
-    <text x="60" y="32" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="24" fill="#FFFFFF" letter-spacing="1">NETSHOES</text>
-  </svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#5A2D82"/>
+  <!-- N dinâmico da Netshoes -->
+  <path d="M28 73 V27 H39.5 L60.5 56.5 V27 H72 V73 H60.5 L39.5 43.5 V73 Z" fill="#FFFFFF"/>
+</svg>
