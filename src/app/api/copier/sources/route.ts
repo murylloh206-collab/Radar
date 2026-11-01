@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
           source_jid: updatedSource.groupJid,
           source_name: updatedSource.name,
           is_active: updatedSource.isActive,
+          configuration: { ...updatedSource, ownerJid: live?.connection.ownerJid || connection.ownerJid },
           auto_approve: updatedSource.operationMode === 'automatico',
           updated_at: updatedSource.updatedAt,
         },

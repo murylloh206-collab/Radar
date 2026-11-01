@@ -219,17 +219,10 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
 
     // 4. Localizar jobs prontos para envio (status = 'agendado' e scheduledFor <= now)
     const pendingJobs = db.jobs.filter((j) => {
+      if (j.originType === 'copiador') return false;
       if (j.status !== 'agendado') return false;
       if (j.isDemo) return false; // NUNCA envia dados de demonstração ou teste
       if (j.targetJid.includes('55555555') || j.targetJid.includes('88888888')) return false;
-
-      // Se o trabalho pertence a uma regra de cópia que foi pausada pelo usuário, suspende o envio
-      if (j.originType === 'copiador' && j.sourceId) {
-        const source = db.sources.find((s) => s.id === j.sourceId);
-        if (source && !source.isActive) {
-          return false;
-        }
-      }
 
       const sched = new Date(j.scheduledFor).getTime();
       return sched <= now.getTime();

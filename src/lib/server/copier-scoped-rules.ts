@@ -16,7 +16,7 @@ export async function scopedCopierRules(session: UserSession, connectionId?: str
     const { data: records, error } = await supabase.from('copy_sources').select('*').eq('user_id', session.userId);
     if (error) throw new WhatsAppPhotoError('RULES_UNAVAILABLE', 503, 'Não foi possível consultar as regras salvas.');
     sources = (records || []).filter(row => row.connection_id === connection.id || (!row.connection_id && connection.isDefault)).map(row => {
-      const local = sources.find(source => source.id === row.id);
+      const local = { ...(row.configuration || {}) } as Partial<CopySource>;
       return { ...local, id: row.id, userId: session.userId, connectionId: connection.id,
         groupJid: row.source_jid, name: row.source_name, isActive: row.is_active === true,
         operationMode: row.auto_approve ? 'automatico' : 'revisao_manual',

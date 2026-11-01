@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { checkApiAuth } from '@/lib/server/auth';
@@ -225,27 +226,7 @@ async function createOrRepairEvolutionInstance(
     qrCodeRaw = qrFetch.qrCodeRaw;
   }
 
-  // Configura Webhook exclusivo para esta instância
-  try {
-    await fetch(`${baseUrl}/webhook/set/${encodeURIComponent(instanceName)}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: apiKey,
-      },
-      body: JSON.stringify({
-        enabled: true,
-        url: webhookUrl,
-        byEvents: false,
-        webhookByEvents: false,
-        events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
-        headers: {
-          'x-webhook-secret': webhookSecret,
-        },
-      }),
-    });
-  } catch {}
-
+  // The persistent worker configures and verifies the webhook independently of pairing.
   return {
     ok: true,
     qrBase64,
@@ -262,7 +243,33 @@ export async function GET(req: NextRequest) {
 
   const userId = auth.session.userId;
   const db = readDatabase();
+  const started = performance.now();
   const connections = await listWhatsAppConnectionsAsync(userId);
+  if (req.nextUrl.searchParams.get('verify') === 'true') {
+    for (let offset = 0; offset < connections.length; offset += 4) {
+      await Promise.all(connections.slice(offset, offset + 4).map(async connection => {
+        const gateway = getActiveEvolutionConfig(connection);
+        const state = await checkEvolutionState(gateway.baseUrl, gateway.apiKey, connection.instanceName);
+        if (state.state === 'open' || state.state === 'connected') {
+          connection.status = 'connected';
+          connection.lastVerificationStatus = 'verified';
+          connection.lastPingAt = new Date().toISOString();
+          const identity = await fetchEvolutionIdentity(gateway.baseUrl, gateway.apiKey, connection.instanceName);
+          if (identity.ownerJid) {
+            connection.ownerJid = identity.ownerJid;
+            connection.phoneNumber = identity.phoneNumber;
+            connection.profileName = identity.profileName;
+            connection.profilePicUrl = identity.profilePicUrl;
+          }
+          await saveWhatsAppConnection(connection);
+        } else if (state.exists && ['close', 'closed', 'disconnected'].includes(state.state || '')) {
+          connection.status = 'disconnected';
+          connection.lastVerificationStatus = 'verified';
+          await saveWhatsAppConnection(connection);
+        } else connection.lastVerificationStatus = 'unreachable';
+      }));
+    }
+  }
 
   // Mapear contagens de vínculos reais por conexão
   const enrichedConnections = connections.map((conn) => {
@@ -301,10 +308,17 @@ export async function GET(req: NextRequest) {
     ok: true,
     connections: enrichedConnections,
     total: enrichedConnections.length,
-  });
+  }, { headers: { 'Cache-Control': 'private, no-store', 'Server-Timing': 'connections;dur=' + (performance.now() - started).toFixed(1) } });
 }
 
 export async function POST(req: NextRequest) {
+  const started = performance.now();
+  const timedJson = (body: unknown, init?: ResponseInit) => {
+    const headers = new Headers(init?.headers);
+    headers.set('Server-Timing', 'whatsapp-operation;dur=' + (performance.now() - started).toFixed(1));
+    headers.set('Cache-Control', 'private, no-store');
+    return NextResponse.json(body, { ...init, headers });
+  };
   const auth = checkApiAuth(req);
   if (!auth.authorized || !auth.session) {
     return auth.response!;
@@ -338,7 +352,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!baseUrl || !apiKey) {
-      return NextResponse.json(
+      return timedJson(
         { ok: false, error: 'Evolution Gateway não configurado no servidor (baseUrl ou apiKey ausentes).' },
         { status: 500 }
       );
@@ -350,7 +364,7 @@ export async function POST(req: NextRequest) {
       const conn = await getWhatsAppConnectionAsync(connectionId, userId);
 
       if (!conn) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: 'Conexão não encontrada ou não pertence a este usuário.' },
           { status: 404 }
         );
@@ -363,7 +377,7 @@ export async function POST(req: NextRequest) {
       const sourcesCount = (db.sources || []).filter((s) => s.connectionId === conn.id).length;
       const jobsCount = (db.jobs || []).filter((j) => j.connectionId === conn.id).length;
 
-      return NextResponse.json({
+      return timedJson({
         ok: true,
         impact: {
           connectionId: conn.id,
@@ -393,7 +407,7 @@ export async function POST(req: NextRequest) {
       const createRes = await createOrRepairEvolutionInstance(baseUrl, apiKey, instanceName, webhookUrl, webhookSecret);
 
       if (!createRes.ok) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: createRes.error || 'Falha ao criar instância no gateway WhatsApp.' },
           { status: createRes.status || 502 }
         );
@@ -417,7 +431,7 @@ export async function POST(req: NextRequest) {
 
       await saveWhatsAppConnection(newConnection);
 
-      return NextResponse.json({
+      return timedJson({
         ok: true,
         connectionId,
         instanceName,
@@ -425,7 +439,7 @@ export async function POST(req: NextRequest) {
         status: newConnection.status,
         qrCodeBase64: createRes.qrBase64,
         qrcode: createRes.qrBase64 ? { base64: createRes.qrBase64, code: createRes.qrCodeRaw } : undefined,
-        connection: newConnection,
+        connection: safeConnection(newConnection),
       });
     }
 
@@ -435,64 +449,29 @@ export async function POST(req: NextRequest) {
       const conn = await getWhatsAppConnectionAsync(connectionId, userId);
 
       if (!conn) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: 'Conexão não encontrada ou não pertence a este usuário.' },
           { status: 404 }
         );
       }
 
+      if (!conn.webhookSecret) conn.webhookSecret = crypto.randomUUID();
       const instanceName = conn.instanceName;
       const stateResult = await checkEvolutionState(baseUrl, apiKey, instanceName);
 
       if (stateResult.state === 'open' || stateResult.state === 'connected') {
-        const identity = await fetchEvolutionIdentity(baseUrl, apiKey, instanceName);
-
         conn.status = 'connected';
-        conn.ownerJid = identity.ownerJid || conn.ownerJid;
-        conn.phoneNumber = identity.phoneNumber || conn.phoneNumber;
-        conn.profileName = identity.profileName || conn.profileName;
-        conn.profilePicUrl = identity.profilePicUrl || conn.profilePicUrl;
+        conn.lastVerificationStatus = 'verified';
         conn.qrCodeBase64 = undefined;
         conn.lastPingAt = new Date().toISOString();
         await saveWhatsAppConnection(conn);
 
-        // Sincronização inicial rápida de grupos da conexão pareada
-        try {
-          const grpRes = await fetch(
-            `${baseUrl}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`,
-            { headers: { apikey: apiKey } }
-          );
-          if (grpRes.ok) {
-            const rawGroups = await grpRes.json();
-            if (Array.isArray(rawGroups)) {
-              const db = readDatabase();
-              const nowIso = new Date().toISOString();
-              const initialGroups: WhatsAppGroup[] = rawGroups.map((rg) => ({
-                id: ensureValidUuid(),
-                userId,
-                connectionId: conn.id,
-                groupJid: String(rg.id || rg.jid || ''),
-                name: String(rg.subject || rg.name || 'Grupo sem nome'),
-                participantCount: Number(rg.size || rg.participantsCount || 0),
-                isAdmin: false,
-                isOrigin: false,
-                isDestination: false,
-                lastSyncedAt: nowIso,
-              }));
-
-              const otherGroups = (db.groups || []).filter((g) => g.connectionId !== conn.id);
-              db.groups = [...otherGroups, ...initialGroups];
-              conn.lastSyncedAt = nowIso;
-              writeDatabase(db);
-            }
-          }
-        } catch {}
-
-        return NextResponse.json({
+        return timedJson({
           ok: true,
           status: 'connected',
           connected: true,
-          connection: conn,
+          identityPending: !conn.ownerJid,
+          connection: safeConnection(conn),
           phoneNumber: conn.phoneNumber,
           profileName: conn.profileName,
           profilePicUrl: conn.profilePicUrl,
@@ -509,13 +488,13 @@ export async function POST(req: NextRequest) {
         await saveWhatsAppConnection(conn);
       }
 
-      return NextResponse.json({
+      return timedJson({
         ok: true,
         status: stateResult.state === 'connecting' ? 'connecting' : 'qrcode',
         connected: false,
         qrCodeBase64: updatedQr,
         qrcode: updatedQr ? { base64: updatedQr, code: qrRes.qrCodeRaw } : undefined,
-        connection: conn,
+        connection: safeConnection(conn),
       });
     }
 
@@ -525,35 +504,31 @@ export async function POST(req: NextRequest) {
       const conn = await getWhatsAppConnectionAsync(connectionId, userId);
 
       if (!conn) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: 'Conexão não encontrada ou não pertence a este usuário.' },
           { status: 404 }
         );
       }
 
+      if (!conn.webhookSecret) conn.webhookSecret = crypto.randomUUID();
       // 1. Consultar estado da instância correspondente no gateway Evolution
       const instanceCheck = await checkEvolutionState(baseUrl, apiKey, conn.instanceName);
 
       // CASO A: Instância já está conectada no gateway
       if (instanceCheck.exists && (instanceCheck.state === 'open' || instanceCheck.state === 'connected')) {
-        const identity = await fetchEvolutionIdentity(baseUrl, apiKey, conn.instanceName);
-
         conn.status = 'connected';
-        conn.ownerJid = identity.ownerJid || conn.ownerJid;
-        conn.phoneNumber = identity.phoneNumber || conn.phoneNumber;
-        conn.profileName = identity.profileName || conn.profileName;
-        conn.profilePicUrl = identity.profilePicUrl || conn.profilePicUrl;
+        conn.lastVerificationStatus = 'verified';
         conn.qrCodeBase64 = undefined;
         conn.lastPingAt = new Date().toISOString();
         await saveWhatsAppConnection(conn);
 
-        return NextResponse.json({
+        return timedJson({
           ok: true,
           alreadyConnected: true,
           status: 'connected',
           connected: true,
           message: `A conta "${conn.label}" já está conectada no WhatsApp.`,
-          connection: conn,
+          connection: safeConnection(conn),
           phoneNumber: conn.phoneNumber,
           profileName: conn.profileName,
           profilePicUrl: conn.profilePicUrl,
@@ -568,13 +543,13 @@ export async function POST(req: NextRequest) {
           conn.qrCodeBase64 = qrRes.qrBase64;
           await saveWhatsAppConnection(conn);
 
-          return NextResponse.json({
+          return timedJson({
             ok: true,
             status: 'qrcode',
             connectionId: conn.id,
             qrCodeBase64: qrRes.qrBase64,
             qrcode: { base64: qrRes.qrBase64, code: qrRes.qrCodeRaw },
-            connection: conn,
+            connection: safeConnection(conn),
           });
         }
       }
@@ -602,7 +577,7 @@ export async function POST(req: NextRequest) {
           conn.webhookSecret = webhookSecret;
           await saveWhatsAppConnection(conn);
 
-          return NextResponse.json({
+          return timedJson({
             ok: true,
             repaired: true,
             status: 'qrcode',
@@ -610,11 +585,11 @@ export async function POST(req: NextRequest) {
             connectionId: conn.id,
             qrCodeBase64: repairResult.qrBase64,
             qrcode: { base64: repairResult.qrBase64, code: repairResult.qrCodeRaw },
-            connection: conn,
+            connection: safeConnection(conn),
           });
         }
 
-        return NextResponse.json(
+        return timedJson(
           {
             ok: false,
             error: repairResult.error || 'A instância não existia no gateway e não pôde ser recriada automaticamente.',
@@ -625,7 +600,7 @@ export async function POST(req: NextRequest) {
       }
 
       // CASO D: Falha do Gateway (timeout, 502, credencial inválida)
-      return NextResponse.json(
+      return timedJson(
         {
           ok: false,
           error: instanceCheck.error || 'Não foi possível gerar novo QR Code para esta conexão.',
@@ -641,7 +616,7 @@ export async function POST(req: NextRequest) {
       const conn = await getWhatsAppConnectionAsync(connectionId, userId);
 
       if (!conn) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: 'Conexão não encontrada ou não pertence a este usuário.' },
           { status: 404 }
         );
@@ -659,10 +634,10 @@ export async function POST(req: NextRequest) {
       conn.lastPingAt = new Date().toISOString();
       await saveWhatsAppConnection(conn);
 
-      return NextResponse.json({
+      return timedJson({
         ok: true,
         message: `Conexão "${conn.label}" desconectada.`,
-        connection: conn,
+        connection: safeConnection(conn),
       });
     }
 
@@ -673,7 +648,7 @@ export async function POST(req: NextRequest) {
       const conn = await getWhatsAppConnectionAsync(connectionId, userId);
 
       if (!conn) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: 'Conexão não encontrada ou não pertence a este usuário.' },
           { status: 404 }
         );
@@ -709,7 +684,7 @@ export async function POST(req: NextRequest) {
 
       // Se o gateway estiver indisponível e o usuário NÃO solicitou remoção local forçada:
       if (!gatewayDeleted && !forceLocalOnly) {
-        return NextResponse.json(
+        return timedJson(
           {
             ok: false,
             error: 'O gateway WhatsApp está indisponível para encerrar a sessão remota no momento.',
@@ -730,7 +705,7 @@ export async function POST(req: NextRequest) {
       // (deleteWhatsAppConnection já pausa regras vinculadas e preserva mensagens/jobs)
       await deleteWhatsAppConnection(connectionId, userId);
 
-      return NextResponse.json({
+      return timedJson({
         ok: true,
         message: `Conexão "${conn.label}" removida com sucesso.`,
         gatewayDeleted,
@@ -747,12 +722,12 @@ export async function POST(req: NextRequest) {
       const connectionId = body.connectionId as string;
       const success = await setDefaultWhatsAppConnection(connectionId, userId);
       if (!success) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: 'Conexão não encontrada ou não pertence a este usuário.' },
           { status: 404 }
         );
       }
-      return NextResponse.json({ ok: true, message: 'Conexão padrão atualizada.' });
+      return timedJson({ ok: true, message: 'Conexão padrão atualizada.' });
     }
 
     // 7. AÇÃO: ATUALIZAR APELIDO (LABEL)
@@ -761,7 +736,7 @@ export async function POST(req: NextRequest) {
       const newLabel = String(body.label || '').trim();
       const conn = await getWhatsAppConnectionAsync(connectionId, userId);
       if (!conn) {
-        return NextResponse.json(
+        return timedJson(
           { ok: false, error: 'Conexão não encontrada ou não pertence a este usuário.' },
           { status: 404 }
         );
@@ -770,14 +745,19 @@ export async function POST(req: NextRequest) {
         conn.label = newLabel;
         await saveWhatsAppConnection(conn);
       }
-      return NextResponse.json({ ok: true, label: conn.label });
+      return timedJson({ ok: true, label: conn.label });
     }
 
-    return NextResponse.json({ ok: false, error: `Ação "${action}" desconhecida.` }, { status: 400 });
+    return timedJson({ ok: false, error: `Ação "${action}" desconhecida.` }, { status: 400 });
   } catch (err: any) {
-    return NextResponse.json(
+    return timedJson(
       { ok: false, error: err?.message || 'Erro interno ao gerenciar conexões WhatsApp.' },
       { status: 500 }
     );
   }
+}
+
+function safeConnection(connection: import('@/lib/types').WhatsAppConnection) {
+  const { id, label, instanceName, status, ownerJid, phoneNumber, profileName, profilePicUrl, lastPingAt, isDefault } = connection;
+  return { id, label, instanceName, status, ownerJid, phoneNumber, profileName, profilePicUrl, lastPingAt, isDefault };
 }

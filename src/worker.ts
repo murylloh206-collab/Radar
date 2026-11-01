@@ -1,40 +1,25 @@
-import { runWorkerCycle } from './lib/server/worker-engine';
+import { loadEnvConfig } from '@next/env';
+import { serialPoll } from './lib/client/serial-poll';
 
-const INTERVAL_MS = Number(process.env.WORKER_INTERVAL_MS || 30000);
+let stopping = false;
+let stopHeartbeat = () => {};
 
-let isRunning = true;
-
-async function startWorker() {
-  console.log(`[Radar Worker] Iniciado com intervalo de ${INTERVAL_MS / 1000}s`);
-
-  while (isRunning) {
-    try {
-      const report = await runWorkerCycle();
-      if (report.processedCount > 0) {
-        console.log(
-          `[Radar Worker] ${report.timestamp} — Processados ${report.processedCount} jobs com sucesso.`
-        );
-      } else if (report.skippedReason) {
-        console.log(`[Radar Worker] Ignorado: ${report.skippedReason}`);
-      }
-    } catch (err) {
-      console.error('[Radar Worker] Erro no ciclo de envio:', err);
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS));
+async function start() {
+  loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production');
+  const { copierHeartbeat, runDurableCopierCycle } = await import('./lib/server/copier-runtime');
+  stopHeartbeat = serialPoll(async () => {
+    try { await copierHeartbeat(); }
+    catch { console.error('[Copiador] Não foi possível registrar heartbeat. Confira o banco e a migração 06.'); }
+    return stopping;
+  }, 15000);
+  console.log('[Copiador] Worker persistente iniciado.');
+  while (!stopping) {
+    try { await runDurableCopierCycle(); }
+    catch { console.error('[Copiador] Ciclo não concluído. Confira a conexão do banco, a migração 06 e as configurações das contas.'); }
+    if (!stopping) await new Promise(resolve => setTimeout(resolve, 2000));
   }
-
-  console.log('[Radar Worker] Encerrado com sucesso.');
+  stopHeartbeat();
 }
-
-process.on('SIGTERM', () => {
-  console.log('[Radar Worker] Recebido SIGTERM. Finalizando...');
-  isRunning = false;
-});
-
-process.on('SIGINT', () => {
-  console.log('[Radar Worker] Recebido SIGINT. Finalizando...');
-  isRunning = false;
-});
-
-startWorker();
+process.on('SIGTERM', () => { stopping = true; stopHeartbeat(); });
+process.on('SIGINT', () => { stopping = true; stopHeartbeat(); });
+void start().catch(() => { stopHeartbeat(); process.exitCode = 1; });

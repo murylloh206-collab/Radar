@@ -9,7 +9,7 @@
     "lint": "next lint",
     "test": "npx tsx --test tests/acceptance.test.ts",
     "typecheck": "tsc --noEmit",
-    "worker": "node dist/worker.js"
+    "worker": "tsx src/worker.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

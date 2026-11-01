@@ -1,5 +1,7 @@
 'use client';
 
+import { serialPoll } from '@/lib/client/serial-poll';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -74,7 +76,9 @@ export default function WhatsAppGroupsPanel() {
   const [actionLoading, setActionLoading] = useState(false);
 
   const mounted = useRef(false);
-  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const stopPairingRef = useRef<(() => void) | null>(null);
+  const selectedRef = useRef('');
+  const groupRevision = useRef(0);
 
   // 1. Carregar Conexões e Grupos do Cache/Banco Imediatamente
   const loadInitialData = useCallback(async () => {
@@ -86,16 +90,19 @@ export default function WhatsAppGroupsPanel() {
       if (dataConn.ok && Array.isArray(dataConn.connections)) {
         setConnections(dataConn.connections);
         // Selecionar conexão padrão ou primeira
-        const defaultConn = dataConn.connections.find((c: WhatsAppConnection) => c.isDefault) || dataConn.connections[0];
+        const defaultConn = dataConn.connections.find((c: WhatsAppConnection) => c.id === selectedRef.current) || dataConn.connections.find((c: WhatsAppConnection) => c.isDefault) || dataConn.connections[0];
         const activeId = defaultConn ? defaultConn.id : '';
+        selectedRef.current = activeId;
         setSelectedConnectionId(activeId);
+        setLoadingInitial(false);
 
         // Carregar grupos imediatamente do banco para essa conexão
+        const revision = groupRevision.current;
         const resGroups = await fetch(`/api/whatsapp/groups?connectionId=${encodeURIComponent(activeId)}`, {
           cache: 'no-store',
         });
         const dataGroups = await resGroups.json().catch(() => ({}));
-        if (dataGroups.ok && Array.isArray(dataGroups.groups)) {
+        if (selectedRef.current === activeId && revision === groupRevision.current && dataGroups.ok && Array.isArray(dataGroups.groups)) {
           setGroups(dataGroups.groups);
           setSyncedAt(dataGroups.cachedAt || defaultConn?.lastPingAt || null);
         }
@@ -114,6 +121,7 @@ export default function WhatsAppGroupsPanel() {
     const targetId = connectionIdToSync || selectedConnectionId;
     if (!targetId) return;
 
+    groupRevision.current++;
     setRefreshingGroups(true);
     setGroupsError(null);
 
@@ -125,7 +133,7 @@ export default function WhatsAppGroupsPanel() {
       });
       const data = await response.json().catch(() => ({}));
 
-      if (mounted.current) {
+      if (mounted.current && selectedRef.current === targetId) {
         if (data.ok && Array.isArray(data.groups)) {
           setGroups(data.groups);
           setSyncedAt(data.cachedAt || new Date().toISOString());
@@ -161,12 +169,25 @@ export default function WhatsAppGroupsPanel() {
     void loadInitialData();
     return () => {
       mounted.current = false;
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      stopPairingRef.current?.();
     };
   }, [loadInitialData]);
 
+  const verifyKnownConnections = useCallback(async (signal?: AbortSignal) => {
+    return fetch('/api/whatsapp/connections?verify=true', { cache: 'no-store', signal })
+      .then(response => { if (!response.ok) throw new Error('Falha ao verificar conexão.'); return response.json(); })
+      .then(payload => { if (!signal?.aborted && mounted.current && payload.ok) setConnections(payload.connections); })
+      .catch(error => { if (error.name !== 'AbortError' && mounted.current) setErrorMessage('Último estado conhecido exibido. Não foi possível verificar agora.'); });
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void verifyKnownConnections(controller.signal);
+    return () => controller.abort();
+  }, [verifyKnownConnections]);
+
   // Ao trocar de conexão no card
   const handleSelectConnection = (connId: string) => {
+    selectedRef.current = connId;
     setSelectedConnectionId(connId);
     setSearch('');
     setLimit(25);
@@ -176,7 +197,7 @@ export default function WhatsAppGroupsPanel() {
     fetch(`/api/whatsapp/groups?connectionId=${encodeURIComponent(connId)}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok && Array.isArray(data.groups)) {
+        if (selectedRef.current === connId && data.ok && Array.isArray(data.groups)) {
           setGroups(data.groups);
           setSyncedAt(data.cachedAt || null);
         }
@@ -231,11 +252,6 @@ export default function WhatsAppGroupsPanel() {
       } else {
         setModalStep('qrcode');
       }
-
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      pollTimerRef.current = setInterval(() => {
-        pollPairingStatus(conn.id);
-      }, 2500);
     } catch {
       setModalError('Falha de conexão ao criar a instância. Tente novamente.');
       setModalStep('error');
@@ -245,23 +261,28 @@ export default function WhatsAppGroupsPanel() {
   };
 
   // Pooling de Pareamento
-  const pollPairingStatus = async (connId: string) => {
+  const pollPairingStatus = async (connId: string, signal?: AbortSignal) => {
     try {
       const res = await fetch('/api/whatsapp/connections', {
         method: 'POST',
+        signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'poll_qr', connectionId: connId }),
       });
       const data = await res.json();
+      if (signal?.aborted) return true;
 
       if (data.ok && (data.connected || data.status === 'connected')) {
-        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        stopPairingRef.current?.();
         const finalConn = data.connection || activeNewConn;
         if (finalConn) setActiveNewConn(finalConn);
         setModalStep('connected');
+        void verifyKnownConnections();
 
-        // Recarregar lista de conexões e sincronizar grupos
+        selectedRef.current = connId;
+        // Load the account first; groups remain independent.
         void loadInitialData();
+        void refreshCurrentGroups(connId);
         setSelectedConnectionId(connId);
       } else if (data.qrcode?.base64 || data.qrCodeBase64) {
         const freshQr = data.qrcode?.base64 || data.qrCodeBase64;
@@ -271,8 +292,10 @@ export default function WhatsAppGroupsPanel() {
         }
       }
     } catch {
-      // Ignora erro passageiro de poll
+      if (signal?.aborted) return true;
+      setModalError('Consulta temporariamente indisponível. Tentando novamente…');
     }
+    return false;
   };
 
   // Conectar / Reconectar Conta Existente (Sem criar instâncias duplicadas)
@@ -296,6 +319,7 @@ export default function WhatsAppGroupsPanel() {
       if (data.ok && (data.alreadyConnected || data.connected || data.status === 'connected')) {
         setActiveNewConn(data.connection || conn);
         setModalStep('connected');
+        void verifyKnownConnections();
         void loadInitialData();
         return;
       }
@@ -305,11 +329,6 @@ export default function WhatsAppGroupsPanel() {
         setQrCodeBase64(qr);
         setQrCodeRaw(data.qrcode?.code || null);
         setModalStep('qrcode');
-
-        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        pollTimerRef.current = setInterval(() => {
-          pollPairingStatus(conn.id);
-        }, 2500);
       } else {
         setModalError(data.error || 'Não foi possível gerar novo QR Code para esta conexão.');
         setModalStep('error');
@@ -319,6 +338,15 @@ export default function WhatsAppGroupsPanel() {
       setModalStep('error');
     }
   };
+
+  useEffect(() => {
+    if (!showAddModal || modalStep !== 'qrcode' || !activeNewConn?.id) return;
+    const stop = serialPoll(signal => pollPairingStatus(activeNewConn.id, signal), 2500);
+    stopPairingRef.current = stop;
+    return stop;
+    // The polling session changes only when the modal or selected pairing changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAddModal, modalStep, activeNewConn?.id]);
 
   // Executar Desconexão ou Remoção confirmada
   const handleConfirmAction = async (forceLocalOnly = false) => {
@@ -685,7 +713,7 @@ export default function WhatsAppGroupsPanel() {
           onClick={(e) => {
             if (e.target === e.currentTarget && modalStep !== 'preparing') {
               setShowAddModal(false);
-              if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+              stopPairingRef.current?.();
             }
           }}
         >
@@ -707,7 +735,7 @@ export default function WhatsAppGroupsPanel() {
                 className="wa-modal-close"
                 onClick={() => {
                   setShowAddModal(false);
-                  if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+                  stopPairingRef.current?.();
                 }}
                 aria-label="Fechar modal"
               >
@@ -859,7 +887,7 @@ export default function WhatsAppGroupsPanel() {
                   className="wa-btn-primary"
                   onClick={() => {
                     setShowAddModal(false);
-                    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+                    stopPairingRef.current?.();
                   }}
                 >
                   Concluir

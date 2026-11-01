@@ -1,3 +1,4 @@
+import { runtimeDatabase, replaceRuntimeDatabase } from './copier-runtime-context';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -674,6 +675,8 @@ export function getInitialDatabase(): DatabaseSchema {
  * Leitura síncrona do arquivo local (usado apenas em testes e fallback offline)
  */
 export function readDatabase(): DatabaseSchema {
+  const runtime = runtimeDatabase();
+  if (runtime) return structuredClone(runtime);
   try {
     const dbFile = getDatabaseFilePath();
     const dataDir = path.dirname(dbFile);
@@ -725,6 +728,7 @@ export function readDatabase(): DatabaseSchema {
  * Gravação síncrona no arquivo local (usado apenas em testes e fallback offline)
  */
 export function writeDatabase(data: DatabaseSchema): void {
+  if (runtimeDatabase()) { replaceRuntimeDatabase(data); return; }
   try {
     const dbFile = getDatabaseFilePath();
     const dataDir = path.dirname(dbFile);
@@ -1260,6 +1264,7 @@ export async function savePublicationJob(job: PublicationJob): Promise<void> {
     db.jobs.unshift(job);
   }
   writeDatabase(db);
+  if (runtimeDatabase()) return;
 
   if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
     const { error } = await supabase.from('publication_jobs').upsert({
@@ -1303,6 +1308,7 @@ export async function saveProductToCatalog(product: ProductItem): Promise<void> 
     db.products.unshift(product);
   }
   writeDatabase(db);
+  if (runtimeDatabase()) return;
 
   if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
     try {
@@ -1347,6 +1353,7 @@ export async function saveOfferEvaluation(evalItem: OfferEvaluation): Promise<vo
   const db = readDatabase();
   db.evaluations.unshift(evalItem);
   writeDatabase(db);
+  if (runtimeDatabase()) return;
 
   if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
     try {
@@ -1387,6 +1394,7 @@ export async function saveIncomingMessageRecord(msg: IncomingMessage): Promise<v
     db.incomingMessages.unshift(msg);
   }
   writeDatabase(db);
+  if (runtimeDatabase()) return;
 
   if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
     try {
@@ -1501,7 +1509,7 @@ export async function listWhatsAppConnectionsAsync(userId: string = DEFAULT_USER
       }
 
       // 2. Fallback resiliente caso a migration 05 ainda não tenha sido rodada no Supabase
-      if (connsErr && (connsErr.code === 'PGRST202' || connsErr.message?.includes('not find the table'))) {
+      if (connsErr && (['PGRST205', '42P01'].includes(connsErr.code) || connsErr.message?.includes('not find the table'))) {
         const { data: iwData, error: iwErr } = await supabase
           .from('integrations_whatsapp')
           .select('*')
@@ -1537,8 +1545,9 @@ export async function listWhatsAppConnectionsAsync(userId: string = DEFAULT_USER
           return mappedFallback;
         }
       }
+      throw new Error('Falha ao consultar o cadastro persistido de conexões.');
     } catch (err) {
-      console.error('[Supabase listWhatsAppConnectionsAsync] Erro ao consultar conexões:', err);
+      throw new Error('Não foi possível consultar as conexões persistidas. Nenhuma conexão alternativa foi utilizada.');
     }
   }
 
@@ -1663,9 +1672,9 @@ export async function saveWhatsAppConnection(conn: WhatsAppConnection): Promise<
             .eq('user_id', userUuid)
             .neq('id', connUuid);
         }
-      } else if (upsertErr.code === 'PGRST202' || upsertErr.message?.includes('not find the table')) {
+      } else if (['PGRST205', '42P01'].includes(upsertErr.code) || upsertErr.message?.includes('not find the table')) {
         // Fallback em integrations_whatsapp se a tabela whatsapp_connections ainda não existir
-        await supabase.from('integrations_whatsapp').upsert({
+        const { error: legacyError } = await supabase.from('integrations_whatsapp').upsert({
           id: connUuid,
           user_id: userUuid,
           instance_name: conn.instanceName,
@@ -1678,9 +1687,10 @@ export async function saveWhatsAppConnection(conn: WhatsAppConnection): Promise<
           webhook_secret: conn.webhookSecret || null,
           updated_at: now,
         });
-      }
+        if (legacyError) throw new Error('Falha ao persistir a conexão legada.');
+      } else throw new Error('Falha ao persistir a conexão WhatsApp.');
     } catch (err) {
-      console.error('[saveWhatsAppConnection] Erro de persistência no Supabase:', err);
+      throw new Error('Não foi possível salvar a conexão no banco. Tente novamente.');
     }
   }
 }

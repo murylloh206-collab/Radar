@@ -1,5 +1,6 @@
 'use client';
 
+import CopierRuntimeStatus from '@/components/CopierRuntimeStatus';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -518,6 +519,8 @@ function CopierContent() {
         accountLabel={(activeConnection?.label || 'WhatsApp selecionado') + ' · ' + formatPhone(activeConnection?.phoneNumber)}
         loading={groupsLoading} error={groupError} onRefresh={() => void loadData(selectedConnectionId, true)} onClose={() => setPicker(null)}
         onConfirm={selection => { selectionEdited.current = true; if (picker === 'origin') { setSelectedOriginJid(selection[0]); setSelectedDestJids(previous => previous.filter(jid => jid !== selection[0])); } else setSelectedDestJids(selection); setPicker(null); }} />}
+
+      <CopierRuntimeStatus connectionId={selectedConnectionId} />
 
       {/* Resumo do Fluxo Principal */}
       <div className="rp-flow copier-flow" style={{ marginBottom: 20 }}>

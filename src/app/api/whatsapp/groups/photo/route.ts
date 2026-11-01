@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase';
 import { NextRequest, NextResponse } from 'next/server';
 import { copierConnection } from '@/lib/server/copier-group-catalog';
 import { getSessionFromRequest } from '@/lib/server/auth';
@@ -59,7 +60,13 @@ export async function GET(req: NextRequest) {
     finally { if (pending.get(key) === task) pending.delete(key); }
     cache.set(key, { picture, expires: Date.now() + (picture.pictureUrl ? 600000 : 60000) });
     while (cache.size > 500) cache.delete(cache.keys().next().value!);
-    return NextResponse.json({ ok: true, ...picture }, { headers });
+    let cachePersisted = false;
+    if (supabase && connectionId && picture.pictureUrl) {
+      const persisted = await supabase.rpc('copier_cache_photo', { p_user: session.userId,
+        p_connection: connectionId, p_owner: owner, p_group: account ? null : jid, p_picture: picture.pictureUrl });
+      cachePersisted = !persisted.error && persisted.data === true;
+    }
+    return NextResponse.json({ ok: true, ...picture, cachePersisted }, { headers });
   } catch (error) {
     if (error instanceof WhatsAppPhotoError) return failure(error.code, error.message, error.status);
     return failure('PHOTO_UNAVAILABLE', 'Não foi possível obter a foto agora.', 502);

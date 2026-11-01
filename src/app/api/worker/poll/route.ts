@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { runWorkerCycle } from '@/lib/server/worker-engine';
-import { syncRecentOriginMessagesFromEvolution } from '@/lib/server/copier-service';
+import { runDurableCopierCycle } from '@/lib/server/copier-runtime';
 
 async function handlePoll(req: NextRequest) {
   try {
@@ -40,11 +39,9 @@ async function handlePoll(req: NextRequest) {
       );
     }
 
-    const syncedOriginMessages = await syncRecentOriginMessagesFromEvolution(true).catch(() => 0);
-    const report = await runWorkerCycle();
+    const report = await runDurableCopierCycle();
     return NextResponse.json({
       ok: true,
-      syncedOriginMessages,
       report,
     });
   } catch (err: unknown) {

@@ -1,3 +1,4 @@
+import { runtimeDatabase } from './copier-runtime-context';
 import {
   CopySource,
   IncomingMessage,
@@ -285,6 +286,7 @@ export function extractOfferDetailsFromWhatsAppText(
 export interface ProcessIncomingOptions {
   isSimulation?: boolean;
   connectionId?: string;
+  deferDispatch?: boolean;
 }
 
 /**
@@ -829,7 +831,7 @@ export async function processIncomingMessage(
   const isAutomaticAllowed =
     authorizedSource.operationMode === 'automatico' &&
     !hasBlockedKeyword &&
-    Boolean(conversionResult.success && conversionResult.affiliateUrl);
+    Boolean(conversionResult.success && conversionResult.affiliateUrl && conversionResult.verificationStatus === 'verificado' && conversionResult.isAutoDispatchAllowed);
 
   const delaySeconds =
     typeof authorizedSource.customDelaySeconds === 'number' && authorizedSource.customDelaySeconds >= 0
@@ -891,7 +893,7 @@ export async function processIncomingMessage(
   }
 
   // Em produção (Render / Vercel / Local), executa o envio imediatamente na requisição para não depender de timers voláteis
-  if (!isSimulation && isAutomaticAllowed && createdJobIds.length > 0) {
+  if (!runtimeDatabase() && !options?.deferDispatch && !isSimulation && isAutomaticAllowed && createdJobIds.length > 0) {
     if (isImmediateDispatchMode) {
       try {
         await runWorkerCycle();
