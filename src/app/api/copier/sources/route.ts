@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     const connection = saved.connection;
     const savedSource = saved.sources.find(source => id ? source.id === id : source.groupJid === groupJid);
     if (id && !savedSource) return NextResponse.json({ ok: false, error: 'Regra não autorizada nesta conexão.' }, { status: 403 });
-    const pausing = body.isActive === false && !!savedSource;
+    const pausing = body.isActive === false && !!savedSource && body.saveOnly !== true;
     const live = pausing ? null : await copierGroupCatalog(session, { connectionId: connection.id, refresh: true, permissions: true });
     if (live) db.groups = [...db.groups.filter(group => group.connectionId !== connection.id), ...live.groups];
     db.sources = [...db.sources.filter(source => !saved.sources.some(stored => stored.id === source.id)), ...saved.sources];

@@ -153,6 +153,7 @@ function CopierContent() {
   const [groupError, setGroupError] = useState<string | null>(null);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const requestVersion = useRef(0);
+  const savedRule = useRef<CopySource | null>(null);
   const selectionEdited = useRef(false);
   const accountIdentity = useRef('');
   const currentConnection = useRef(paramConnId);
@@ -164,6 +165,7 @@ function CopierContent() {
     currentConnection.current = target;
     if (switched) {
       selectionEdited.current = false;
+      savedRule.current = null;
       setGroups([]); setActiveConnection(null); setStatusData(null); setPicker(null);
       setSelectedOriginJid(''); setSelectedDestJids([]); setActiveRuleId(null); setIsActiveRule(false);
     }
@@ -202,7 +204,8 @@ function CopierContent() {
           const rules = await response.json();
           if (version !== requestVersion.current || !response.ok || !rules.ok) return;
           const found: CopySource | undefined = rules.sources.find((source: CopySource) => source.isActive) || rules.sources[0];
-          if (!found) { setActiveRuleId(null); setIsActiveRule(false); return; }
+          if (!found) { savedRule.current = null; setActiveRuleId(null); setIsActiveRule(false); return; }
+          savedRule.current = found;
           setActiveRuleId(found.id);
           if (!refresh && !selectionEdited.current) {
             setSelectedOriginJid(paramOriginJid || found.groupJid);
@@ -253,8 +256,9 @@ function CopierContent() {
   }, [selectedDestJids, groupsMap]);
 
   // Salvar / Alternar Ativação do Copiador (Passo 4)
-  const handleToggleCopier = async () => {
-    if (!isActiveRule && (groupsLoading || groupError || !groupsMap.has(selectedOriginJid) || selectedDestJids.some(jid => !groupsMap.has(jid)))) {
+  const handleToggleCopier = async (requestedActive?: boolean) => {
+    const nextState = requestedActive ?? !isActiveRule;
+    if (nextState && (groupsLoading || groupError || !groupsMap.has(selectedOriginJid) || selectedDestJids.some(jid => !groupsMap.has(jid)))) {
       setFeedback({ type: 'warning', message: 'Atualize os grupos e confirme a origem e os destinos desta conta antes de ativar.' });
       return;
     }
@@ -267,7 +271,6 @@ function CopierContent() {
       return;
     }
 
-    const nextState = !isActiveRule;
     setSaving(true);
     setFeedback(null);
 
@@ -279,6 +282,8 @@ function CopierContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...savedRule.current,
+          saveOnly: requestedActive !== undefined,
           id: activeRuleId || undefined,
           connectionId: selectedConnectionId || activeConnection?.id,
           groupJid: selectedOriginJid,
@@ -293,12 +298,12 @@ function CopierContent() {
       });
 
       const data = await res.json();
-      if (data.ok) {
+      if (res.ok && data.ok) {
         setIsActiveRule(nextState);
         if (data.source?.id) setActiveRuleId(data.source.id);
         setFeedback({
           type: 'success',
-          message: nextState
+          message: requestedActive !== undefined ? `Configurações salvas. O copiador permanece ${nextState ? 'ativo' : 'pausado'}.` : nextState
             ? 'Copiador ativado com sucesso! As novas ofertas recebidas serão convertidas e processadas continuamente.'
             : 'Copiador pausado. O monitoramento foi suspenso.',
         });
@@ -740,6 +745,10 @@ function CopierContent() {
             </p>
 
             <div className="rp-actions">
+              <button type="button" className="rp-btn" style={{ minHeight: 46 }} disabled={saving || groupsLoading}
+                onClick={() => void handleToggleCopier(isActiveRule)}>
+                {saving ? 'Salvando…' : 'Salvar configurações'}
+              </button>
               <button
                 type="button"
                 className={`rp-btn ${isActiveRule ? '' : 'rp-primary'}`}
@@ -752,7 +761,7 @@ function CopierContent() {
                   alignItems: 'center',
                   gap: 8,
                 }}
-                onClick={handleToggleCopier}
+                onClick={() => void handleToggleCopier()}
                 disabled={saving}
               >
                 {saving ? (
