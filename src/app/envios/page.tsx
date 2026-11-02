@@ -384,7 +384,20 @@ function EnviosContent() {
                 ) : (
                   pendingJobs.map((j) => (
                     <div key={j.id} className="rp-list-item">
-                      <div className="rp-product-photo rp-p1" role="img" aria-label={j.targetName} />
+                      {j.mediaUrl ? (
+                        <div style={{ position: 'relative', width: 68, height: 68, flexShrink: 0, borderRadius: 10, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
+                          <img
+                            src={j.mediaUrl}
+                            alt={j.targetName || 'Foto do produto'}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="rp-product-photo rp-p1" role="img" aria-label={j.targetName} />
+                      )}
                       <div className="rp-list-copy">
                         <strong>{j.targetName || 'Oferta em revisão'}</strong>
                         <p>{j.messageText.slice(0, 80)}...</p>
@@ -454,6 +467,18 @@ function EnviosContent() {
                 ) : (
                   scheduledJobs.map((j) => (
                     <div key={j.id} className="rp-list-item">
+                      {j.mediaUrl && (
+                        <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
+                          <img
+                            src={j.mediaUrl}
+                            alt={j.targetName || 'Foto do produto'}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
                       <span className="rp-tag">
                         {j.scheduledFor
                           ? new Date(j.scheduledFor).toLocaleString('pt-BR', {
@@ -596,6 +621,18 @@ function EnviosContent() {
                 ) : (
                   historyJobs.map((j) => (
                     <div key={j.id} className="rp-list-item">
+                      {j.mediaUrl && (
+                        <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
+                          <img
+                            src={j.mediaUrl}
+                            alt={j.targetName || 'Foto do produto'}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
                       <div className="rp-list-copy">
                         <strong>{j.targetName || 'Disparo WhatsApp'}</strong>
                         <p>

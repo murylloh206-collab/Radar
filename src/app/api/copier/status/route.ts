@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
           status: entry.status, reason: entry.last_error || entry.result?.reason, groupName: names.get(entry.remoteJid) || 'Grupo de origem' })),
         ...activity.jobs.map(job => ({ id: job.id, type: 'envio', timestamp: job.sent_at || job.updated_at,
           title: 'Publicação', detail: job.error_details || job.status, status: job.status,
+          mediaUrl: (job as any).media_url || undefined,
           reason: job.error_details, groupName: job.target_name || 'Grupo de destino' })),
       ].sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp)).slice(0, 50) }, { headers });
   } catch {

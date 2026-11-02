@@ -60,6 +60,7 @@ interface ActivityEvent {
   title: string;
   detail: string;
   status: string;
+  mediaUrl?: string;
   reason?: string;
   store?: string;
   groupName: string;
@@ -901,11 +902,16 @@ function CopierContent() {
             </div>
 
             <div className="rp-message rp-section">
-              <div
-                className="rp-product-photo rp-p1"
-                role="img"
-                aria-label="Fone sem fio de exemplo"
-              />
+              <div style={{ position: 'relative', width: '100%', maxWidth: 220, aspectRatio: '1', borderRadius: 10, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227', marginBottom: 12 }}>
+                <img
+                  src="/scenarios/eletroeletronicos.png"
+                  alt="Prévia de cenário de produto"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <div style={{ position: 'absolute', bottom: 6, right: 6, background: 'rgba(15, 23, 42, 0.85)', padding: '2px 8px', borderRadius: 10, fontSize: 10, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+                  <span>🎯 @radar.ofertas.br1</span>
+                </div>
+              </div>
               <p>
                 🔥 <strong>Achado imperdível do Radar</strong><br />
                 Fone de Ouvido Bluetooth Sem Fio Estéreo<br />
@@ -1079,6 +1085,20 @@ function CopierContent() {
                         <p style={{ margin: 0, fontSize: 12, color: '#a4b7c4', lineHeight: 1.5, wordBreak: 'break-word' }}>
                           {event.detail}
                         </p>
+
+                        {event.mediaUrl && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                            <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#182026', flexShrink: 0 }}>
+                              <img
+                                src={event.mediaUrl}
+                                alt="Mídia da publicação"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                              />
+                            </div>
+                            <span style={{ fontSize: 11, color: '#8fa2b1' }}>Foto enviada com a publicação</span>
+                          </div>
+                        )}
 
                         {event.reason && (
                           <div

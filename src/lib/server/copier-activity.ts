@@ -9,7 +9,7 @@ export async function copierActivity(userId: string, connectionId: string) {
     supabase.from('copier_worker_heartbeat').select('last_seen_at').order('last_seen_at', { ascending: false }).limit(1),
     supabase.from('copier_inbox').select('id,status,received_at,completed_at,last_error,result,payload->data->key->>remoteJid')
       .eq('user_id', userId).eq('connection_id', connectionId).order('received_at', { ascending: false }).limit(40),
-    supabase.from('publication_jobs').select('id,status,target_name,error_details,scheduled_for,sent_at,updated_at,runtime_delivery')
+    supabase.from('publication_jobs').select('id,status,target_name,media_url,error_details,scheduled_for,sent_at,updated_at,runtime_delivery')
       .eq('user_id', userId).eq('connection_id', connectionId).not('runtime_payload', 'is', null).order('created_at', { ascending: false }).limit(40),
     inboxQuery().gte('received_at', start), inboxQuery().in('status', ['pending', 'processing']),
     jobsQuery().eq('status', 'enviado').gte('sent_at', start), jobsQuery().eq('status', 'agendado'),

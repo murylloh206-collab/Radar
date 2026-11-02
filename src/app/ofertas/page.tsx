@@ -272,7 +272,20 @@ function OfertasContent() {
                   const photoClass = idx % 3 === 0 ? 'rp-p1' : idx % 3 === 1 ? 'rp-p2' : 'rp-p3';
                   return (
                     <div key={p.id} className="rp-panel rp-catalog-card">
-                      <div className={`rp-product-photo ${photoClass}`} role="img" aria-label={p.title} />
+                      {p.imageUrl ? (
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 9, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227', marginBottom: 10 }}>
+                          <img
+                            src={p.imageUrl}
+                            alt={p.title}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className={`rp-product-photo ${photoClass}`} role="img" aria-label={p.title} />
+                      )}
                       <p className="rp-sub">
                         {p.storeName.toUpperCase()} · Avaliação {p.rating || '4.8'}
                       </p>
