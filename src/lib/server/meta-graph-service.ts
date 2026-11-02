@@ -100,9 +100,9 @@ export async function connectMetaAccount(userId: string, input: {
       });
     }
 
-    // 2. Inspecionar o Token via /me para identificar se é Page Token ou User Token
+    // 2. Inspecionar o Token via /me para identificar o ID e Nome da entidade (User ou Page)
     const meRes = await fetch(
-      `${META_GRAPH_BASE}/me?fields=id,name,category,access_token&access_token=${encodeURIComponent(token)}`
+      `${META_GRAPH_BASE}/me?fields=id,name&access_token=${encodeURIComponent(token)}`
     );
     const meJson = await meRes.json();
 
@@ -113,51 +113,59 @@ export async function connectMetaAccount(userId: string, input: {
       };
     }
 
-    // CASO A: O token colado já é um PAGE ACCESS TOKEN direto (possui categoria de página)
-    if (meJson.category) {
-      const pageId = meJson.id;
-      const pageName = meJson.name;
+    // 3. Tentar consultar /me/accounts para listar as Páginas
+    const pagesRes = await fetch(
+      `${META_GRAPH_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
+    );
+    const pagesJson = await pagesRes.json();
 
-      const pageDetailsRes = await fetch(
-        `${META_GRAPH_BASE}/${pageId}?fields=id,name,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
-      );
-      const pageDetailsJson = await pageDetailsRes.json();
-      const ig = pageDetailsJson.instagram_business_account;
+    // Se /me/accounts retornou páginas válidas (fluxo User Token com páginas)
+    if (pagesJson.data && Array.isArray(pagesJson.data) && pagesJson.data.length > 0) {
+      const pages = pagesJson.data;
+      const pageWithIg = pages.find((p: any) => p.instagram_business_account?.id);
 
-      if (!ig?.id) {
+      if (!pageWithIg) {
+        const pageNames = pages.map((p: any) => p.name).join(', ');
         return {
           ok: false,
-          error: `Página "${pageName}" identificada com sucesso, mas ela não possui um Instagram Comercial vinculado. No Meta Business Suite, acesse Configurações > Contas do Instagram e vincule seu perfil comercial.`,
+          error: `Página(s) encontrada(s): "${pageNames}", porém nenhuma delas possui uma Conta Profissional do Instagram vinculada.\n\nPara resolver: acesse o Meta Business Suite > Configurações > Contas do Instagram e conecte seu perfil comercial à página.`,
         };
       }
 
+      const effectiveToken = pageWithIg.access_token || token;
+      const igAccount = pageWithIg.instagram_business_account;
+
+      return await persistMetaCredentials(userId, {
+        accessToken: effectiveToken,
+        facebookPageId: pageWithIg.id,
+        facebookPageName: pageWithIg.name,
+        instagramAccountId: igAccount.id,
+        instagramUsername: igAccount.username,
+        instagramProfilePic: igAccount.profile_picture_url,
+      });
+    }
+
+    // Se /me/accounts falhou (ex: o token já é um Page Access Token direto)
+    // Tentar consultar a entidade /me diretamente como se fosse uma Página
+    const directPageRes = await fetch(
+      `${META_GRAPH_BASE}/${meJson.id}?fields=id,name,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
+    );
+    const directPageJson = await directPageRes.json();
+
+    if (directPageJson.instagram_business_account?.id) {
+      const ig = directPageJson.instagram_business_account;
       return await persistMetaCredentials(userId, {
         accessToken: token,
-        facebookPageId: pageId,
-        facebookPageName: pageName,
+        facebookPageId: directPageJson.id,
+        facebookPageName: directPageJson.name,
         instagramAccountId: ig.id,
         instagramUsername: ig.username,
         instagramProfilePic: ig.profile_picture_url,
       });
     }
 
-    // CASO B: O token é um USER ACCESS TOKEN. Buscar as Páginas administradas pelo usuário
-    const pagesRes = await fetch(
-      `${META_GRAPH_BASE}/me/accounts?fields=id,name,access_token,category,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
-    );
-    const pagesJson = await pagesRes.json();
-
-    if (pagesJson.error) {
-      return {
-        ok: false,
-        error: `Erro ao listar páginas da Meta: ${pagesJson.error.message}`,
-      };
-    }
-
-    const pages = Array.isArray(pagesJson.data) ? pagesJson.data : [];
-
-    // Se não encontrou nenhuma página, investigar as permissões do token
-    if (pages.length === 0) {
+    // Se /me/accounts retornou vazio (data: []), investigar as permissões do usuário
+    if (pagesJson.data && Array.isArray(pagesJson.data) && pagesJson.data.length === 0) {
       const permRes = await fetch(
         `${META_GRAPH_BASE}/me/permissions?access_token=${encodeURIComponent(token)}`
       );
@@ -170,38 +178,28 @@ export async function connectMetaAccount(userId: string, input: {
         return {
           ok: false,
           error:
-            "O token foi gerado sem a permissão 'pages_show_list'.\n\nComo resolver no Graph API Explorer:\n1. No campo 'User or Page', selecione sua Página do Facebook diretamente;\n2. OU no botão 'Add a Permission' à direita, adicione: pages_show_list, instagram_basic, instagram_content_publish e pages_read_engagement;\n3. Clique em 'Generate Access Token' e cole o novo token aqui.",
+            "O token foi gerado sem a permissão 'pages_show_list'.\n\nComo resolver no Graph API Explorer:\n1. No topo direito, no campo 'User or Page', selecione a sua Página do Facebook diretamente;\n2. OU clique em 'Add a Permission' e adicione 'pages_show_list', 'instagram_basic', 'instagram_content_publish' e gere o token novamente.",
         };
       }
 
       return {
         ok: false,
-        error: `O perfil "${meJson.name || 'informado'}" não possui nenhuma Página do Facebook administrada ou aprovada. Crie uma Página no Facebook e vincule seu Instagram Comercial a ela.`,
+        error: `O perfil "${meJson.name || 'informado'}" não possui nenhuma Página do Facebook como administrador. Crie uma Página no Facebook e vincule seu Instagram Comercial a ela.`,
       };
     }
 
-    // Localizar a página que possui conta do Instagram conectada
-    const pageWithIg = pages.find((p: any) => p.instagram_business_account?.id);
-
-    if (!pageWithIg) {
-      const pageNames = pages.map((p: any) => p.name).join(', ');
+    // Se chegou até aqui sem encontrar o Instagram
+    if (directPageJson.name) {
       return {
         ok: false,
-        error: `Página(s) encontrada(s): "${pageNames}", porém nenhuma delas tem um Instagram Comercial vinculado.\n\nPara resolver: acesse o Meta Business Suite da sua Página > Contas > Contas do Instagram > Adicionar/Vincular seu Instagram.`,
+        error: `Página "${directPageJson.name}" conectada, mas ela não possui uma Conta Comercial do Instagram vinculada.\n\nNo Meta Business Suite, vincule seu Instagram Comercial à sua página para liberar a publicação.`,
       };
     }
 
-    const effectiveToken = pageWithIg.access_token || token;
-    const igAccount = pageWithIg.instagram_business_account;
-
-    return await persistMetaCredentials(userId, {
-      accessToken: effectiveToken,
-      facebookPageId: pageWithIg.id,
-      facebookPageName: pageWithIg.name,
-      instagramAccountId: igAccount.id,
-      instagramUsername: igAccount.username,
-      instagramProfilePic: igAccount.profile_picture_url,
-    });
+    return {
+      ok: false,
+      error: `A Meta não localizou páginas nem Instagram vinculados ao token informado: ${pagesJson.error?.message || 'Permissões insuficientes.'}`,
+    };
   } catch (err: any) {
     return { ok: false, error: `Falha na conexão com a Meta: ${err.message || 'Erro de rede ou timeout'}` };
   }
