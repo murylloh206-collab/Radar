@@ -844,16 +844,28 @@ export async function processIncomingMessage(
       ? productData.imageUrl
       : undefined;
 
-  const photoSelection = selectBestProductPhoto(rawCandidatePhoto, conversionResult.store);
+  const photoSelection = selectBestProductPhoto(
+    rawCandidatePhoto,
+    conversionResult.store,
+    productData.rawEvidences?.pictures as Array<{ url?: string; secure_url?: string; size?: string; max_size?: string }> | undefined
+  );
   const bestOfficialPhoto = photoSelection.selectedUrl || rawCandidatePhoto || '';
 
   if (authorizedSource.imageMode === 'none') {
     finalMediaUrl = undefined;
     finalMediaType = 'none';
   } else if (bestOfficialPhoto) {
-    // Formata a fotografia oficial no tamanho quadrado perfeito (1:1) com fundo limpo e marca d'água oficial da logo
+    // Formata a fotografia oficial no tamanho quadrado perfeito (1:1, 1080x1080) com enquadramento adaptativo 'contain', fundo limpo e marca d'água oficial
     const applyWatermark = authorizedSource.brandWatermarkEnabled !== false;
-    finalMediaUrl = await optimizeProductImageForWhatsApp(bestOfficialPhoto, authorizedSource.userId, { watermark: applyWatermark });
+    finalMediaUrl = await optimizeProductImageForWhatsApp(
+      bestOfficialPhoto,
+      authorizedSource.userId,
+      {
+        watermark: applyWatermark,
+        productPageUrl: conversionResult.cleanUrl,
+        store: conversionResult.store,
+      }
+    );
     finalMediaType = 'image';
   } else {
     finalMediaUrl = undefined;
