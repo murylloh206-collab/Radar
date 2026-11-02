@@ -83,3 +83,4 @@ export function generatePostCaption(input: PostCopyInput, style: PostCopyStyle =
     .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
     .join('\n');
 }
+
