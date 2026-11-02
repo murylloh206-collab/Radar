@@ -108,3 +108,4 @@ test('5. Template limpa tags ausentes quando não há cupom nem ou', () => {
   assert.doesNotMatch(rendered, /\{preco_ou\}/);
   assert.doesNotMatch(rendered, /\{cupom\}/);
 });
+
