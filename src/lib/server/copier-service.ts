@@ -836,14 +836,21 @@ export async function processIncomingMessage(
   const delaySeconds =
     typeof authorizedSource.customDelaySeconds === 'number' && authorizedSource.customDelaySeconds >= 0
       ? authorizedSource.customDelaySeconds
-      : 5;
+      : 60;
 
   const isImmediateDispatchMode = !isTestIsolationActive() && isAutomaticAllowed;
-  const scheduledTime = isImmediateDispatchMode
-    ? new Date().toISOString()
-    : new Date(Date.now() + delaySeconds * 1000).toISOString();
 
   for (const dest of validDestinations) {
+    // Calcular o próximo horário de envio respeitando o intervalo configurado e evitando acúmulo de disparos de uma vez
+    const pendingSameDest = db.jobs
+      .filter((j) => j.targetJid === dest.groupJid && (j.status === 'agendado' || j.status === 'enviando'))
+      .map((j) => new Date(j.scheduledFor).getTime())
+      .filter((t) => !isNaN(t) && t > Date.now());
+
+    const baseScheduledTime = pendingSameDest.length > 0 ? Math.max(...pendingSameDest) : Date.now();
+    const scheduledTime = isImmediateDispatchMode && pendingSameDest.length === 0
+      ? new Date().toISOString()
+      : new Date(baseScheduledTime + delaySeconds * 1000).toISOString();
     // Deduplicação básica: checar se este mesmo link de afiliado ou produto foi enviado para o mesmo grupo nas últimas 12 horas
     const alreadySentRecently = db.jobs.some(
       (j) =>

@@ -207,6 +207,10 @@ export interface CopySource {
   imageMode?: 'radar_art' | 'official_photo' | 'none';
   startTime?: string;
   endTime?: string;
+  dispatchOrder?: 'sequencial' | 'aleatoria';
+  templateName?: string;
+  is24Hours?: boolean;
+  customTemplates?: Array<{ id: string; name: string; templateText: string }>;
   convertAffiliateLinks?: boolean;
   isTestMode?: boolean;
   testGroupJid?: string;

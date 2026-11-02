@@ -38,6 +38,10 @@ export async function POST(req: NextRequest) {
       stripExternalTags = true,
       customDelaySeconds = 60,
       templateText,
+      templateName,
+      is24Hours = false,
+      dispatchOrder = 'sequencial',
+      customTemplates,
       imageMode = 'radar_art',
       startTime = '08:00',
       endTime = '22:00',
@@ -57,6 +61,50 @@ export async function POST(req: NextRequest) {
     const connection = saved.connection;
     const savedSource = saved.sources.find(source => id ? source.id === id : source.groupJid === groupJid);
     if (id && !savedSource) return NextResponse.json({ ok: false, error: 'Regra não autorizada nesta conexão.' }, { status: 403 });
+
+    // RESTRIÇÃO OBRIGATÓRIA: O Copiador só pode ser editado quando pausado.
+    // Enquanto estiver ativo, permite apenas requisições que estejam pausando a regra (isActive === false).
+    if (savedSource && savedSource.isActive && body.isActive !== false) {
+      const isConfigChange =
+        (body.customDelaySeconds !== undefined && Number(body.customDelaySeconds) !== savedSource.customDelaySeconds) ||
+        (body.startTime !== undefined && body.startTime !== savedSource.startTime) ||
+        (body.endTime !== undefined && body.endTime !== savedSource.endTime) ||
+        (body.is24Hours !== undefined && Boolean(body.is24Hours) !== Boolean(savedSource.is24Hours)) ||
+        (body.dispatchOrder !== undefined && body.dispatchOrder !== (savedSource.dispatchOrder || 'sequencial')) ||
+        (body.templateText !== undefined && body.templateText !== (savedSource.templateText || '')) ||
+        (body.templateName !== undefined && body.templateName !== (savedSource.templateName || '')) ||
+        (body.operationMode !== undefined && body.operationMode !== savedSource.operationMode);
+
+      if (isConfigChange) {
+        return NextResponse.json({
+          ok: false,
+          error: 'O copiador só pode ser editado quando estiver pausado. Pause o copiador antes de alterar suas configurações.',
+          code: 'COPIER_ACTIVE_READONLY',
+        }, { status: 400 });
+      }
+    }
+
+    // Validação do Template de Mensagem: deve conter {link}
+    if (templateText && typeof templateText === 'string') {
+      if (!templateText.includes('{link}')) {
+        return NextResponse.json({
+          ok: false,
+          error: 'O template de mensagem deve incluir a variável {link} para que a oferta seja publicada com seu link de afiliado validado.',
+          code: 'TEMPLATE_MISSING_LINK',
+        }, { status: 400 });
+      }
+    }
+
+    const effectiveIs24Hours = Boolean(is24Hours) || (startTime === '00:00' && (endTime === '00:00' || endTime === '23:59'));
+    const effectiveStartTime = effectiveIs24Hours ? '00:00' : (startTime || '08:00');
+    const effectiveEndTime = effectiveIs24Hours ? '00:00' : (endTime || '22:00');
+
+    if (!/^\d{2}:\d{2}$/.test(effectiveStartTime) || !/^\d{2}:\d{2}$/.test(effectiveEndTime)) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Os horários de início e término devem estar no formato HH:mm.',
+      }, { status: 400 });
+    }
     const pausing = body.isActive === false && !!savedSource && body.saveOnly !== true;
     const live = pausing ? null : await copierGroupCatalog(session, { connectionId: connection.id, refresh: true, permissions: true });
     if (live) db.groups = [...db.groups.filter(group => group.connectionId !== connection.id), ...live.groups];
@@ -106,11 +154,15 @@ export async function POST(req: NextRequest) {
       allowedStores,
       stripThirdPartyLinks,
       stripExternalTags,
-      customDelaySeconds: Number(customDelaySeconds) || 60,
+      customDelaySeconds: Math.max(0, Number(customDelaySeconds) || 60),
       templateText: templateText || undefined,
+      templateName: templateName || undefined,
+      is24Hours: effectiveIs24Hours,
+      dispatchOrder: dispatchOrder === 'aleatoria' ? 'aleatoria' : 'sequencial',
+      customTemplates: Array.isArray(customTemplates) ? customTemplates : undefined,
       imageMode: imageMode || 'radar_art',
-      startTime: startTime || '08:00',
-      endTime: endTime || '22:00',
+      startTime: effectiveStartTime,
+      endTime: effectiveEndTime,
       convertAffiliateLinks: Boolean(convertAffiliateLinks),
       updatedAt: new Date().toISOString(),
     };

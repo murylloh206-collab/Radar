@@ -12,6 +12,7 @@ import {
   WhatsAppGroup,
 } from '@/lib/types';
 import CopierGroupPicker, { CopierGroupPhoto } from '@/components/CopierGroupPicker';
+import CopierSettingsModal, { BUILTIN_TEMPLATES } from '@/components/CopierSettingsModal';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
   Activity,
@@ -33,6 +34,9 @@ import {
   Sparkles,
   Users,
   X,
+  Settings,
+  Plus,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface ConnectionInfo {
@@ -141,6 +145,7 @@ function CopierContent() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Estados dos 4 Passos do Fluxo
   const [activeRuleId, setActiveRuleId] = useState<string | null>(null);
@@ -170,6 +175,7 @@ function CopierContent() {
     setSelectedDestJids((sharedWhatsApp.workspace?.destinations || []).filter(destination => destination.sourceId === source?.id && destination.isActive).map(destination => destination.groupJid));
     setOperationMode(source?.operationMode || 'revisao_manual');
     setAllowedStores(source?.allowedStores?.length ? source.allowedStores : ['shopee', 'mercadolivre', 'amazon', 'netshoes']);
+    if (source?.templateName) setSelectedTemplate(source.templateName);
   }, [sharedWhatsApp.workspace?.destinations]);
 
   useEffect(() => { if (paramConnId && paramConnId !== sharedWhatsApp.selectedId) sharedWhatsApp.select(paramConnId); }, [paramConnId, sharedWhatsApp.selectedId, sharedWhatsApp.select]);
@@ -313,6 +319,65 @@ function CopierContent() {
     }
   };
 
+  const handlePauseFromModal = async () => {
+    await handleToggleCopier(false);
+  };
+
+  const handleSaveModalSettings = async (updated: Partial<CopySource>) => {
+    if (isActiveRule) {
+      throw new Error('O copiador só pode ser editado quando estiver pausado. Pause antes de salvar alterações.');
+    }
+
+    setSaving(true);
+    setFeedback(null);
+
+    try {
+      const originGroup = groupsMap.get(selectedOriginJid);
+      const computedName = originGroup ? `Cópia: ${originGroup.name}` : (savedRule.current?.name || 'Regra Copiador');
+
+      const payload = {
+        ...savedRule.current,
+        ...updated,
+        id: activeRuleId || undefined,
+        connectionId: selectedConnectionId || activeConnection?.id,
+        groupJid: selectedOriginJid || savedRule.current?.groupJid,
+        name: computedName,
+        operationMode,
+        allowedStores,
+        stripThirdPartyLinks: true,
+        stripExternalTags: true,
+        destinationJids: selectedDestJids,
+        isActive: false, // salva pausado conforme a regra de fluxo estrito
+        saveOnly: true,
+      };
+
+      const res = await fetch('/api/copier/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        if (data.source) {
+          savedRule.current = data.source;
+          setActiveRuleId(data.source.id);
+          selectedRuleChoice.current = data.source.id;
+          if (data.source.templateName) setSelectedTemplate(data.source.templateName);
+        }
+        setFeedback({
+          type: 'success',
+          message: 'Configurações do copiador salvas com sucesso! Para iniciar o monitoramento, clique em "Ativar Copiador".',
+        });
+        await loadData();
+      } else {
+        throw new Error(data.error || 'Falha ao salvar as configurações.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const editAllowedStores = (update: React.SetStateAction<string[]>) => { selectionEdited.current = true; setAllowedStores(update); };
 
   const isConnected = activeConnection?.status === 'connected';
@@ -368,15 +433,105 @@ function CopierContent() {
         </div>
       </div>
 
-      <div className="rp-panel" style={{ padding: 16, marginBottom: 18 }}>
-        <label htmlFor="copier-rule-choice" style={{ display: 'block', marginBottom: 8 }}>Configuração do copiador</label>
-        <select id="copier-rule-choice" aria-label="Escolher configuração do copiador" value={activeRuleId || ''}
-          onChange={event => chooseRule(event.target.value)} disabled={!rulesReady}
-          style={{ width: '100%', padding: 12, borderRadius: 10, background: '#20262b', color: '#edf2f5', border: '1px solid #364049' }}>
-          <option value="">Nova configuração — escolha a origem e o destino</option>
-          {rulesList.map(source => <option key={source.id} value={source.id}>{source.name} · {source.isActive ? 'Ativa' : 'Pausada'}</option>)}
-        </select>
-        <p className="rp-sub" style={{ margin: '8px 0 0' }}>{selectionEdited.current ? 'Alterações no formulário. Salve para atualizar esta regra.' : activeRuleId ? 'Regra salva. Você pode trocar qualquer grupo abaixo.' : 'Escolha os grupos abaixo. As regras já ativas continuam funcionando.'}</p>
+      {/* Painel de Regras e Botão de Engrenagem SVG Profissional */}
+      <div
+        className="rp-panel"
+        style={{
+          padding: '16px 20px',
+          marginBottom: 18,
+          background: '#1d252b',
+          border: '1px solid #34404b',
+          borderRadius: 14,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+          <div>
+            <span className="rp-step" style={{ fontSize: 10, letterSpacing: '0.08em' }}>Regras da Automação</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+              <h2 style={{ fontSize: 16, margin: 0, color: '#edf2f5' }}>
+                {activeRuleId && savedRule.current ? savedRule.current.name : 'Nova Configuração do Copiador'}
+              </h2>
+              <span className={`rp-tag ${isRuleActive ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10 }}>
+                {isRuleActive ? 'Monitoramento Ativo' : 'Copiador Pausado'}
+              </span>
+            </div>
+            <p className="rp-sub" style={{ margin: '4px 0 0', fontSize: 12 }}>
+              {isRuleActive
+                ? 'Copiador em execução. Para alterar intervalo, janela de funcionamento, ordem ou templates, pause o copiador.'
+                : 'Copiador pausado. Configure a origem, destinos ou clique no botão de engrenagem para abrir as configurações avançadas.'}
+            </p>
+          </div>
+
+          {/* Botão com Engrenagem SVG Profissional */}
+          <button
+            type="button"
+            className="copier-settings-gear-btn"
+            onClick={() => setShowSettingsModal(true)}
+            aria-label="Abrir configurações avançadas do copiador"
+            title="Configurações da automação (intervalo, horários, ordem e templates)"
+          >
+            <Settings size={18} style={{ color: '#39bee6' }} aria-hidden="true" />
+            <span>Configurações do Copiador</span>
+          </button>
+        </div>
+
+        {/* Escolha de Regras por Cards Interativos / Botões Segmentados (Sem listas de select) */}
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+          <button
+            type="button"
+            className={`csm-seg-btn ${!activeRuleId ? 'is-active' : ''}`}
+            style={{ minWidth: 150, flex: 'none' }}
+            onClick={() => chooseRule('')}
+            disabled={!rulesReady}
+          >
+            <Plus size={14} />
+            <span>+ Nova Regra</span>
+          </button>
+
+          {rulesList.map((source) => {
+            const isSelected = activeRuleId === source.id;
+            return (
+              <button
+                key={source.id}
+                type="button"
+                className={`csm-seg-btn ${isSelected ? 'is-active' : ''}`}
+                style={{ minWidth: 160, flex: 'none', justifyContent: 'space-between' }}
+                onClick={() => chooseRule(source.id)}
+                disabled={!rulesReady}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>
+                  {source.name}
+                </span>
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: source.isActive ? '#10b981' : '#f59e0b',
+                    flexShrink: 0,
+                  }}
+                  title={source.isActive ? 'Ativa' : 'Pausada'}
+                />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Resumo das configurações aplicadas da regra */}
+        {savedRule.current && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid #28333b', paddingTop: 8, fontSize: 11, color: '#8fa2b1' }}>
+            <span>⏱️ Intervalo: <strong style={{ color: '#edf2f5' }}>{savedRule.current.customDelaySeconds || 60}s</strong></span>
+            <span>&bull;</span>
+            <span>🕒 Janela: <strong style={{ color: '#edf2f5' }}>{savedRule.current.is24Hours || (savedRule.current.startTime === '00:00' && (savedRule.current.endTime === '00:00' || savedRule.current.endTime === '23:59')) ? '24 Horas' : `${savedRule.current.startTime || '08:00'} às ${savedRule.current.endTime || '22:00'} (Brasília)`}</strong></span>
+            <span>&bull;</span>
+            <span>🔀 Ordem: <strong style={{ color: '#edf2f5' }}>{savedRule.current.dispatchOrder === 'aleatoria' ? 'Aleatória' : 'Em sequência'}</strong></span>
+            <span>&bull;</span>
+            <span>📝 Template: <strong style={{ color: '#edf2f5' }}>{savedRule.current.templateName || selectedTemplate}</strong></span>
+          </div>
+        )}
       </div>
       {!sharedWhatsApp.workspace && <p role="status" className="rp-panel" style={{ padding: 18 }}>{sharedWhatsApp.error || 'Carregando suas contas, grupos e regras salvas…'}</p>}
 
@@ -623,17 +778,52 @@ function CopierContent() {
               </label>
             </div>
 
-            <label className="rp-field">
-              Modelo de texto (Template)
-              <select
-                value={selectedTemplate}
-                onChange={(e) => { selectionEdited.current = true; setSelectedTemplate(e.target.value); }}
-              >
-                <option value="Oferta essencial">Oferta essencial (Preço + Link limpo)</option>
-                <option value="Oferta com cupom">Oferta com cupom e destaque</option>
-                <option value="Texto curto">Texto curto e direto</option>
-              </select>
-            </label>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#c1d0dc' }}>Modelo de mensagem (Template)</label>
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#39bee6',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <Settings size={13} />
+                  Personalizar no modal
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                {Object.values(BUILTIN_TEMPLATES).map((tpl) => {
+                  const isSelected = selectedTemplate === tpl.name;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      className={`csm-seg-btn ${isSelected ? 'is-active' : ''}`}
+                      style={{ padding: '10px 8px', fontSize: 12, textAlign: 'center' }}
+                      onClick={() => {
+                        selectionEdited.current = true;
+                        setSelectedTemplate(tpl.name);
+                        if (savedRule.current) {
+                          savedRule.current.templateText = tpl.templateText;
+                          savedRule.current.templateName = tpl.name;
+                        }
+                      }}
+                    >
+                      {tpl.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <details className="rp-details" style={{ marginTop: 14 }}>
               <summary>Lojas autorizadas e regras de conversão</summary>
@@ -798,6 +988,17 @@ function CopierContent() {
           </div>
         </div>
       </div>
+
+      {/* MODAL: Configurações da Automação (Intervalo, Horários, Ordem, Templates) */}
+      <CopierSettingsModal
+        isOpen={showSettingsModal}
+        isRuleActive={isActiveRule}
+        rule={savedRule.current}
+        connectionId={selectedConnectionId}
+        onClose={() => setShowSettingsModal(false)}
+        onSave={handleSaveModalSettings}
+        onPauseRule={handlePauseFromModal}
+      />
 
       {/* MODAL: Histórico de Atividade Detalhada */}
       {showActivityModal && (

@@ -1,6 +1,6 @@
 import type { WhatsAppConnection } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
-import { getActiveEvolutionConfig } from './storage';
+import { supabase, isSupabaseConfigured, isTestIsolationActive } from '@/lib/supabase';
+import { getActiveEvolutionConfig, readDatabase, writeDatabase } from './storage';
 import { safeWhatsAppPictureUrl } from './whatsapp-picture';
 
 const pendingChecks = new Map<string, Promise<WhatsAppConnection>>();
@@ -26,7 +26,25 @@ async function gatewayJson(connection: WhatsAppConnection, endpoint: string) {
 }
 
 async function persistObservation(connection: WhatsAppConnection, patch: Record<string, unknown>) {
-  if (!supabase) throw new Error('Banco indisponível para confirmar a conexão.');
+  if (isTestIsolationActive() || !isSupabaseConfigured || !supabase) {
+    const db = readDatabase();
+    const connIdx = (db.connections || []).findIndex(c => c.id === connection.id);
+    if (connIdx >= 0) {
+      db.connections[connIdx] = {
+        ...db.connections[connIdx],
+        status: (patch.status as any) || db.connections[connIdx].status,
+        lastPingAt: (patch.last_ping_at as string) || db.connections[connIdx].lastPingAt,
+        lastVerificationStatus: (patch.last_verification_status as any) || db.connections[connIdx].lastVerificationStatus,
+        ownerJid: (patch.owner_jid as string) || db.connections[connIdx].ownerJid,
+        phoneNumber: (patch.phone_number as string) || db.connections[connIdx].phoneNumber,
+        profileName: (patch.profile_name as string) || db.connections[connIdx].profileName,
+        profilePicUrl: (patch.profile_pic_url as string) || db.connections[connIdx].profilePicUrl,
+        updatedAt: new Date().toISOString(),
+      };
+      writeDatabase(db);
+    }
+    return;
+  }
   const saved = await supabase.from('whatsapp_connections').update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', connection.id).eq('user_id', connection.userId);
   if (saved.error) throw new Error('Não foi possível salvar a verificação da conexão.');
