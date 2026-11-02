@@ -22,11 +22,12 @@ export async function POST(req: NextRequest) {
       imageUrl,
       affiliateUrl,
       linkCallToAction,
+      format = 'story_9_16',
     } = body;
 
     if (!title || !priceCurrent || !imageUrl) {
       return NextResponse.json(
-        { ok: false, error: 'Título, Preço Por e Imagem são obrigatórios para gerar o Story.' },
+        { ok: false, error: 'Título, Preço Por e Imagem são obrigatórios para gerar a arte publicitária.' },
         { status: 400 }
       );
     }
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
       imageUrl,
       affiliateUrl,
       linkCallToAction,
+      format,
     });
 
     if (!result.ok) {

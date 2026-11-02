@@ -316,54 +316,58 @@ function CriarConteudoContent() {
       ctx.fillRect(0, 0, 1080, 1920);
 
       // Borda sutil de destaque
-      ctx.strokeStyle = '#363c41';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 3;
       ctx.strokeRect(36, 36, 1008, 1848);
 
-      // Marca superior: RADAR DE OFERTAS
-      ctx.fillStyle = '#39bee6';
-      ctx.font = 'bold 36px sans-serif';
+      // Marca superior oficial: RADAR DE OFERTAS
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 38px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('◉  RADAR DE OFERTAS', 540, 180);
+      ctx.fillText('RADAR DE OFERTAS', 540, 180);
 
-      ctx.fillStyle = '#aab2b7';
-      ctx.font = '500 24px sans-serif';
-      ctx.fillText('ACHADOS & OFERTAS EXCLUSIVAS', 540, 230);
+      ctx.fillStyle = '#FBBF24';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('Achados que valem a pena.', 540, 226);
 
       // Caixa da imagem central
-      ctx.fillStyle = '#292e33';
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(100, 320, 880, 880);
-      ctx.strokeStyle = '#39bee6';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 3;
       ctx.strokeRect(100, 320, 880, 880);
 
       // Ícone ou texto representativo no centro da foto
-      ctx.fillStyle = '#f2f4f5';
+      ctx.fillStyle = '#090E1A';
       ctx.font = 'bold 44px sans-serif';
       ctx.fillText(storyTitle.slice(0, 30), 540, 760);
 
       // Título do Produto
-      ctx.fillStyle = '#f2f4f5';
-      ctx.font = 'bold 54px sans-serif';
+      ctx.fillStyle = '#F8FAFC';
+      ctx.font = 'bold 50px sans-serif';
       ctx.fillText(storyTitle, 540, 1300);
 
       // Preço e Cupom
       if (showStoryPrice) {
-        ctx.fillStyle = '#56c288';
+        ctx.fillStyle = '#FBBF24';
         ctx.font = 'bold 76px sans-serif';
         ctx.fillText(`R$ ${storyPrice}`, 540, 1420);
 
         if (storyCoupon) {
-          ctx.fillStyle = '#39bee6';
-          ctx.font = 'bold 38px sans-serif';
+          ctx.fillStyle = '#F59E0B';
+          ctx.font = 'bold 36px sans-serif';
           ctx.fillText(`CUPOM: ${storyCoupon}`, 540, 1500);
         }
       }
 
-      // Rodapé CTA
-      ctx.fillStyle = '#f2f4f5';
+      // Rodapé CTA oficial
+      ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 32px sans-serif';
-      ctx.fillText('CLIQUE NO LINK DOS STORIES OU RESPONDA NO CHAT', 540, 1720);
+      ctx.fillText('👉 COMPRE DIRETO NO LINK', 540, 1680);
+
+      ctx.fillStyle = '#FBBF24';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('@radar.ofertas.br1', 540, 1740);
 
       // Download real do arquivo PNG
       canvas.toBlob((blob) => {
