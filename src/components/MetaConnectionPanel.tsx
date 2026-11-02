@@ -21,6 +21,7 @@ export default function MetaConnectionPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
+  const [pageIdInput, setPageIdInput] = useState('');
   const [igIdInput, setIgIdInput] = useState('');
   const [showTutorial, setShowTutorial] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -61,6 +62,7 @@ export default function MetaConnectionPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accessToken: tokenInput.trim(),
+          pageId: pageIdInput.trim() || undefined,
           instagramAccountId: igIdInput.trim() || undefined,
         }),
       });
@@ -294,17 +296,32 @@ export default function MetaConnectionPanel() {
             />
           </div>
 
-          <div>
-            <label className="text-[11px] font-semibold text-[#8EADC7] block mb-1">
-              Instagram Account ID (Opcional - deixe vazio para detecção automática):
-            </label>
-            <input
-              type="text"
-              value={igIdInput}
-              onChange={(e) => setIgIdInput(e.target.value)}
-              placeholder="Ex: 17841400000000000 (preencha apenas se a detecção automática não encontrar)"
-              className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-4 py-2 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold text-[#8EADC7] block mb-1">
+                ID da Página do Facebook (Opcional):
+              </label>
+              <input
+                type="text"
+                value={pageIdInput}
+                onChange={(e) => setPageIdInput(e.target.value)}
+                placeholder="Ex: 104829102938472 (se a detecção automática não listar)"
+                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-4 py-2 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-[#8EADC7] block mb-1">
+                Instagram Account ID (Opcional):
+              </label>
+              <input
+                type="text"
+                value={igIdInput}
+                onChange={(e) => setIgIdInput(e.target.value)}
+                placeholder="Ex: 17841400000000000 (se a detecção automática não listar)"
+                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-4 py-2 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
+              />
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">

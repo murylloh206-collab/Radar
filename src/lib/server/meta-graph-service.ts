@@ -100,7 +100,35 @@ export async function connectMetaAccount(userId: string, input: {
       });
     }
 
-    // 2. Inspecionar o Token via /me para identificar o ID e Nome da entidade (User ou Page)
+    // 2. Se o usuário forneceu diretamente o Page ID, consultar a Página diretamente
+    if (input.pageId) {
+      const directPageRes = await fetch(
+        `${META_GRAPH_BASE}/${input.pageId}?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
+      );
+      const directPageJson = await directPageRes.json();
+      if (directPageJson.error) {
+        return { ok: false, error: `Erro ao consultar a Página (${input.pageId}): ${directPageJson.error.message}` };
+      }
+
+      const ig = directPageJson.instagram_business_account;
+      if (!ig?.id) {
+        return {
+          ok: false,
+          error: `Página "${directPageJson.name}" localizada, mas ela não possui um Instagram Comercial vinculado no Meta Business Suite.`,
+        };
+      }
+
+      return await persistMetaCredentials(userId, {
+        accessToken: directPageJson.access_token || token,
+        facebookPageId: directPageJson.id,
+        facebookPageName: directPageJson.name,
+        instagramAccountId: ig.id,
+        instagramUsername: ig.username,
+        instagramProfilePic: ig.profile_picture_url,
+      });
+    }
+
+    // 3. Inspecionar o Token via /me para identificar o ID e Nome da entidade (User ou Page)
     const meRes = await fetch(
       `${META_GRAPH_BASE}/me?fields=id,name&access_token=${encodeURIComponent(token)}`
     );
@@ -162,6 +190,37 @@ export async function connectMetaAccount(userId: string, input: {
         instagramUsername: ig.username,
         instagramProfilePic: ig.profile_picture_url,
       });
+    }
+
+    // 4. Se /me/accounts retornou vazio ou falhou, tentar buscar páginas vinculadas a Negócios (Meta Business Portfolio)
+    try {
+      const bizRes = await fetch(
+        `${META_GRAPH_BASE}/me/businesses?fields=id,name&access_token=${encodeURIComponent(token)}`
+      );
+      const bizJson = await bizRes.json();
+      if (bizJson.data && Array.isArray(bizJson.data) && bizJson.data.length > 0) {
+        for (const biz of bizJson.data) {
+          const ownedRes = await fetch(
+            `${META_GRAPH_BASE}/${biz.id}/owned_pages?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
+          );
+          const ownedJson = await ownedRes.json();
+          const bizPages = Array.isArray(ownedJson.data) ? ownedJson.data : [];
+          const found = bizPages.find((p: any) => p.instagram_business_account?.id);
+          if (found) {
+            const igAccount = found.instagram_business_account;
+            return await persistMetaCredentials(userId, {
+              accessToken: found.access_token || token,
+              facebookPageId: found.id,
+              facebookPageName: found.name,
+              instagramAccountId: igAccount.id,
+              instagramUsername: igAccount.username,
+              instagramProfilePic: igAccount.profile_picture_url,
+            });
+          }
+        }
+      }
+    } catch {
+      // Continua para o diagnóstico detalhado
     }
 
     // Se /me/accounts retornou vazio (data: []), investigar as permissões do usuário
