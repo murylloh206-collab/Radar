@@ -13,6 +13,8 @@ import {
 } from '@/lib/types';
 import CopierGroupPicker, { CopierGroupPhoto } from '@/components/CopierGroupPicker';
 import CopierSettingsModal, { BUILTIN_TEMPLATES } from '@/components/CopierSettingsModal';
+import CopierHistoryModal from '@/components/CopierHistoryModal';
+import { InstagramIcon } from '@/components/SocialIcons';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
   Activity,
@@ -147,6 +149,7 @@ function CopierContent() {
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Estados dos 4 Passos do Fluxo
   const [activeRuleId, setActiveRuleId] = useState<string | null>(null);
@@ -417,6 +420,22 @@ function CopierContent() {
               </select>
             </div>
           )}
+
+          <button
+            type="button"
+            className="rp-btn"
+            style={{
+              background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 700,
+            }}
+            onClick={() => setShowHistoryModal(true)}
+            title="Ver histórico de links copiados e postar Stories"
+          >
+            <InstagramIcon size={14} aria-hidden="true" />
+            Histórico & Stories
+          </button>
 
           <button
             type="button"
@@ -1137,6 +1156,12 @@ function CopierContent() {
           </div>
         </div>
       )}
+
+      {/* Modal de Histórico de Ofertas Copiadas com Story 9:16 */}
+      <CopierHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+      />
     </section>
   );
 }

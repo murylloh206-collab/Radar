@@ -6,6 +6,7 @@ import { StoreName } from '@/lib/types';
 import WhatsAppGroupsPanel from '@/components/WhatsAppGroupsPanel';
 import { SafeVaultStatus } from '@/lib/server/credentials-vault';
 import { BrandLogo } from '@/components/BrandLogo';
+import MetaConnectionPanel from '@/components/MetaConnectionPanel';
 
 interface StoreConfigForm {
   appId: string;
@@ -23,10 +24,11 @@ function ConexoesContent() {
 
   const parseTab = (val: string | null) => {
     if (val === 'lojas') return 'lojas';
+    if (val === 'redes') return 'redes';
     return 'whatsapp';
   };
 
-  const [activeTab, setActiveTab] = useState<'whatsapp' | 'lojas'>(() =>
+  const [activeTab, setActiveTab] = useState<'whatsapp' | 'lojas' | 'redes'>(() =>
     parseTab(initialTabParam)
   );
 
@@ -266,7 +268,7 @@ function ConexoesContent() {
     }
   };
 
-  const handleSelectTab = (tab: 'whatsapp' | 'lojas') => {
+  const handleSelectTab = (tab: 'whatsapp' | 'lojas' | 'redes') => {
     setActiveTab(tab);
     router.replace(`/conexoes?aba=${tab}`, { scroll: false });
   };
@@ -363,6 +365,14 @@ function ConexoesContent() {
             onClick={() => handleSelectTab('lojas')}
           >
             Lojas e afiliados
+          </button>
+          <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'redes'}
+            onClick={() => handleSelectTab('redes')}
+          >
+            Redes sociais (Meta)
           </button>
         </div>
 
@@ -618,6 +628,13 @@ function ConexoesContent() {
             <p className="rp-sub" style={{ marginTop: 22, fontSize: 11, color: '#94a3ad' }}>
               Cada loja tem seu próprio processo de conexão. A validação do link acontece antes da publicação.
             </p>
+          </div>
+        )}
+
+        {/* Aba 3: Redes sociais (Meta - Instagram Stories e Facebook) */}
+        {activeTab === 'redes' && (
+          <div data-panel="redes" role="tabpanel" className="mt-4">
+            <MetaConnectionPanel />
           </div>
         )}
       </div>
