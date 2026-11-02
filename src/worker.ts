@@ -8,7 +8,10 @@ async function start() {
   loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production');
   const { copierHeartbeat, runDurableCopierCycle } = await import('./lib/server/copier-runtime');
   stopHeartbeat = serialPoll(async () => {
-    try { await copierHeartbeat(); }
+    try {
+      await copierHeartbeat();
+      if (process.send) process.send({ type: 'heartbeat' });
+    }
     catch { console.error('[Copiador] Não foi possível registrar heartbeat. Confira o banco e a migração 06.'); }
     return stopping;
   }, 15000);

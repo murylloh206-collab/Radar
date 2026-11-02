@@ -24,7 +24,7 @@ import {
 import { isTestIsolationActive } from '../supabase';
 import { fetchProductRealData } from './product-fetcher';
 import { processRadarArt, selectBestProductPhoto } from './radar-art-engine';
-import { processAutomaticCopierImage } from './scenario-composer';
+import { optimizeProductImageForWhatsApp } from './product-image-optimizer';
 import { runWorkerCycle } from './worker-engine';
 
 export interface EvolutionWebhookPayload {
@@ -790,16 +790,11 @@ export async function processIncomingMessage(
     };
   }
 
-  // 7. Montar Imagem do Copiador (Cenário Automático por Categoria ou Foto Oficial)
+  // 7. Imagem do Copiador (Foto Oficial da Loja em alta resolução e formato 1:1 sem cortes)
   let finalMediaUrl: string | undefined = undefined;
   let finalMediaType: 'image' | 'video' | 'none' = 'none';
   let requiresManualReviewDueToImage = false;
   let imageReviewReason: string | undefined = undefined;
-
-  const effectiveImageMode = authorizedSource.imageMode || 'cenario_automatico';
-  const effectiveFallback = authorizedSource.imageFailureFallback || 'usar_foto_oficial';
-  const watermarkHandle = authorizedSource.brandWatermarkHandle || db.settings?.watermarkText || '@radar.ofertas.br1';
-  const watermarkEnabled = authorizedSource.brandWatermarkEnabled !== false;
 
   const rawCandidatePhoto =
     productData.imageUrl && productData.imageUrl.startsWith('http')
@@ -809,44 +804,16 @@ export async function processIncomingMessage(
   const photoSelection = selectBestProductPhoto(rawCandidatePhoto, conversionResult.store);
   const bestOfficialPhoto = photoSelection.selectedUrl || rawCandidatePhoto || '';
 
-  if (effectiveImageMode === 'none') {
+  if (authorizedSource.imageMode === 'none') {
     finalMediaUrl = undefined;
     finalMediaType = 'none';
-  } else if (effectiveImageMode === 'foto_oficial') {
-    finalMediaUrl = bestOfficialPhoto || undefined;
-    finalMediaType = finalMediaUrl ? 'image' : 'none';
+  } else if (bestOfficialPhoto) {
+    // Formata a fotografia oficial no tamanho quadrado perfeito (1:1) com fundo limpo para visualização completa no WhatsApp sem abrir
+    finalMediaUrl = await optimizeProductImageForWhatsApp(bestOfficialPhoto, authorizedSource.userId);
+    finalMediaType = 'image';
   } else {
-    // Modo cenario_automatico (padrão)
-    if (!bestOfficialPhoto) {
-      if (effectiveFallback === 'revisao_manual') {
-        requiresManualReviewDueToImage = true;
-        imageReviewReason = 'Nenhuma foto oficial encontrada na loja para montagem de cenário.';
-      }
-    } else {
-      const autoImgResult = await processAutomaticCopierImage({
-        userId: authorizedSource.userId,
-        sourceId: authorizedSource.id,
-        productTitle: productData.title,
-        rawText,
-        storeName: conversionResult.store,
-        officialPhotoUrl: bestOfficialPhoto,
-        watermarkHandle,
-        watermarkEnabled,
-        imageMode: 'cenario_automatico',
-        failureFallback: effectiveFallback,
-      });
-
-      if (autoImgResult.requiresManualReview) {
-        requiresManualReviewDueToImage = true;
-        imageReviewReason = autoImgResult.reason;
-      } else if (autoImgResult.composedUrl) {
-        finalMediaUrl = autoImgResult.composedUrl;
-        finalMediaType = 'image';
-      } else if (bestOfficialPhoto) {
-        finalMediaUrl = bestOfficialPhoto;
-        finalMediaType = 'image';
-      }
-    }
+    finalMediaUrl = undefined;
+    finalMediaType = 'none';
   }
 
   // 8. Encurtar link de afiliado longo (ex: Mercado Livre) e montar mensagem final para envio

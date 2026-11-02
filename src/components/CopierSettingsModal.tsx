@@ -168,8 +168,8 @@ export default function CopierSettingsModal({
   );
 
   // Estados de Imagem do Copiador
-  const [imageMode, setImageMode] = useState<'cenario_automatico' | 'foto_oficial'>(
-    (rule?.imageMode === 'foto_oficial' ? 'foto_oficial' : 'cenario_automatico')
+  const [imageMode, setImageMode] = useState<'foto_oficial' | 'none'>(
+    rule?.imageMode === 'none' ? 'none' : 'foto_oficial'
   );
   const [imageFailureFallback, setImageFailureFallback] = useState<'usar_foto_oficial' | 'revisao_manual'>(
     rule?.imageFailureFallback === 'revisao_manual' ? 'revisao_manual' : 'usar_foto_oficial'
@@ -209,7 +209,7 @@ export default function CopierSettingsModal({
       );
       setCustomTemplateName(rule?.templateName || 'Meu Template Personalizado');
       setSavedCustomTemplates(rule?.customTemplates || []);
-      setImageMode(rule?.imageMode === 'foto_oficial' ? 'foto_oficial' : 'cenario_automatico');
+      setImageMode(rule?.imageMode === 'none' ? 'none' : 'foto_oficial');
       setImageFailureFallback(rule?.imageFailureFallback === 'revisao_manual' ? 'revisao_manual' : 'usar_foto_oficial');
       setWatermarkHandle(rule?.brandWatermarkHandle || '@radar.ofertas.br1');
       setWatermarkEnabled(rule?.brandWatermarkEnabled !== false);
@@ -699,162 +699,62 @@ export default function CopierSettingsModal({
             </div>
           </section>
 
-          {/* SEÇÃO 4: IMAGENS AUTOMÁTICAS POR CATEGORIA */}
+          {/* SEÇÃO 4: IMAGEM DO PRODUTO */}
           <section className="csm-section">
             <div className="csm-section-head">
               <div>
                 <span className="csm-section-label">Configuração 04</span>
-                <h3 className="csm-section-title">Imagens do copiador</h3>
+                <h3 className="csm-section-title">Imagem da publicação</h3>
                 <p className="csm-section-desc">
-                  Escolha como a imagem da oferta será enviada aos grupos: montagem profissional no cenário real da categoria ou fotografia oficial limpa da loja.
+                  Configuração de formato e qualidade das fotos enviadas para os grupos de WhatsApp.
                 </p>
               </div>
             </div>
 
-            {/* Grid de Cards: Cenário Automático vs Foto Oficial */}
+            {/* Grid de Cards: Foto Oficial Otimizada vs Sem Imagem */}
             <div className="csm-cards-grid" role="radiogroup" aria-label="Modo de imagem do produto">
-              {/* Card 1: Cenário Automático */}
+              {/* Card 1: Foto Oficial Otimizada */}
               <div
-                className={`csm-card ${imageMode === 'cenario_automatico' ? 'csm-card-active' : ''} ${isRuleActive ? 'csm-card-disabled' : ''}`}
-                onClick={() => !isRuleActive && setImageMode('cenario_automatico')}
-                role="radio"
-                aria-checked={imageMode === 'cenario_automatico'}
-                tabIndex={isRuleActive ? -1 : 0}
-              >
-                <div className="csm-card-top">
-                  <div className="csm-card-icon" aria-hidden="true">
-                    <Sparkles size={18} />
-                  </div>
-                  <span className="csm-card-badge" style={{ background: 'rgba(57, 190, 230, 0.15)', color: '#39bee6' }}>
-                    Visual Aprovado
-                  </span>
-                </div>
-                <h4 className="csm-card-title">Cenário automático por categoria</h4>
-                <p className="csm-card-desc">
-                  Recorta o produto real e monta sobre o cenário compatível (academia, escritório, bancada, etc.), com sombra de contato e assinatura da sua conta.
-                </p>
-              </div>
-
-              {/* Card 2: Foto Oficial */}
-              <div
-                className={`csm-card ${imageMode === 'foto_oficial' ? 'csm-card-active' : ''} ${isRuleActive ? 'csm-card-disabled' : ''}`}
+                className={`csm-card ${imageMode !== 'none' ? 'csm-card-active' : ''} ${isRuleActive ? 'csm-card-disabled' : ''}`}
                 onClick={() => !isRuleActive && setImageMode('foto_oficial')}
                 role="radio"
-                aria-checked={imageMode === 'foto_oficial'}
+                aria-checked={imageMode !== 'none'}
                 tabIndex={isRuleActive ? -1 : 0}
               >
                 <div className="csm-card-top">
                   <div className="csm-card-icon" aria-hidden="true">
                     <Camera size={18} />
                   </div>
-                  <span className="csm-card-badge">Original</span>
+                  <span className="csm-card-badge" style={{ background: 'rgba(57, 190, 230, 0.15)', color: '#39bee6' }}>
+                    Recomendado
+                  </span>
                 </div>
-                <h4 className="csm-card-title">Foto oficial da loja</h4>
+                <h4 className="csm-card-title">Foto oficial otimizada (Padrão WhatsApp 1:1)</h4>
                 <p className="csm-card-desc">
-                  Envia a fotografia oficial em alta resolução da loja diretamente, sem composição de cenário nem recorte.
+                  Foto oficial da loja centralizada em formato quadrado (1:1) com alta qualidade e fundo limpo. O produto fica 100% visível na conversa sem cortes e sem precisar abrir a foto.
+                </p>
+              </div>
+
+              {/* Card 2: Sem Imagem */}
+              <div
+                className={`csm-card ${imageMode === 'none' ? 'csm-card-active' : ''} ${isRuleActive ? 'csm-card-disabled' : ''}`}
+                onClick={() => !isRuleActive && setImageMode('none')}
+                role="radio"
+                aria-checked={imageMode === 'none'}
+                tabIndex={isRuleActive ? -1 : 0}
+              >
+                <div className="csm-card-top">
+                  <div className="csm-card-icon" aria-hidden="true">
+                    <FileText size={18} />
+                  </div>
+                  <span className="csm-card-badge">Texto</span>
+                </div>
+                <h4 className="csm-card-title">Apenas texto (sem foto)</h4>
+                <p className="csm-card-desc">
+                  Publica apenas o texto com as informações da oferta e o link de afiliado, sem enviar anexo de imagem.
                 </p>
               </div>
             </div>
-
-            {/* Bloco de Prévia da Composição e Assinatura (se modo Cenário) */}
-            {imageMode === 'cenario_automatico' && (
-              <div style={{ marginTop: 16 }}>
-                {/* Card de Prévia Visual */}
-                <div className="csm-image-preview-box">
-                  <img
-                    src="/scenarios/suplementos-fitness.png"
-                    alt="Prévia de Cenário Automático"
-                    className="csm-image-preview-thumb"
-                  />
-                  <div className="csm-image-preview-info">
-                    <span className="csm-image-preview-badge">
-                      <Sparkles size={12} />
-                      Composição Fotorrealista Ativa
-                    </span>
-                    <h5 className="csm-image-preview-title">
-                      Direção visual aprovada por categoria
-                    </h5>
-                    <p className="csm-image-preview-desc">
-                      7 cenários dedicados (fitness, eletrônicos, ferramentas, beleza, eletrodomésticos, moda). Recorte de pixels reais e sombra de contato física sem recriação por IA.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Configuração da Assinatura da Conta */}
-                <div style={{ marginTop: 14 }}>
-                  <label className="csm-custom-input-label" htmlFor="watermark-handle-input">
-                    Assinatura da conta (identificador na imagem):
-                  </label>
-                  <div className="csm-watermark-row">
-                    <input
-                      id="watermark-handle-input"
-                      type="text"
-                      className="csm-watermark-input"
-                      value={watermarkHandle}
-                      onChange={(e) => !isRuleActive && setWatermarkHandle(e.target.value)}
-                      placeholder="@radar.ofertas.br1"
-                      disabled={isRuleActive || !watermarkEnabled}
-                      maxLength={40}
-                    />
-                    <button
-                      type="button"
-                      className={`csm-segmented-btn ${watermarkEnabled ? 'csm-seg-active' : ''}`}
-                      onClick={() => !isRuleActive && setWatermarkEnabled(!watermarkEnabled)}
-                      disabled={isRuleActive}
-                      style={{ padding: '8px 12px', fontSize: 12, height: 38 }}
-                    >
-                      {watermarkEnabled ? 'Assinatura ativa' : 'Sem assinatura'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sub-configuração: Se a montagem falhar */}
-                <div style={{ marginTop: 16 }}>
-                  <label className="csm-custom-input-label">
-                    Se a montagem de cenário não for possível:
-                  </label>
-                  <div className="csm-cards-grid" role="radiogroup" aria-label="Contingência de imagem">
-                    <div
-                      className={`csm-card ${imageFailureFallback === 'usar_foto_oficial' ? 'csm-card-active' : ''} ${isRuleActive ? 'csm-card-disabled' : ''}`}
-                      onClick={() => !isRuleActive && setImageFailureFallback('usar_foto_oficial')}
-                      role="radio"
-                      aria-checked={imageFailureFallback === 'usar_foto_oficial'}
-                      style={{ padding: 14 }}
-                    >
-                      <div className="csm-card-top" style={{ marginBottom: 6 }}>
-                        <div className="csm-card-icon" style={{ width: 30, height: 30 }}>
-                          <CheckCircle2 size={15} />
-                        </div>
-                        <span className="csm-card-badge">Recomendado</span>
-                      </div>
-                      <h4 className="csm-card-title" style={{ fontSize: 13 }}>Usar foto oficial</h4>
-                      <p className="csm-card-desc" style={{ fontSize: 11 }}>
-                        Envia a foto oficial em alta resolução da loja como contingência para não atrasar a publicação.
-                      </p>
-                    </div>
-
-                    <div
-                      className={`csm-card ${imageFailureFallback === 'revisao_manual' ? 'csm-card-active' : ''} ${isRuleActive ? 'csm-card-disabled' : ''}`}
-                      onClick={() => !isRuleActive && setImageFailureFallback('revisao_manual')}
-                      role="radio"
-                      aria-checked={imageFailureFallback === 'revisao_manual'}
-                      style={{ padding: 14 }}
-                    >
-                      <div className="csm-card-top" style={{ marginBottom: 6 }}>
-                        <div className="csm-card-icon" style={{ width: 30, height: 30 }}>
-                          <AlertTriangle size={15} />
-                        </div>
-                        <span className="csm-card-badge">Controle</span>
-                      </div>
-                      <h4 className="csm-card-title" style={{ fontSize: 13 }}>Encaminhar para revisão</h4>
-                      <p className="csm-card-desc" style={{ fontSize: 11 }}>
-                        Retém a oferta na fila para você conferir e aprovar manualmente antes do disparo.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </section>
 
           {/* SEÇÃO 5: SELEÇÃO E CRIAÇÃO DE TEMPLATES POR CARDS */}
