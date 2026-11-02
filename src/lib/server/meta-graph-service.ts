@@ -300,7 +300,7 @@ async function persistMetaCredentials(
     affiliate_tag: info.instagramUsername,
     encrypted_user_token: encryptedToken,
     encrypted_session_data: encryptedSession,
-    authType: 'credentials',
+    auth_type: 'credentials',
     connection_status: 'conectado',
     tag_identified: info.instagramAccountId,
     is_active: true,
