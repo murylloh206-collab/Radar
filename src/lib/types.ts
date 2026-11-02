@@ -191,6 +191,31 @@ export interface WhatsAppGroup {
   lastSyncedAt: string;
 }
 
+export type ScenarioCategory =
+  | 'suplementos-fitness'
+  | 'eletroeletronicos'
+  | 'ferramentas'
+  | 'saude-beleza'
+  | 'eletrodomesticos'
+  | 'moda-feminina'
+  | 'moda-masculina';
+
+export interface ScenarioCompositionRecord {
+  id: string;
+  userId: string;
+  sourceId?: string;
+  productId?: string;
+  category: ScenarioCategory;
+  originalPhotoUrl: string;
+  composedPhotoUrl: string;
+  scenarioFile: string;
+  styleVersion: string;
+  processingMs: number;
+  status: 'sucesso' | 'falha_fallback_oficial' | 'falha_revisao';
+  errorMessage?: string;
+  createdAt: string;
+}
+
 export interface CopySource {
   connectionId?: string;
   id: string;
@@ -204,7 +229,10 @@ export interface CopySource {
   stripExternalTags: boolean;
   customDelaySeconds: number;
   templateText?: string;
-  imageMode?: 'radar_art' | 'official_photo' | 'none';
+  imageMode?: 'cenario_automatico' | 'foto_oficial' | 'radar_art' | 'none';
+  imageFailureFallback?: 'usar_foto_oficial' | 'revisao_manual';
+  brandWatermarkHandle?: string;
+  brandWatermarkEnabled?: boolean;
   startTime?: string;
   endTime?: string;
   dispatchOrder?: 'sequencial' | 'aleatoria';

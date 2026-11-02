@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
       is24Hours = false,
       dispatchOrder = 'sequencial',
       customTemplates,
-      imageMode = 'radar_art',
+      imageMode = 'cenario_automatico',
+      imageFailureFallback = 'usar_foto_oficial',
+      brandWatermarkHandle = '@radar.ofertas.br1',
+      brandWatermarkEnabled = true,
       startTime = '08:00',
       endTime = '22:00',
       convertAffiliateLinks = true,
@@ -73,6 +76,10 @@ export async function POST(req: NextRequest) {
         (body.dispatchOrder !== undefined && body.dispatchOrder !== (savedSource.dispatchOrder || 'sequencial')) ||
         (body.templateText !== undefined && body.templateText !== (savedSource.templateText || '')) ||
         (body.templateName !== undefined && body.templateName !== (savedSource.templateName || '')) ||
+        (body.imageMode !== undefined && body.imageMode !== (savedSource.imageMode || 'cenario_automatico')) ||
+        (body.imageFailureFallback !== undefined && body.imageFailureFallback !== (savedSource.imageFailureFallback || 'usar_foto_oficial')) ||
+        (body.brandWatermarkHandle !== undefined && body.brandWatermarkHandle !== (savedSource.brandWatermarkHandle || '@radar.ofertas.br1')) ||
+        (body.brandWatermarkEnabled !== undefined && Boolean(body.brandWatermarkEnabled) !== (savedSource.brandWatermarkEnabled !== false)) ||
         (body.operationMode !== undefined && body.operationMode !== savedSource.operationMode);
 
       if (isConfigChange) {
@@ -160,7 +167,10 @@ export async function POST(req: NextRequest) {
       is24Hours: effectiveIs24Hours,
       dispatchOrder: dispatchOrder === 'aleatoria' ? 'aleatoria' : 'sequencial',
       customTemplates: Array.isArray(customTemplates) ? customTemplates : undefined,
-      imageMode: imageMode || 'radar_art',
+      imageMode: imageMode || savedSource?.imageMode || 'cenario_automatico',
+      imageFailureFallback: imageFailureFallback || savedSource?.imageFailureFallback || 'usar_foto_oficial',
+      brandWatermarkHandle: brandWatermarkHandle !== undefined ? brandWatermarkHandle : (savedSource?.brandWatermarkHandle || '@radar.ofertas.br1'),
+      brandWatermarkEnabled: brandWatermarkEnabled !== undefined ? Boolean(brandWatermarkEnabled) : (savedSource?.brandWatermarkEnabled !== false),
       startTime: effectiveStartTime,
       endTime: effectiveEndTime,
       convertAffiliateLinks: Boolean(convertAffiliateLinks),

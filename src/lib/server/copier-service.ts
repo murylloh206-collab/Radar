@@ -23,7 +23,8 @@ import {
 } from './storage';
 import { isTestIsolationActive } from '../supabase';
 import { fetchProductRealData } from './product-fetcher';
-import { processRadarArt } from './radar-art-engine';
+import { processRadarArt, selectBestProductPhoto } from './radar-art-engine';
+import { processAutomaticCopierImage } from './scenario-composer';
 import { runWorkerCycle } from './worker-engine';
 
 export interface EvolutionWebhookPayload {
@@ -789,26 +790,64 @@ export async function processIncomingMessage(
     };
   }
 
-  // 7. Montar Arte Radar automática (se houver foto oficial disponível; caso contrário envia como mensagem de texto)
-  const artResult = await processRadarArt({
-    productTitle: productData.title,
-    storeName: conversionResult.store,
-    imageUrl: productData.imageUrl,
-    currentPrice: productData.currentPrice,
-    originalPrice: productData.originalPrice,
-    discountPct: productData.discountPct,
-    isPriceVerified: productData.currentPrice > 0,
-    isDiscountVerified: Boolean(productData.discountPct && productData.discountPct > 0),
-    fallbackRule: productData.imageUrl ? 'revisao_manual' : 'text_only',
-  });
+  // 7. Montar Imagem do Copiador (Cenário Automático por Categoria ou Foto Oficial)
+  let finalMediaUrl: string | undefined = undefined;
+  let finalMediaType: 'image' | 'video' | 'none' = 'none';
+  let requiresManualReviewDueToImage = false;
+  let imageReviewReason: string | undefined = undefined;
 
-  const finalPhotoUrl =
-    (artResult.audit?.selectedPhotoUrl && artResult.audit.selectedPhotoUrl.startsWith('http')
-      ? artResult.audit.selectedPhotoUrl
-      : undefined) ||
-    (productData.imageUrl && productData.imageUrl.startsWith('http')
+  const effectiveImageMode = authorizedSource.imageMode || 'cenario_automatico';
+  const effectiveFallback = authorizedSource.imageFailureFallback || 'usar_foto_oficial';
+  const watermarkHandle = authorizedSource.brandWatermarkHandle || db.settings?.watermarkText || '@radar.ofertas.br1';
+  const watermarkEnabled = authorizedSource.brandWatermarkEnabled !== false;
+
+  const rawCandidatePhoto =
+    productData.imageUrl && productData.imageUrl.startsWith('http')
       ? productData.imageUrl
-      : undefined);
+      : undefined;
+
+  const photoSelection = selectBestProductPhoto(rawCandidatePhoto, conversionResult.store);
+  const bestOfficialPhoto = photoSelection.selectedUrl || rawCandidatePhoto || '';
+
+  if (effectiveImageMode === 'none') {
+    finalMediaUrl = undefined;
+    finalMediaType = 'none';
+  } else if (effectiveImageMode === 'foto_oficial') {
+    finalMediaUrl = bestOfficialPhoto || undefined;
+    finalMediaType = finalMediaUrl ? 'image' : 'none';
+  } else {
+    // Modo cenario_automatico (padrão)
+    if (!bestOfficialPhoto) {
+      if (effectiveFallback === 'revisao_manual') {
+        requiresManualReviewDueToImage = true;
+        imageReviewReason = 'Nenhuma foto oficial encontrada na loja para montagem de cenário.';
+      }
+    } else {
+      const autoImgResult = await processAutomaticCopierImage({
+        userId: authorizedSource.userId,
+        sourceId: authorizedSource.id,
+        productTitle: productData.title,
+        rawText,
+        storeName: conversionResult.store,
+        officialPhotoUrl: bestOfficialPhoto,
+        watermarkHandle,
+        watermarkEnabled,
+        imageMode: 'cenario_automatico',
+        failureFallback: effectiveFallback,
+      });
+
+      if (autoImgResult.requiresManualReview) {
+        requiresManualReviewDueToImage = true;
+        imageReviewReason = autoImgResult.reason;
+      } else if (autoImgResult.composedUrl) {
+        finalMediaUrl = autoImgResult.composedUrl;
+        finalMediaType = 'image';
+      } else if (bestOfficialPhoto) {
+        finalMediaUrl = bestOfficialPhoto;
+        finalMediaType = 'image';
+      }
+    }
+  }
 
   // 8. Encurtar link de afiliado longo (ex: Mercado Livre) e montar mensagem final para envio
   const displayAffiliateUrl = await shortenUrlForWhatsApp(conversionResult.affiliateUrl);
@@ -882,12 +921,12 @@ export async function processIncomingMessage(
       targetJid: dest.groupJid,
       targetName: dest.name,
       messageText: formattedMessage,
-      mediaType: finalPhotoUrl ? 'image' : 'none',
-      mediaUrl: finalPhotoUrl, // Usa a foto oficial de alta resolução da loja (HTTP/HTTPS) para envio no WhatsApp
+      mediaType: finalMediaType,
+      mediaUrl: finalMediaUrl, // URL da composição ou foto oficial configurada
       affiliateUrl: conversionResult.affiliateUrl,
       originalUrl: primaryUrl,
-      status: isAutomaticAllowed ? 'agendado' : 'aguardando_aprovacao',
-      errorDetails: isAutomaticAllowed ? undefined : unverifiedReason,
+      status: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? 'agendado' : 'aguardando_aprovacao',
+      errorDetails: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? undefined : (imageReviewReason || unverifiedReason),
       scheduledFor: scheduledTime,
       attempts: 0,
       maxAttempts: 3,

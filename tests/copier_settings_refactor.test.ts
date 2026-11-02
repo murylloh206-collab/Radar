@@ -175,7 +175,7 @@ test('1. Salva nova regra com intervalo, janela 24h, ordem sequencial e template
     isActive: false, // salva pausado
   });
 
-  const res = await sourcesPOST(req);
+  const res = (await sourcesPOST(req))!;
   const data = await res.json();
 
   assert.strictEqual(res.status, 200);
@@ -189,7 +189,7 @@ test('1. Salva nova regra com intervalo, janela 24h, ordem sequencial e template
 
   // Confirma persistência lendo via GET
   const getReq = makeSourcesRequest('GET', USER_A_ID, undefined, { connectionId: 'conn_copier_a' });
-  const getRes = await sourcesGET(getReq);
+  const getRes = (await sourcesGET(getReq))!;
   const getData = await getRes.json();
 
   assert.strictEqual(getData.ok, true);
@@ -216,7 +216,7 @@ test('2. Bloqueio no servidor: Impede editar configurações quando o Copiador e
     templateText: '*{titulo}*\n{link}',
     isActive: true, // REGRA ATIVA
   });
-  const createRes = await sourcesPOST(createReq);
+  const createRes = (await sourcesPOST(createReq))!;
   const createData = await createRes.json();
   assert.strictEqual(createRes.status, 200);
   assert.strictEqual(createData.ok, true);
@@ -233,7 +233,7 @@ test('2. Bloqueio no servidor: Impede editar configurações quando o Copiador e
     saveOnly: true,
   });
 
-  const blockedRes = await sourcesPOST(editWhileActiveReq);
+  const blockedRes = (await sourcesPOST(editWhileActiveReq))!;
   const blockedData = await blockedRes.json();
 
   assert.strictEqual(blockedRes.status, 400);
@@ -249,7 +249,7 @@ test('2. Bloqueio no servidor: Impede editar configurações quando o Copiador e
     destinationJids: [GROUP_DEST_JID],
     isActive: false, // PAUSANDO
   });
-  const pauseRes = await sourcesPOST(pauseReq);
+  const pauseRes = (await sourcesPOST(pauseReq))!;
   const pauseData = await pauseRes.json();
   assert.strictEqual(pauseRes.status, 200);
   assert.strictEqual(pauseData.source.isActive, false);
@@ -265,7 +265,7 @@ test('2. Bloqueio no servidor: Impede editar configurações quando o Copiador e
     isActive: false,
     saveOnly: true,
   });
-  const editRes = await sourcesPOST(editWhilePausedReq);
+  const editRes = (await sourcesPOST(editWhilePausedReq))!;
   const editData = await editRes.json();
   assert.strictEqual(editRes.status, 200);
   assert.strictEqual(editData.source.customDelaySeconds, 300);
@@ -279,7 +279,7 @@ test('2. Bloqueio no servidor: Impede editar configurações quando o Copiador e
     destinationJids: [GROUP_DEST_JID],
     isActive: true, // RETOMANDO
   });
-  const resumeRes = await sourcesPOST(resumeReq);
+  const resumeRes = (await sourcesPOST(resumeReq))!;
   const resumeData = await resumeRes.json();
   assert.strictEqual(resumeRes.status, 200);
   assert.strictEqual(resumeData.source.isActive, true);
@@ -322,7 +322,7 @@ test('4. Validação de Template: Rejeita template que omite a variável {link}'
     isActive: false,
   });
 
-  const res = await sourcesPOST(req);
+  const res = (await sourcesPOST(req))!;
   const data = await res.json();
 
   assert.strictEqual(res.status, 400);
@@ -375,7 +375,7 @@ test('6. Ordem Aleatória: não repete envios nem cruza com outras regras ou des
     isActive: false,
   });
 
-  const res = await sourcesPOST(req);
+  const res = (await sourcesPOST(req))!;
   const data = await res.json();
 
   assert.strictEqual(res.status, 200);
@@ -395,7 +395,7 @@ test('7. Isolamento SaaS: Usuário B não pode editar nem pausar regras do Usuá
     templateText: '*{titulo}*\n{link}',
     isActive: false,
   });
-  const createRes = await sourcesPOST(createReq);
+  const createRes = (await sourcesPOST(createReq))!;
   const createData = await createRes.json();
   const ruleId = createData.source.id;
 
@@ -407,7 +407,7 @@ test('7. Isolamento SaaS: Usuário B não pode editar nem pausar regras do Usuá
     customDelaySeconds: 999,
   });
 
-  const res = await sourcesPOST(unauthorizedReq);
+  const res = (await sourcesPOST(unauthorizedReq))!;
   assert.strictEqual(res.status === 403 || res.status === 404, true);
 });
 
