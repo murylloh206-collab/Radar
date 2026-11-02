@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       startTime = '08:00',
       endTime = '22:00',
       convertAffiliateLinks = true,
-      destinationJids = [],
+      destinationJids,
     } = body;
 
     if (!groupJid) {
@@ -64,6 +64,46 @@ export async function POST(req: NextRequest) {
     const connection = saved.connection;
     const savedSource = saved.sources.find(source => id ? source.id === id : source.groupJid === groupJid);
     if (id && !savedSource) return NextResponse.json({ ok: false, error: 'Regra não autorizada nesta conexão.' }, { status: 403 });
+
+    // CORREÇÃO P1: Transição de pausa sem payload completo
+    // Quando a ação é apenas pausar (isActive === false e saveOnly !== true),
+    // preserva 100% das configurações anteriores e não toca nos destinos existentes!
+    const isPausingOnly = body.isActive === false && !!savedSource && body.saveOnly !== true;
+    if (isPausingOnly) {
+      const now = new Date().toISOString();
+      const pausedSource: CopySource = {
+        ...savedSource,
+        isActive: false,
+        updatedAt: now,
+      };
+
+      if (isSupabaseConfigured && supabase && !isTestIsolationActive()) {
+        const { error: sbSourceErr } = await supabase.from('copy_sources').update({
+          is_active: false,
+          updated_at: now,
+          configuration: { ...savedSource, isActive: false, updatedAt: now },
+        }).eq('id', savedSource.id);
+
+        if (sbSourceErr) {
+          return NextResponse.json(
+            { ok: false, error: `Falha ao pausar regra no Supabase: ${sbSourceErr.message}`, code: 'SUPABASE_SOURCE_ERROR' },
+            { status: 500 }
+          );
+        }
+      }
+
+      const existingIdx = db.sources.findIndex(s => s.id === savedSource.id || (s.groupJid === savedSource.groupJid && s.userId === session.userId));
+      if (existingIdx >= 0) {
+        db.sources[existingIdx] = pausedSource;
+      }
+      writeDatabase(db);
+
+      return NextResponse.json({
+        ok: true,
+        message: 'Regra de origem pausada com sucesso.',
+        source: pausedSource,
+      });
+    }
 
     // RESTRIÇÃO OBRIGATÓRIA: O Copiador só pode ser editado quando pausado.
     // Enquanto estiver ativo, permite apenas requisições que estejam pausando a regra (isActive === false).
@@ -142,38 +182,45 @@ export async function POST(req: NextRequest) {
       ruleIsActive = Boolean(db.sources[existingIndex].isActive);
     }
 
-    // Se estiver ativando, validar se há destinos válidos informados
-    if (ruleIsActive && Array.isArray(destinationJids) && destinationJids.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: 'Para ativar o copiador, selecione pelo menos um grupo de destino com permissão de envio.' },
-        { status: 400 }
-      );
+    // CORREÇÃO P1: Validação de destinos e preservação em edição parcial
+    const hasExplicitDestinations = destinationJids !== undefined && Array.isArray(destinationJids);
+    const existingDestinations = savedSource ? saved.destinations.filter(d => d.sourceId === savedSource.id) : [];
+
+    if (ruleIsActive) {
+      const activeDestCount = hasExplicitDestinations ? destinationJids.length : existingDestinations.length;
+      if (activeDestCount === 0) {
+        return NextResponse.json(
+          { ok: false, error: 'Para ativar o copiador, selecione pelo menos um grupo de destino com permissão de envio.' },
+          { status: 400 }
+        );
+      }
     }
 
+    // Preservar configurações anteriores em edições parciais; aplicar padrões somente em novas regras
     const updatedSource: CopySource = {
       id: sourceId,
       userId: session.userId,
       connectionId: connection.id,
       groupJid,
       name: sourceName,
-      operationMode,
+      operationMode: body.operationMode !== undefined ? body.operationMode : (savedSource?.operationMode || 'revisao_manual'),
       isActive: ruleIsActive,
-      allowedStores,
-      stripThirdPartyLinks,
-      stripExternalTags,
-      customDelaySeconds: Math.max(0, Number(customDelaySeconds) || 60),
-      templateText: templateText || undefined,
-      templateName: templateName || undefined,
-      is24Hours: effectiveIs24Hours,
-      dispatchOrder: dispatchOrder === 'aleatoria' ? 'aleatoria' : 'sequencial',
-      customTemplates: Array.isArray(customTemplates) ? customTemplates : undefined,
-      imageMode: imageMode || savedSource?.imageMode || 'cenario_automatico',
-      imageFailureFallback: imageFailureFallback || savedSource?.imageFailureFallback || 'usar_foto_oficial',
-      brandWatermarkHandle: brandWatermarkHandle !== undefined ? brandWatermarkHandle : (savedSource?.brandWatermarkHandle || '@radar.ofertas.br1'),
-      brandWatermarkEnabled: brandWatermarkEnabled !== undefined ? Boolean(brandWatermarkEnabled) : (savedSource?.brandWatermarkEnabled !== false),
-      startTime: effectiveStartTime,
-      endTime: effectiveEndTime,
-      convertAffiliateLinks: Boolean(convertAffiliateLinks),
+      allowedStores: body.allowedStores !== undefined ? body.allowedStores : (savedSource?.allowedStores || allowedStores),
+      stripThirdPartyLinks: body.stripThirdPartyLinks !== undefined ? Boolean(body.stripThirdPartyLinks) : (savedSource?.stripThirdPartyLinks ?? true),
+      stripExternalTags: body.stripExternalTags !== undefined ? Boolean(body.stripExternalTags) : (savedSource?.stripExternalTags ?? true),
+      customDelaySeconds: body.customDelaySeconds !== undefined ? Math.max(0, Number(body.customDelaySeconds) || 60) : (savedSource?.customDelaySeconds ?? 60),
+      templateText: body.templateText !== undefined ? (body.templateText || undefined) : savedSource?.templateText,
+      templateName: body.templateName !== undefined ? (body.templateName || undefined) : savedSource?.templateName,
+      is24Hours: body.is24Hours !== undefined ? effectiveIs24Hours : (savedSource?.is24Hours ?? effectiveIs24Hours),
+      dispatchOrder: body.dispatchOrder !== undefined ? (body.dispatchOrder === 'aleatoria' ? 'aleatoria' : 'sequencial') : (savedSource?.dispatchOrder || 'sequencial'),
+      customTemplates: body.customTemplates !== undefined ? (Array.isArray(body.customTemplates) ? body.customTemplates : undefined) : savedSource?.customTemplates,
+      imageMode: body.imageMode !== undefined ? body.imageMode : (savedSource?.imageMode || 'cenario_automatico'),
+      imageFailureFallback: body.imageFailureFallback !== undefined ? body.imageFailureFallback : (savedSource?.imageFailureFallback || 'usar_foto_oficial'),
+      brandWatermarkHandle: body.brandWatermarkHandle !== undefined ? body.brandWatermarkHandle : (savedSource?.brandWatermarkHandle || '@radar.ofertas.br1'),
+      brandWatermarkEnabled: body.brandWatermarkEnabled !== undefined ? Boolean(body.brandWatermarkEnabled) : (savedSource?.brandWatermarkEnabled !== false),
+      startTime: body.startTime !== undefined ? effectiveStartTime : (savedSource?.startTime || effectiveStartTime),
+      endTime: body.endTime !== undefined ? effectiveEndTime : (savedSource?.endTime || effectiveEndTime),
+      convertAffiliateLinks: body.convertAffiliateLinks !== undefined ? Boolean(body.convertAffiliateLinks) : (savedSource?.convertAffiliateLinks ?? true),
       updatedAt: new Date().toISOString(),
     };
 
@@ -205,29 +252,31 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Remover destinos antigos e gravar novos no Supabase
-      await supabase.from('copy_destinations').delete().eq('source_id', sourceId);
+      // CORREÇÃO P1: Substituir destinos no Supabase SOMENTE quando destinationJids for enviado explicitamente
+      if (hasExplicitDestinations) {
+        await supabase.from('copy_destinations').delete().eq('source_id', sourceId);
 
-      if (Array.isArray(destinationJids) && destinationJids.length > 0) {
-        const validDests = destinationJids
-          .filter((destJid: string) => destJid !== groupJid)
-          .map((destJid: string) => ({
-            id: ensureValidUuid(),
-            source_id: sourceId,
-            target_jid: destJid,
-          }));
+        if (destinationJids.length > 0) {
+          const validDests = destinationJids
+            .filter((destJid: string) => destJid !== groupJid)
+            .map((destJid: string) => ({
+              id: ensureValidUuid(),
+              source_id: sourceId,
+              target_jid: destJid,
+            }));
 
-        if (validDests.length > 0) {
-          const { error: sbDestErr } = await supabase.from('copy_destinations').insert(validDests);
-          if (sbDestErr) {
-            return NextResponse.json(
-              {
-                ok: false,
-                error: `Falha ao gravar destinos no Supabase: ${sbDestErr.message}`,
-                code: 'SUPABASE_DEST_ERROR',
-              },
-              { status: 500 }
-            );
+          if (validDests.length > 0) {
+            const { error: sbDestErr } = await supabase.from('copy_destinations').insert(validDests);
+            if (sbDestErr) {
+              return NextResponse.json(
+                {
+                  ok: false,
+                  error: `Falha ao gravar destinos no Supabase: ${sbDestErr.message}`,
+                  code: 'SUPABASE_DEST_ERROR',
+                },
+                { status: 500 }
+              );
+            }
           }
         }
       }
@@ -240,10 +289,10 @@ export async function POST(req: NextRequest) {
       db.sources.push(updatedSource);
     }
 
-    // Atualizar destinos vinculados no banco local
-    db.destinations = db.destinations.filter((d) => d.sourceId !== sourceId);
+    // CORREÇÃO P1: Substituir destinos no banco local SOMENTE quando destinationJids for enviado explicitamente
+    if (hasExplicitDestinations) {
+      db.destinations = db.destinations.filter((d) => d.sourceId !== sourceId);
 
-    if (Array.isArray(destinationJids)) {
       destinationJids.forEach((destJid: string) => {
         // Prevenção de loop: a origem nunca pode ser destino de si mesma
         if (destJid === groupJid) return;

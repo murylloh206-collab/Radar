@@ -255,7 +255,11 @@ export async function runDurableCopierCycle() {
     if (!entries.length) break;
     {
       const entry = entries[0];
-      try { await processEntry(entry); processed++; }
+      try {
+        await copierHeartbeat();
+        await processEntry(entry);
+        processed++;
+      }
       catch (error) {
         checked(await database().from('copier_inbox').update({ status: entry.attempts >= 3 ? 'failed' : 'pending',
           available_at: new Date(Date.now() + 30000).toISOString(), lease_until: null,

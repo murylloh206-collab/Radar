@@ -216,8 +216,13 @@ export async function removeProductBackground(
     const { RawImage, Tensor } = await import('@xenova/transformers');
     const model = await getSegmentationModel();
 
-    // Ler e redimensionar para entrada 1024x1024 do RMBG
-    const image = await RawImage.read(imageUrl);
+    if (controller.signal.aborted) {
+      throw new Error(`Timeout na remoção de fundo (${timeoutMs}ms)`);
+    }
+
+    // CORREÇÃO P1: Reutilizar o buffer já baixado em memória via RawImage.fromBlob(new Blob([origBuffer]))
+    // evitando segundo download desnecessário pela rede que ignorava timeouts e causava latência dobrada
+    const image = await RawImage.fromBlob(new Blob([origBuffer]));
     const resized = await image.resize(1024, 1024);
 
     const numPixels = 1024 * 1024;
@@ -548,14 +553,21 @@ export async function persistComposedImage(params: {
           upsert: true,
         });
 
-      if (!uploadErr) {
-        const { data } = supabase.storage.from('radar-media').getPublicUrl(storagePath);
-        if (data?.publicUrl) {
-          return data.publicUrl;
-        }
+      if (uploadErr) {
+        throw new Error(`Falha no upload para Supabase Storage: ${uploadErr.message}`);
       }
-    } catch {
-      // Fallback local se o upload para o bucket falhar
+
+      const { data } = supabase.storage.from('radar-media').getPublicUrl(storagePath);
+      if (data?.publicUrl) {
+        return data.publicUrl;
+      }
+      throw new Error('Supabase Storage não retornou URL pública para a imagem');
+    } catch (err: any) {
+      // CORREÇÃO P1: Em ambiente de produção com Supabase configurado,
+      // nunca salvar no disco local do worker nem inventar URL sob APP_URL (Vercel),
+      // pois o arquivo não existe na Vercel e resultará em erro 404 para o destinatário.
+      // O erro é propagado para acionar o fallback seguro (foto oficial ou revisão manual).
+      throw new Error(`Persistência remota da imagem no Supabase falhou: ${err.message || 'Erro desconhecido'}`);
     }
   }
 
@@ -599,6 +611,8 @@ export interface ProcessAutomaticImageResult {
   record?: ScenarioCompositionRecord;
 }
 
+export const IMAGE_PIPELINE_TOTAL_TIMEOUT_MS = 12000;
+
 /**
  * Pipeline completo de processamento de imagem automática do Copiador.
  * 1. Avalia se o modo configurado é cenario_automatico ou foto_oficial
@@ -609,7 +623,7 @@ export interface ProcessAutomaticImageResult {
  *    c) Remove fundo
  *    d) Compõe no cenário com sombra e marca d'água
  *    e) Salva no Supabase Storage com isolamento
- *    f) Se falhar, aplica o fallback configurado (usar foto oficial ou encaminhar para revisão)
+ *    f) Se falhar ou exceder prazo total, aplica o fallback configurado (usar foto oficial ou encaminhar para revisão)
  */
 export async function processAutomaticCopierImage(
   params: ProcessAutomaticImageParams
@@ -665,23 +679,39 @@ export async function processAutomaticCopierImage(
   const hashInput = `${officialPhotoUrl}|${category}|${watermarkHandle}|${watermarkEnabled ? '1' : '0'}|v1`;
   const hashKey = createHash('sha256').update(hashInput).digest('hex').substring(0, 20);
 
-  // 3. Executar recorte e composição
+  // 3. Executar recorte e composição sob prazo total (12s)
   try {
-    const cutoutBuffer = await removeProductBackground(officialPhotoUrl, 15000);
-    const composedBuffer = await composeProductOnScenario({
-      category,
-      productCutoutBuffer: cutoutBuffer,
-      targetSize: 1080,
-      watermarkHandle,
-      watermarkEnabled,
+    const pipelinePromise = (async () => {
+      // Timeout do download/recorte ajustado para caber no orçamento total de 12s
+      const cutoutBuffer = await removeProductBackground(officialPhotoUrl, 10000);
+      const composedBuffer = await composeProductOnScenario({
+        category,
+        productCutoutBuffer: cutoutBuffer,
+        targetSize: 1080,
+        watermarkHandle,
+        watermarkEnabled,
+      });
+
+      // 4. Salvar no Supabase Storage
+      const publicUrl = await persistComposedImage({
+        userId,
+        sourceId,
+        imageBuffer: composedBuffer,
+        hashKey,
+      });
+
+      return { publicUrl };
+    })();
+
+    let timeoutTimer: NodeJS.Timeout;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutTimer = setTimeout(() => {
+        reject(new Error(`Tempo limite do pipeline de imagem excedido (${IMAGE_PIPELINE_TOTAL_TIMEOUT_MS}ms)`));
+      }, IMAGE_PIPELINE_TOTAL_TIMEOUT_MS);
     });
 
-    // 4. Salvar no Supabase Storage
-    const publicUrl = await persistComposedImage({
-      userId,
-      sourceId,
-      imageBuffer: composedBuffer,
-      hashKey,
+    const { publicUrl } = await Promise.race([pipelinePromise, timeoutPromise]).finally(() => {
+      clearTimeout(timeoutTimer);
     });
 
     const elapsed = Math.round(performance.now() - started);

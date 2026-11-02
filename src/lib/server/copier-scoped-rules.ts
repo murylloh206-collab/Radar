@@ -21,15 +21,37 @@ export async function copierRulesForConnection(session: UserSession, connection:
     if (error) throw new WhatsAppPhotoError('RULES_UNAVAILABLE', 503, 'Não foi possível consultar as regras salvas.');
     sources = (records || []).filter(row => row.connection_id === connection.id).map(row => {
       const local = { ...(row.configuration || {}) } as Partial<CopySource>;
-      return { ownerJid: (row.configuration || {}).ownerJid,
-        templateText: local.templateText, imageMode: local.imageMode, startTime: local.startTime, endTime: local.endTime,
-        convertAffiliateLinks: local.convertAffiliateLinks, isTestMode: local.isTestMode, testGroupJid: local.testGroupJid, isDemo: local.isDemo,
-        id: row.id, userId: session.userId, connectionId: connection.id,
-        groupJid: row.source_jid, name: row.source_name, isActive: row.is_active === true,
+      return {
+        ...local,
+        id: row.id,
+        userId: session.userId,
+        connectionId: connection.id,
+        groupJid: row.source_jid,
+        name: row.source_name,
+        isActive: row.is_active === true,
         operationMode: row.auto_approve ? 'automatico' : 'revisao_manual',
-        allowedStores: local?.allowedStores || [], stripThirdPartyLinks: local?.stripThirdPartyLinks ?? true,
-        stripExternalTags: local?.stripExternalTags ?? true, customDelaySeconds: local?.customDelaySeconds ?? 60,
-        updatedAt: row.updated_at } as CopySource;
+        ownerJid: (row.configuration || {}).ownerJid,
+        allowedStores: local.allowedStores || [],
+        stripThirdPartyLinks: local.stripThirdPartyLinks ?? true,
+        stripExternalTags: local.stripExternalTags ?? true,
+        customDelaySeconds: local.customDelaySeconds ?? 60,
+        templateText: local.templateText,
+        templateName: local.templateName,
+        is24Hours: local.is24Hours,
+        dispatchOrder: local.dispatchOrder ?? 'sequencial',
+        customTemplates: local.customTemplates,
+        imageMode: local.imageMode ?? 'cenario_automatico',
+        imageFailureFallback: local.imageFailureFallback ?? 'usar_foto_oficial',
+        brandWatermarkHandle: local.brandWatermarkHandle ?? '@radar.ofertas.br1',
+        brandWatermarkEnabled: local.brandWatermarkEnabled !== false, // Preserva explicitamente false
+        startTime: local.startTime ?? '08:00',
+        endTime: local.endTime ?? '22:00',
+        convertAffiliateLinks: local.convertAffiliateLinks ?? true,
+        isTestMode: local.isTestMode,
+        testGroupJid: local.testGroupJid,
+        isDemo: local.isDemo,
+        updatedAt: row.updated_at,
+      } as CopySource;
     });
     if (sources.length) {
       const { data: targets, error: targetError } = await supabase.from('copy_destinations').select('*').in('source_id', sources.map(source => source.id));

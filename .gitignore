@@ -45,3 +45,4 @@ next-env.d.ts
 .cache/
 .backup/
 /public/generated-media/
+tests/fixtures/

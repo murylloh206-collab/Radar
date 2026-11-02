@@ -18,7 +18,7 @@ import type { CopySource, CopyDestination, WhatsAppConnection } from '../src/lib
 
 const TEST_DB_PATH = path.join(process.cwd(), 'tests', 'fixtures', 'radar_db_test_images.json');
 process.env.RADAR_DB_PATH = TEST_DB_PATH;
-process.env.NODE_ENV = 'test';
+(process.env as any).NODE_ENV = 'test';
 
 function setupCleanTestDb() {
   const db = getInitialDatabase();
@@ -27,7 +27,7 @@ function setupCleanTestDb() {
       id: 'conn_img_test',
       userId: 'user_img_test',
       instanceName: 'inst_img_test',
-      name: 'Conta Teste',
+      label: 'Conta Teste',
       phoneNumber: '5511999990001',
       status: 'connected',
       connectionState: 'open',
@@ -39,7 +39,8 @@ function setupCleanTestDb() {
       apiKey: 'test-api-key',
       lastSyncedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    } as WhatsAppConnection,
+      createdAt: new Date().toISOString(),
+    } as unknown as WhatsAppConnection,
   ];
 
   db.groups = [
@@ -49,11 +50,12 @@ function setupCleanTestDb() {
       connectionId: 'conn_img_test',
       groupJid: '120363000000000001@g.us',
       name: 'Grupo Origem Ofertas',
-      memberCount: 50,
+      participantCount: 50,
+      isAdmin: false,
       isOrigin: true,
+      isDestination: false,
       canPost: true,
-      permissionStatus: 'allowed',
-      participantRole: 'member',
+      permissionStatus: 'verified_member',
       lastSyncedAt: new Date().toISOString(),
     },
     {
@@ -62,12 +64,13 @@ function setupCleanTestDb() {
       connectionId: 'conn_img_test',
       groupJid: '120363000000000002@g.us',
       name: 'Canal VIP Ofertas',
-      memberCount: 200,
+      participantCount: 200,
+      isAdmin: true,
       isOrigin: false,
+      isDestination: true,
       canPost: true,
-      permissionStatus: 'allowed',
-      participantRole: 'admin',
-      announce: false,
+      permissionStatus: 'verified_admin',
+      isAnnounce: false,
       lastSyncedAt: new Date().toISOString(),
     },
   ];
