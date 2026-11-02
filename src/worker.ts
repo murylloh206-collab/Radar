@@ -14,9 +14,14 @@ async function start() {
   }, 15000);
   console.log('[Copiador] Worker persistente iniciado.');
   while (!stopping) {
-    try { await runDurableCopierCycle(); }
+    let busy = false;
+    try {
+      const cycle = await runDurableCopierCycle();
+      busy = cycle.processed > 0 || cycle.dispatched > 0;
+      if (busy) console.log('[Copiador] Ciclo: ' + cycle.processed + ' eventos processados; ' + cycle.dispatched + ' publicações avaliadas.');
+    }
     catch { console.error('[Copiador] Ciclo não concluído. Confira a conexão do banco, a migração 06 e as configurações das contas.'); }
-    if (!stopping) await new Promise(resolve => setTimeout(resolve, 2000));
+    if (!stopping) await new Promise(resolve => setTimeout(resolve, busy ? 50 : 750));
   }
   stopHeartbeat();
 }

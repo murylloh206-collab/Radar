@@ -1,12 +1,14 @@
 'use client';
 
+import { useWhatsAppWorkspace } from '@/components/WhatsAppWorkspaceProvider';
+import { initialCopierRule } from '@/lib/client/copier-selection';
+import { serialPoll } from '@/lib/client/serial-poll';
 import CopierRuntimeStatus from '@/components/CopierRuntimeStatus';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   CopySource,
-  CopyDestination,
   WhatsAppGroup,
 } from '@/lib/types';
 import CopierGroupPicker, { CopierGroupPhoto } from '@/components/CopierGroupPicker';
@@ -124,6 +126,7 @@ function formatDateTimeBR(isoString?: string | null) {
 
 function CopierContent() {
   const searchParams = useSearchParams();
+  const sharedWhatsApp = useWhatsAppWorkspace();
   const paramConnId = searchParams?.get('connectionId') || '';
   const paramOriginJid = searchParams?.get('originJid') || '';
 
@@ -149,91 +152,83 @@ function CopierContent() {
   const [isActiveRule, setIsActiveRule] = useState(false);
 
   const [picker, setPicker] = useState<'origin' | 'destinations' | null>(null);
-  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupsLoading, setGroupsLoading] = useState(!sharedWhatsApp.workspace);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
-  const requestVersion = useRef(0);
   const savedRule = useRef<CopySource | null>(null);
   const selectionEdited = useRef(false);
   const accountIdentity = useRef('');
-  const currentConnection = useRef(paramConnId);
 
-  const loadData = useCallback(async (requestedId?: string, refresh = false) => {
-    const version = ++requestVersion.current;
-    const target = requestedId ?? currentConnection.current;
-    const switched = target !== currentConnection.current;
-    currentConnection.current = target;
-    if (switched) {
-      selectionEdited.current = false;
-      savedRule.current = null;
-      setGroups([]); setActiveConnection(null); setStatusData(null); setPicker(null);
-      setSelectedOriginJid(''); setSelectedDestJids([]); setActiveRuleId(null); setIsActiveRule(false);
-    }
-    setGroupsLoading(true); setGroupError(null);
-    const query = new URLSearchParams();
-    if (target) query.set('connectionId', target);
-    if (refresh) query.set('refresh', 'true');
-    try {
-      const response = await fetch('/api/copier/group-catalog?' + query, { cache: 'no-store' });
-      const catalog = await response.json();
-      if (version !== requestVersion.current) return;
-      if (Array.isArray(catalog.connections)) setConnections(catalog.connections);
-      if (!response.ok && catalog.connection) {
-        setActiveConnection(catalog.connection); setSelectedConnectionId(catalog.connection.id);
-        currentConnection.current = catalog.connection.id;
-      }
-      if (!response.ok || !catalog.ok) throw new Error(catalog.error || 'Não foi possível consultar os grupos.');
-      const connection: ConnectionInfo = catalog.connection;
-      const identity = connection.id + ':' + connection.ownerJid;
-      if (accountIdentity.current && accountIdentity.current !== identity) {
-        setSelectedOriginJid(''); setSelectedDestJids([]); setActiveRuleId(null); setIsActiveRule(false);
-        selectionEdited.current = true;
-      }
-      accountIdentity.current = identity;
-      currentConnection.current = connection.id;
-      setSelectedConnectionId(connection.id); setActiveConnection(connection);
-      setConnections(catalog.connections); setGroups(catalog.groups); setSyncedAt(catalog.syncedAt);
-      setGroupsLoading(false); setLoading(false);
-      const scopedQuery = '?connectionId=' + encodeURIComponent(connection.id);
-      await Promise.allSettled([
-        fetch('/api/copier/status' + scopedQuery, { cache: 'no-store' }).then(async response => {
-          const status = await response.json();
-          if (version === requestVersion.current && response.ok && status.ok) setStatusData(status);
-        }),
-        fetch('/api/copier/sources' + scopedQuery, { cache: 'no-store' }).then(async response => {
-          const rules = await response.json();
-          if (version !== requestVersion.current || !response.ok || !rules.ok) return;
-          const found: CopySource | undefined = rules.sources.find((source: CopySource) => source.isActive) || rules.sources[0];
-          if (!found) { savedRule.current = null; setActiveRuleId(null); setIsActiveRule(false); return; }
-          savedRule.current = found;
-          setActiveRuleId(found.id);
-          if (!refresh && !selectionEdited.current) {
-            setSelectedOriginJid(paramOriginJid || found.groupJid);
-            setSelectedDestJids((rules.destinations || []).filter((destination: CopyDestination) => destination.sourceId === found.id && destination.isActive).map((destination: CopyDestination) => destination.groupJid));
-            setOperationMode(found.operationMode || 'revisao_manual');
-            if (found.allowedStores?.length) setAllowedStores(found.allowedStores);
-          }
-          setIsActiveRule(!!found.isActive);
-        }),
-      ]);
-    } catch (error) {
-      if (version !== requestVersion.current) return;
-      setGroupError(error instanceof Error ? error.message : 'Não foi possível consultar os grupos.');
-      if (switched) setActiveConnection(previous => previous?.id === currentConnection.current ? previous : null);
-      else setActiveConnection(previous => previous ? { ...previous, state: 'unreachable', statusLabel: 'Não foi possível verificar agora' } : null);
-    } finally {
-      if (version === requestVersion.current) { setLoading(false); setGroupsLoading(false); }
-    }
-  }, [paramOriginJid]);
+  const [rulesReady, setRulesReady] = useState(false);
+  const [rulesList, setRulesList] = useState<CopySource[]>([]);
+  const selectedRuleChoice = useRef<string | null>(null);
+
+  const applyRule = useCallback((source: CopySource | null, origin = '') => {
+    savedRule.current = source;
+    setActiveRuleId(source?.id || null); setIsActiveRule(!!source?.isActive);
+    setSelectedOriginJid(origin || source?.groupJid || '');
+    setSelectedDestJids((sharedWhatsApp.workspace?.destinations || []).filter(destination => destination.sourceId === source?.id && destination.isActive).map(destination => destination.groupJid));
+    setOperationMode(source?.operationMode || 'revisao_manual');
+    setAllowedStores(source?.allowedStores?.length ? source.allowedStores : ['shopee', 'mercadolivre', 'amazon', 'netshoes']);
+  }, [sharedWhatsApp.workspace?.destinations]);
+
+  useEffect(() => { if (paramConnId && paramConnId !== sharedWhatsApp.selectedId) sharedWhatsApp.select(paramConnId); }, [paramConnId, sharedWhatsApp.selectedId, sharedWhatsApp.select]);
 
   useEffect(() => {
-    void loadData(paramConnId);
-    return () => { requestVersion.current++; };
-  }, [loadData, paramConnId]);
+    const workspace = sharedWhatsApp.workspace;
+    if (!workspace?.connection) {
+      setLoading(sharedWhatsApp.loading); setGroupsLoading(sharedWhatsApp.loading);
+      if (workspace) { setConnections(workspace.connections); setGroups([]); setRulesReady(true); }
+      return;
+    }
+    const connection = workspace.connection;
+    const identity = connection.id + ':' + (connection.ownerJid || '');
+    const changedAccount = accountIdentity.current !== identity;
+    if (changedAccount) {
+      accountIdentity.current = identity; selectionEdited.current = false; selectedRuleChoice.current = null;
+      setPicker(null); setStatusData(null); setRulesReady(false);
+    }
+    setSelectedConnectionId(connection.id); setActiveConnection(connection);
+    setConnections(workspace.connections); setGroups(workspace.groups); setSyncedAt(workspace.syncedAt);
+    setRulesList(workspace.sources);
+    if (!selectionEdited.current && selectedRuleChoice.current === null) {
+      const source = initialCopierRule(workspace.sources, paramOriginJid);
+      applyRule(source, paramOriginJid);
+    }
+    setRulesReady(true); setLoading(false); setGroupsLoading(false);
+    setGroupError(sharedWhatsApp.error);
+  }, [sharedWhatsApp.workspace, sharedWhatsApp.loading, sharedWhatsApp.error, paramOriginJid, applyRule]);
 
-  const handleSelectConnection = (newId: string) => {
-    setSelectedConnectionId(newId);
-    void loadData(newId);
+  useEffect(() => {
+    if (!selectedConnectionId) return;
+    setStatusData(null);
+    return serialPoll(async signal => {
+      if (document.visibilityState === 'hidden') return false;
+      try {
+        const response = await fetch('/api/copier/status?connectionId=' + encodeURIComponent(selectedConnectionId), { signal, cache: 'no-store' });
+        const status = await response.json();
+        if (!signal.aborted && response.ok && status.ok) setStatusData(status);
+      } catch { /* Statistics do not block account and group selection. */ }
+      return false;
+    }, 15000);
+  }, [selectedConnectionId]);
+
+  const loadData = async (_requestedId?: string, refresh = false) => {
+    if (refresh) {
+      setGroupsLoading(true);
+      await sharedWhatsApp.refreshGroups();
+      setGroupsLoading(false);
+    } else await sharedWhatsApp.reload();
+  };
+  const handleSelectConnection = (id: string) => {
+    setRulesReady(false); setGroups([]); setActiveConnection(null); setStatusData(null);
+    setSelectedOriginJid(''); setSelectedDestJids([]); setActiveRuleId(null); setIsActiveRule(false);
+    selectedRuleChoice.current = null; selectionEdited.current = false;
+    sharedWhatsApp.select(id);
+  };
+  const chooseRule = (id: string) => {
+    selectedRuleChoice.current = id; selectionEdited.current = true;
+    applyRule(rulesList.find(source => source.id === id) || null);
   };
 
   // Mapa de grupos
@@ -258,7 +253,7 @@ function CopierContent() {
   // Salvar / Alternar Ativação do Copiador (Passo 4)
   const handleToggleCopier = async (requestedActive?: boolean) => {
     const nextState = requestedActive ?? !isActiveRule;
-    if (nextState && (groupsLoading || groupError || !groupsMap.has(selectedOriginJid) || selectedDestJids.some(jid => !groupsMap.has(jid)))) {
+    if (nextState && (!groupsMap.has(selectedOriginJid) || selectedDestJids.some(jid => !groupsMap.has(jid)))) {
       setFeedback({ type: 'warning', message: 'Atualize os grupos e confirme a origem e os destinos desta conta antes de ativar.' });
       return;
     }
@@ -300,7 +295,7 @@ function CopierContent() {
       const data = await res.json();
       if (res.ok && data.ok) {
         setIsActiveRule(nextState);
-        if (data.source?.id) setActiveRuleId(data.source.id);
+        if (data.source?.id) { savedRule.current = data.source; selectedRuleChoice.current = data.source.id; setActiveRuleId(data.source.id); }
         setFeedback({
           type: 'success',
           message: requestedActive !== undefined ? `Configurações salvas. O copiador permanece ${nextState ? 'ativo' : 'pausado'}.` : nextState
@@ -318,7 +313,9 @@ function CopierContent() {
     }
   };
 
-  const isConnected = activeConnection?.state === 'connected_now';
+  const editAllowedStores = (update: React.SetStateAction<string[]>) => { selectionEdited.current = true; setAllowedStores(update); };
+
+  const isConnected = activeConnection?.status === 'connected';
   const isRuleActive = isActiveRule;
   const isReceivingActive = statusData?.receiving?.status === 'ativo';
   const isQueueActive = statusData?.queue?.status === 'processando';
@@ -370,6 +367,18 @@ function CopierContent() {
           </Link>
         </div>
       </div>
+
+      <div className="rp-panel" style={{ padding: 16, marginBottom: 18 }}>
+        <label htmlFor="copier-rule-choice" style={{ display: 'block', marginBottom: 8 }}>Configuração do copiador</label>
+        <select id="copier-rule-choice" aria-label="Escolher configuração do copiador" value={activeRuleId || ''}
+          onChange={event => chooseRule(event.target.value)} disabled={!rulesReady}
+          style={{ width: '100%', padding: 12, borderRadius: 10, background: '#20262b', color: '#edf2f5', border: '1px solid #364049' }}>
+          <option value="">Nova configuração — escolha a origem e o destino</option>
+          {rulesList.map(source => <option key={source.id} value={source.id}>{source.name} · {source.isActive ? 'Ativa' : 'Pausada'}</option>)}
+        </select>
+        <p className="rp-sub" style={{ margin: '8px 0 0' }}>{selectionEdited.current ? 'Alterações no formulário. Salve para atualizar esta regra.' : activeRuleId ? 'Regra salva. Você pode trocar qualquer grupo abaixo.' : 'Escolha os grupos abaixo. As regras já ativas continuam funcionando.'}</p>
+      </div>
+      {!sharedWhatsApp.workspace && <p role="status" className="rp-panel" style={{ padding: 18 }}>{sharedWhatsApp.error || 'Carregando suas contas, grupos e regras salvas…'}</p>}
 
       {/* Cartão de WhatsApp Conectado em Destaque */}
       <div
@@ -437,11 +446,11 @@ function CopierContent() {
               1. Regra
             </span>
             <span className={`rp-tag ${isRuleActive ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10 }}>
-              {isRuleActive ? 'Ativa' : 'Pausada'}
+              {!rulesReady ? 'Carregando…' : !activeRuleId ? 'Nova configuração' : isRuleActive ? 'Ativa' : 'Pausada'}
             </span>
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {isRuleActive ? 'Monitoramento habilitado' : 'Operação suspensa'}
+            {!rulesReady ? 'Consultando regra salva…' : !activeRuleId ? 'Selecione os grupos' : isRuleActive ? 'Monitoramento habilitado' : 'Regra pausada'}
           </div>
           <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
             Modo: <strong>{operationMode === 'automatico' ? 'Envio automático' : 'Revisão prévia'}</strong>
@@ -477,7 +486,7 @@ function CopierContent() {
             </span>
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {statusData?.receiving?.todayCount ?? 0} ofertas hoje
+            {statusData ? statusData.receiving?.todayCount ?? 0 : '—'} ofertas hoje
           </div>
           <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
             Última recebida: <br />
@@ -492,11 +501,11 @@ function CopierContent() {
               4. Processamento & Envio
             </span>
             <span className={`rp-tag ${isQueueActive ? 'rp-good' : ''}`} style={{ fontSize: 10 }}>
-              {statusData?.queue?.status === 'processando' ? 'Processando' : 'Ociosa'}
+              {statusData?.queue?.status === 'parada' ? 'Processador parado' : statusData?.queue?.status === 'processando' ? 'Processando' : 'Ociosa'}
             </span>
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {statusData?.queue?.sentTodayCount ?? 0} enviadas hoje
+            {statusData ? statusData.queue?.sentTodayCount ?? 0 : '—'} enviadas hoje
           </div>
           <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
             Último envio confirmado: <br />
@@ -525,7 +534,7 @@ function CopierContent() {
         loading={groupsLoading} error={groupError} onRefresh={() => void loadData(selectedConnectionId, true)} onClose={() => setPicker(null)}
         onConfirm={selection => { selectionEdited.current = true; if (picker === 'origin') { setSelectedOriginJid(selection[0]); setSelectedDestJids(previous => previous.filter(jid => jid !== selection[0])); } else setSelectedDestJids(selection); setPicker(null); }} />}
 
-      <CopierRuntimeStatus connectionId={selectedConnectionId} />
+      <CopierRuntimeStatus workerActive={statusData?.queue?.isWorkerActive} connectionId={selectedConnectionId} />
 
       {/* Resumo do Fluxo Principal */}
       <div className="rp-flow copier-flow" style={{ marginBottom: 20 }}>
@@ -598,7 +607,7 @@ function CopierContent() {
                   type="radio"
                   name="rp-mode"
                   checked={operationMode === 'revisao_manual'}
-                  onChange={() => setOperationMode('revisao_manual')}
+                  onChange={() => { selectionEdited.current = true; setOperationMode('revisao_manual'); }}
                 />
                 Revisar antes de enviar (Recomendado para conferir fotos e textos)
               </label>
@@ -608,7 +617,7 @@ function CopierContent() {
                   type="radio"
                   name="rp-mode"
                   checked={operationMode === 'automatico'}
-                  onChange={() => setOperationMode('automatico')}
+                  onChange={() => { selectionEdited.current = true; setOperationMode('automatico'); }}
                 />
                 Enviar automaticamente após validar links de afiliado
               </label>
@@ -618,7 +627,7 @@ function CopierContent() {
               Modelo de texto (Template)
               <select
                 value={selectedTemplate}
-                onChange={(e) => setSelectedTemplate(e.target.value)}
+                onChange={(e) => { selectionEdited.current = true; setSelectedTemplate(e.target.value); }}
               >
                 <option value="Oferta essencial">Oferta essencial (Preço + Link limpo)</option>
                 <option value="Oferta com cupom">Oferta com cupom e destaque</option>
@@ -634,7 +643,7 @@ function CopierContent() {
                     type="checkbox"
                     checked={allowedStores.includes('shopee')}
                     onChange={(e) => {
-                      setAllowedStores((prev) =>
+                      editAllowedStores((prev) =>
                         e.target.checked ? [...prev, 'shopee'] : prev.filter((s) => s !== 'shopee')
                       );
                     }}
@@ -646,7 +655,7 @@ function CopierContent() {
                     type="checkbox"
                     checked={allowedStores.includes('mercadolivre')}
                     onChange={(e) => {
-                      setAllowedStores((prev) =>
+                      editAllowedStores((prev) =>
                         e.target.checked ? [...prev, 'mercadolivre'] : prev.filter((s) => s !== 'mercadolivre')
                       );
                     }}
@@ -658,7 +667,7 @@ function CopierContent() {
                     type="checkbox"
                     checked={allowedStores.includes('amazon')}
                     onChange={(e) => {
-                      setAllowedStores((prev) =>
+                      editAllowedStores((prev) =>
                         e.target.checked ? [...prev, 'amazon'] : prev.filter((s) => s !== 'amazon')
                       );
                     }}
@@ -670,7 +679,7 @@ function CopierContent() {
                     type="checkbox"
                     checked={allowedStores.includes('netshoes')}
                     onChange={(e) => {
-                      setAllowedStores((prev) =>
+                      editAllowedStores((prev) =>
                         e.target.checked ? [...prev, 'netshoes'] : prev.filter((s) => s !== 'netshoes')
                       );
                     }}
@@ -734,7 +743,7 @@ function CopierContent() {
             <div className="rp-row" style={{ marginTop: 4 }}>
               <h2>Ativar Copiador</h2>
               <span className={`rp-tag ${isActiveRule ? 'rp-good' : 'rp-warn'}`}>
-                {isActiveRule ? 'Monitoramento Ativo' : 'Copiador Pausado'}
+                {!rulesReady ? 'Carregando…' : !activeRuleId ? 'Nova configuração' : isActiveRule ? 'Monitoramento Ativo' : 'Copiador Pausado'}
               </span>
             </div>
 
@@ -745,7 +754,7 @@ function CopierContent() {
             </p>
 
             <div className="rp-actions">
-              <button type="button" className="rp-btn" style={{ minHeight: 46 }} disabled={saving || groupsLoading}
+              <button type="button" className="rp-btn" style={{ minHeight: 46 }} disabled={saving || !rulesReady || !selectedOriginJid || !selectedDestJids.length}
                 onClick={() => void handleToggleCopier(isActiveRule)}>
                 {saving ? 'Salvando…' : 'Salvar configurações'}
               </button>
@@ -762,7 +771,7 @@ function CopierContent() {
                   gap: 8,
                 }}
                 onClick={() => void handleToggleCopier()}
-                disabled={saving}
+                disabled={saving || !rulesReady}
               >
                 {saving ? (
                   <>

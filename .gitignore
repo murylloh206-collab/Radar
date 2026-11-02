@@ -35,3 +35,9 @@ next-env.d.ts
 
 # Backups temporários
 .radar-copiador-backups/
+
+# Runtime local do Copiador e backups das correcoes
+.radar-worker/
+.radar-rapida-backups/
+.radar-runtime-backups/
+.radar-save-backups/

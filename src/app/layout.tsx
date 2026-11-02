@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { WhatsAppWorkspaceProvider } from '@/components/WhatsAppWorkspaceProvider';
 import { AppShell } from '@/components/AppShell';
 
 export const metadata: Metadata = {
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="antialiased">
-        <AppShell>{children}</AppShell>
+        <WhatsAppWorkspaceProvider><AppShell>{children}</AppShell></WhatsAppWorkspaceProvider>
       </body>
     </html>
   );

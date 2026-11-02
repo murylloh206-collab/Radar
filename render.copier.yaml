@@ -1,0 +1,24 @@
+services:
+  - type: worker
+    name: radar-copiador
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --include=dev
+    startCommand: npm run worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_URL
+        value: https://painel-de-ofertas.vercel.app
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: EVOLUTION_BASE_URL
+        sync: false
+      - key: EVOLUTION_API_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: SESSION_SECRET
+        sync: false

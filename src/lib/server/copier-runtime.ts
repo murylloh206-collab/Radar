@@ -41,11 +41,21 @@ export async function acceptCopierEvent(payload: EvolutionWebhookPayload, suppli
     throw new CopierRuntimeError('Webhook não autorizado.', 401);
   }
   const event = String(payload.event || '').toLowerCase().replaceAll('_', '.');
+  if (event === 'connection.update') {
+    const state = String((payload.data as unknown as { state?: string })?.state || '').toLowerCase();
+    const status = ['open', 'connected'].includes(state) ? 'connected' : ['close', 'closed'].includes(state) ? 'disconnected' : state === 'connecting' ? 'connecting' : undefined;
+    if (status) checked(await client.from('whatsapp_connections').update({ status, last_ping_at: new Date().toISOString(),
+      last_verification_status: 'verified' }).eq('id', connection.id).eq('user_id', connection.user_id), 'Estado da conexão');
+    return { accepted: true, inserted: 0 };
+  }
   if (event && event !== 'messages.upsert') return { accepted: true, inserted: 0 };
+  const sources = checked(await client.from('copy_sources').select('source_jid,configuration')
+    .eq('user_id', connection.user_id).eq('connection_id', connection.id).eq('is_active', true), 'Origens monitoradas');
+  const monitored = new Set((sources || []).filter(source => source.configuration?.ownerJid === connection.owner_jid).map(source => source.source_jid));
   const entries = Array.isArray(payload.data) ? payload.data : [payload.data];
   const records = entries.flatMap(entry => {
     const key = entry?.key;
-    if (!key?.id || typeof key.id !== 'string' || !/^\d{5,30}@g\.us$/.test(key.remoteJid || '')) return [];
+    if (key?.fromMe || !monitored.has(key?.remoteJid) || !key?.id || typeof key.id !== 'string' || !/^\d{5,30}@g\.us$/.test(key.remoteJid || '')) return [];
     return [{ user_id: connection.user_id, connection_id: connection.id, message_id: key.id,
       payload: { event: 'messages.upsert', instance, data: entry } }];
   });
@@ -98,6 +108,15 @@ async function snapshot(userId: string, connectionId: string) {
 
 async function processEntry(entry: InboxEntry) {
   const started = performance.now();
+  const scoped = await scopedCopierRules(serviceSession(entry.user_id), entry.connection_id);
+  const raw = Array.isArray(entry.payload.data) ? entry.payload.data[0] : entry.payload.data;
+  const matchingSource = scoped.sources.find(source => source.isActive && source.groupJid === raw?.key?.remoteJid &&
+    (source as typeof source & { ownerJid?: string }).ownerJid === scoped.connection.ownerJid);
+  if (!matchingSource || raw?.key?.fromMe) {
+    checked(await database().rpc('copier_complete_inbox', { p_id: entry.id, p_token: entry.lease_token,
+      p_result: { reason: 'Mensagem fora das origens ativas desta conta. Nenhum envio criado.' }, p_jobs: [] }), 'Conclusão do evento sem regra');
+    return;
+  }
   const initial = await snapshot(entry.user_id, entry.connection_id);
   const before = new Set(initial.jobs.map(job => job.id));
   const processed = await withCopierDatabase(initial, () => processIncomingMessage(entry.payload, {
@@ -178,7 +197,7 @@ export async function copierHeartbeat() {
   checked(await database().from('copier_worker_heartbeat').upsert({ id: workerId, last_seen_at: new Date().toISOString() }), 'Heartbeat');
 }
 async function configurePendingWebhook() {
-  const rows = checked(await database().from('whatsapp_connections').select('*').eq('runtime_webhook_version', 0)
+  const rows = checked(await database().from('whatsapp_connections').select('*').lt('runtime_webhook_version', 2)
     .lte('runtime_webhook_next_at', new Date().toISOString()).limit(1), 'Consulta do webhook');
   if (!rows?.length) return;
   const row = rows[0];
@@ -189,7 +208,7 @@ async function configurePendingWebhook() {
     const { connection } = await scopedCopierRules(serviceSession(row.user_id), row.id);
     const url = new URL('/api/webhook/evolution', root).href;
     const settings = { enabled: true, url, byEvents: false, webhookByEvents: false,
-      events: ['MESSAGES_UPSERT'], headers: { 'x-webhook-secret': row.webhook_secret } };
+      events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'], headers: { 'x-webhook-secret': row.webhook_secret } };
     const response = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/webhook/set/${encodeURIComponent(connection.instanceName)}`, {
       method: 'POST', headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ webhook: settings, ...settings }), signal: AbortSignal.timeout(8000),
@@ -201,10 +220,10 @@ async function configurePendingWebhook() {
     if (!verify.ok) throw new CopierRuntimeError('Não foi possível confirmar o webhook no gateway.');
     const registered = await verify.json();
     const actual = registered.webhook || registered;
-    if (actual.enabled !== true || actual.url !== url || !actual.events?.includes('MESSAGES_UPSERT')) {
+    if (actual.enabled !== true || actual.url !== url || !actual.events?.includes('MESSAGES_UPSERT') || !actual.events?.includes('CONNECTION_UPDATE')) {
       throw new CopierRuntimeError('A configuração de recebimento não foi confirmada pelo gateway.');
     }
-    checked(await database().from('whatsapp_connections').update({ runtime_webhook_version: 1, runtime_webhook_error: null })
+    checked(await database().from('whatsapp_connections').update({ runtime_webhook_version: 2, runtime_webhook_error: null })
       .eq('id', row.id).eq('user_id', row.user_id), 'Confirmação do webhook');
   } catch (error) {
     checked(await database().from('whatsapp_connections').update({ runtime_webhook_next_at: new Date(Date.now() + 30000).toISOString(),
@@ -230,8 +249,11 @@ export async function runDurableCopierCycle() {
       }
     }
     await configurePendingWebhook();
+    const batchStarted = performance.now();
+    for (let count = 0; count < 12 && performance.now() - batchStarted < 8000; count++) {
     const entries = checked(await database().rpc('copier_claim_inbox'), 'Reserva de evento') as InboxEntry[];
-    if (entries.length) {
+    if (!entries.length) break;
+    {
       const entry = entries[0];
       try { await processEntry(entry); processed++; }
       catch (error) {
@@ -240,6 +262,7 @@ export async function runDurableCopierCycle() {
           last_error: error instanceof CopierRuntimeError ? error.message : 'Falha de processamento. Consulte configurações de afiliados e gateway.' })
           .eq('id', entry.id).eq('lease_token', entry.lease_token), 'Registro da falha do evento');
       }
+    }
     }
     return { processed, dispatched };
   } finally { running = false; }

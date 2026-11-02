@@ -31,7 +31,7 @@ export async function copierConnections(session: UserSession): Promise<Registere
   if (error && !['42P01', 'PGRST205'].includes(error.code)) {
     throw new WhatsAppPhotoError('CONNECTIONS_UNAVAILABLE', 503, 'Não foi possível consultar suas conexões.');
   }
-  const { data: legacy, error: legacyError } = await supabase.from('integrations_whatsapp').select('*').eq('user_id', session.userId);
+  const { data: legacy, error: legacyError } = registered?.length ? { data: [], error: null } : await supabase.from('integrations_whatsapp').select('*').eq('user_id', session.userId);
   if (legacyError) throw new WhatsAppPhotoError('CONNECTIONS_UNAVAILABLE', 503, 'Não foi possível consultar a conexão salva.');
   const rows: Record<string, unknown>[] = registered?.length ? registered : legacy || [];
   const environment = environmentGateway();
@@ -46,6 +46,8 @@ export async function copierConnections(session: UserSession): Promise<Registere
       ownerJid: typeof row.owner_jid === 'string' ? row.owner_jid : undefined,
       phoneNumber: typeof row.phone_number === 'string' ? row.phone_number : undefined,
       profileName: typeof row.profile_name === 'string' ? row.profile_name : undefined,
+      profilePicUrl: safeWhatsAppPictureUrl(row.profile_pic_url) || undefined,
+      lastVerificationStatus: ['verified', 'unreachable', 'timeout', 'failed'].includes(String(row.last_verification_status)) ? row.last_verification_status as WhatsAppConnection['lastVerificationStatus'] : undefined,
       lastPingAt: typeof row.last_ping_at === 'string' ? row.last_ping_at : undefined,
       isDefault: registered?.length ? row.is_default === true : true,
       createdAt: String(row.created_at || ''), updatedAt: String(row.updated_at || ''),

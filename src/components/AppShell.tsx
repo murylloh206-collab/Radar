@@ -21,6 +21,7 @@ import {
   Sliders,
   Check,
 } from 'lucide-react';
+import { useWhatsAppWorkspace } from '@/components/WhatsAppWorkspaceProvider';
 import { BrandLogo } from '@/components/BrandLogo';
 
 interface AppShellProps {
@@ -29,6 +30,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const sharedWhatsApp = useWhatsAppWorkspace();
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -42,6 +44,7 @@ export function AppShell({ children }: AppShellProps) {
   const [userName, setUserName] = useState('Muryllo Henrique');
   const [userEmail, setUserEmail] = useState('');
   const [waConnected, setWaConnected] = useState<boolean>(false);
+  const [waStatusLabel, setWaStatusLabel] = useState('Consultando WhatsApp…');
   const [waPhone, setWaPhone] = useState<string>('');
   const [prefNightPause, setPrefNightPause] = useState(true);
   const [prefInterval, setPrefInterval] = useState(30);
@@ -65,17 +68,14 @@ export function AppShell({ children }: AppShellProps) {
       })
       .catch(() => {});
 
-    fetch('/api/whatsapp/connect')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.ok && data.whatsapp) {
-          setWaConnected(data.whatsapp.status === 'connected');
-          if (data.whatsapp.profileName) setUserName(data.whatsapp.profileName);
-          if (data.whatsapp.phoneNumber) setWaPhone(data.whatsapp.phoneNumber);
-        }
-      })
-      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const account = sharedWhatsApp.workspace?.connection;
+    setWaConnected(account?.status === 'connected');
+    setWaStatusLabel(account?.statusLabel || (sharedWhatsApp.loading ? 'Carregando WhatsApp…' : 'Selecione seu WhatsApp'));
+    setWaPhone(account?.phoneNumber || '');
+  }, [sharedWhatsApp.workspace, sharedWhatsApp.loading]);
 
   // Fecha menu móvel ao mudar de rota
   useEffect(() => {
@@ -86,6 +86,7 @@ export function AppShell({ children }: AppShellProps) {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
+      sharedWhatsApp.clear();
     } catch {}
     startTransition(() => {
       router.push('/login');
@@ -334,7 +335,7 @@ export function AppShell({ children }: AppShellProps) {
             className={waConnected ? 'rdv3-connected' : 'rdv3-connected rdv3-disconnected'}
             title={waConnected ? `Conectado via ${waPhone || 'WhatsApp'}` : 'WhatsApp desconectado'}
           >
-            {waConnected ? 'WhatsApp conectado' : 'WhatsApp desconectado'}
+            {waStatusLabel}
           </span>
         </div>
 

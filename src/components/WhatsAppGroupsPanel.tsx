@@ -1,6 +1,8 @@
 'use client';
 
 import { serialPoll } from '@/lib/client/serial-poll';
+import { useWhatsAppWorkspace } from '@/components/WhatsAppWorkspaceProvider';
+import type { PublicWhatsAppConnection } from '@/lib/whatsapp-workspace-types';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -21,7 +23,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import type { WhatsAppConnection, WhatsAppGroup } from '@/lib/types';
+import type { WhatsAppGroup } from '@/lib/types';
 import WhatsAppAvatar from '@/components/WhatsAppAvatar';
 import './whatsapp-groups.css';
 
@@ -44,11 +46,16 @@ function normalize(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
 }
 
+type WhatsAppConnection = PublicWhatsAppConnection;
+
 export default function WhatsAppGroupsPanel() {
-  const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
-  const [selectedConnectionId, setSelectedConnectionId] = useState<string>('');
-  const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const shared = useWhatsAppWorkspace();
+  const sharedRef = useRef(shared);
+  sharedRef.current = shared;
+  const [connections, setConnections] = useState<WhatsAppConnection[]>(shared.workspace?.connections || []);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string>(shared.selectedId);
+  const [groups, setGroups] = useState<WhatsAppGroup[]>(shared.workspace?.groups || []);
+  const [loadingInitial, setLoadingInitial] = useState(!shared.workspace);
   const [refreshingGroups, setRefreshingGroups] = useState(false);
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(25);
@@ -77,132 +84,35 @@ export default function WhatsAppGroupsPanel() {
 
   const mounted = useRef(false);
   const stopPairingRef = useRef<(() => void) | null>(null);
-  const selectedRef = useRef('');
-  const groupRevision = useRef(0);
+  const lastQrRefresh = useRef(0);
 
-  // 1. Carregar Conexões e Grupos do Cache/Banco Imediatamente
-  const loadInitialData = useCallback(async () => {
-    try {
-      setErrorMessage(null);
-      const resConn = await fetch('/api/whatsapp/connections', { cache: 'no-store' });
-      const dataConn = await resConn.json().catch(() => ({}));
-
-      if (dataConn.ok && Array.isArray(dataConn.connections)) {
-        setConnections(dataConn.connections);
-        // Selecionar conexão padrão ou primeira
-        const defaultConn = dataConn.connections.find((c: WhatsAppConnection) => c.id === selectedRef.current) || dataConn.connections.find((c: WhatsAppConnection) => c.isDefault) || dataConn.connections[0];
-        const activeId = defaultConn ? defaultConn.id : '';
-        selectedRef.current = activeId;
-        setSelectedConnectionId(activeId);
-        setLoadingInitial(false);
-
-        // Carregar grupos imediatamente do banco para essa conexão
-        const revision = groupRevision.current;
-        const resGroups = await fetch(`/api/whatsapp/groups?connectionId=${encodeURIComponent(activeId)}`, {
-          cache: 'no-store',
-        });
-        const dataGroups = await resGroups.json().catch(() => ({}));
-        if (selectedRef.current === activeId && revision === groupRevision.current && dataGroups.ok && Array.isArray(dataGroups.groups)) {
-          setGroups(dataGroups.groups);
-          setSyncedAt(dataGroups.cachedAt || defaultConn?.lastPingAt || null);
-        }
-      }
-    } catch {
-      setErrorMessage('Não foi possível carregar as conexões de WhatsApp.');
-    } finally {
-      if (mounted.current) {
-        setLoadingInitial(false);
-      }
-    }
-  }, []);
-
-  // 2. Atualização Leve em Segundo Plano dos Grupos
-  const refreshCurrentGroups = useCallback(async (connectionIdToSync?: string) => {
-    const targetId = connectionIdToSync || selectedConnectionId;
-    if (!targetId) return;
-
-    groupRevision.current++;
+  const loadInitialData = useCallback(async () => { await sharedRef.current.reload(); }, []);
+  const refreshCurrentGroups = useCallback(async (id?: string) => {
+    if (id && id !== sharedRef.current.selectedId) sharedRef.current.select(id);
     setRefreshingGroups(true);
-    setGroupsError(null);
-
-    try {
-      const response = await fetch('/api/whatsapp/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionId: targetId }),
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (mounted.current && selectedRef.current === targetId) {
-        if (data.ok && Array.isArray(data.groups)) {
-          setGroups(data.groups);
-          setSyncedAt(data.cachedAt || new Date().toISOString());
-          // Atualiza contagem nos cards de conexões
-          setConnections((prev) =>
-            prev.map((c) =>
-              c.id === targetId
-                ? { ...c, groupsCount: data.groups.length, lastPingAt: data.cachedAt || new Date().toISOString() }
-                : c
-            )
-          );
-        } else if (data.groups) {
-          // Se retornou grupos em cache com aviso, preserva
-          setGroups(data.groups);
-          if (data.warning) setGroupsError(data.warning);
-        } else {
-          setGroupsError(data.error || 'Aviso: sincronização em segundo plano não pôde atualizar no momento.');
-        }
-      }
-    } catch {
-      if (mounted.current) {
-        setGroupsError('Falha temporária ao sincronizar grupos em segundo plano.');
-      }
-    } finally {
-      if (mounted.current) {
-        setRefreshingGroups(false);
-      }
-    }
-  }, [selectedConnectionId]);
+    try { await sharedRef.current.refreshGroups(); }
+    finally { if (mounted.current) setRefreshingGroups(false); }
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
-    void loadInitialData();
-    return () => {
-      mounted.current = false;
-      stopPairingRef.current?.();
-    };
-  }, [loadInitialData]);
-
-  const verifyKnownConnections = useCallback(async (signal?: AbortSignal) => {
-    return fetch('/api/whatsapp/connections?verify=true', { cache: 'no-store', signal })
-      .then(response => { if (!response.ok) throw new Error('Falha ao verificar conexão.'); return response.json(); })
-      .then(payload => { if (!signal?.aborted && mounted.current && payload.ok) setConnections(payload.connections); })
-      .catch(error => { if (error.name !== 'AbortError' && mounted.current) setErrorMessage('Último estado conhecido exibido. Não foi possível verificar agora.'); });
+    return () => { mounted.current = false; stopPairingRef.current?.(); };
   }, []);
+
   useEffect(() => {
-    const controller = new AbortController();
-    void verifyKnownConnections(controller.signal);
-    return () => controller.abort();
-  }, [verifyKnownConnections]);
+    const workspace = shared.workspace;
+    setLoadingInitial(!workspace && shared.loading);
+    setErrorMessage(shared.error);
+    if (!workspace) return;
+    setConnections(workspace.connections);
+    setSelectedConnectionId(shared.selectedId);
+    setGroups(workspace.groups); setSyncedAt(workspace.syncedAt);
+    setGroupsError(shared.error);
+  }, [shared.workspace, shared.selectedId, shared.loading, shared.error]);
 
-  // Ao trocar de conexão no card
-  const handleSelectConnection = (connId: string) => {
-    selectedRef.current = connId;
-    setSelectedConnectionId(connId);
-    setSearch('');
-    setLimit(25);
-    setGroupsError(null);
-
-    // Carrega instantaneamente os grupos já salvos dessa conexão
-    fetch(`/api/whatsapp/groups?connectionId=${encodeURIComponent(connId)}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => {
-        if (selectedRef.current === connId && data.ok && Array.isArray(data.groups)) {
-          setGroups(data.groups);
-          setSyncedAt(data.cachedAt || null);
-        }
-      })
-      .catch(() => {});
+  const handleSelectConnection = (id: string) => {
+    setSelectedConnectionId(id); setGroups([]); setSearch(''); setLimit(25);
+    shared.select(id);
   };
 
   // Abrir Modal de Adicionar WhatsApp
@@ -267,7 +177,7 @@ export default function WhatsAppGroupsPanel() {
         method: 'POST',
         signal,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'poll_qr', connectionId: connId }),
+        body: JSON.stringify({ action: 'poll_qr', connectionId: connId, refreshQr: Date.now() - lastQrRefresh.current >= 20000 }),
       });
       const data = await res.json();
       if (signal?.aborted) return true;
@@ -277,9 +187,8 @@ export default function WhatsAppGroupsPanel() {
         const finalConn = data.connection || activeNewConn;
         if (finalConn) setActiveNewConn(finalConn);
         setModalStep('connected');
-        void verifyKnownConnections();
-
-        selectedRef.current = connId;
+        if (data.connection) { sharedRef.current.observe(data.connection); sharedRef.current.select(connId); }
+        void fetch('/api/whatsapp/connections?identity=true&connectionId=' + encodeURIComponent(connId), { cache: 'no-store' }).then(() => loadInitialData()).catch(() => setErrorMessage('Conectado. A identidade será atualizada na próxima sincronização.'));
         // Load the account first; groups remain independent.
         void loadInitialData();
         void refreshCurrentGroups(connId);
@@ -287,6 +196,7 @@ export default function WhatsAppGroupsPanel() {
       } else if (data.qrcode?.base64 || data.qrCodeBase64) {
         const freshQr = data.qrcode?.base64 || data.qrCodeBase64;
         if (freshQr) {
+          lastQrRefresh.current = Date.now();
           setQrCodeBase64(freshQr);
           setQrCodeRaw(data.qrcode?.code || null);
         }
@@ -319,7 +229,7 @@ export default function WhatsAppGroupsPanel() {
       if (data.ok && (data.alreadyConnected || data.connected || data.status === 'connected')) {
         setActiveNewConn(data.connection || conn);
         setModalStep('connected');
-        void verifyKnownConnections();
+        if (data.connection) { sharedRef.current.observe(data.connection); sharedRef.current.select(conn.id); }
         void loadInitialData();
         return;
       }
@@ -341,6 +251,7 @@ export default function WhatsAppGroupsPanel() {
 
   useEffect(() => {
     if (!showAddModal || modalStep !== 'qrcode' || !activeNewConn?.id) return;
+    lastQrRefresh.current = Date.now();
     const stop = serialPoll(signal => pollPairingStatus(activeNewConn.id, signal), 2500);
     stopPairingRef.current = stop;
     return stop;
@@ -490,7 +401,7 @@ export default function WhatsAppGroupsPanel() {
                   <div className="wa-account-card-meta">
                     <span>
                       <Users size={13} style={{ display: 'inline', marginRight: 4 }} />
-                      {conn.groupsCount ?? 0} grupos sincronizados
+                      {conn.id === selectedConnectionId ? groups.length + ' grupos salvos' : conn.groupsCount !== undefined ? conn.groupsCount + ' grupos salvos' : 'Selecione para ver os grupos'}
                     </span>
                     <span>{conn.lastPingAt ? dateLabel(conn.lastPingAt) : 'Sem verificação'}</span>
                   </div>

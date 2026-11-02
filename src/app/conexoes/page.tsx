@@ -113,8 +113,8 @@ function ConexoesContent() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (activeTab === 'lojas') void loadData();
+  }, [loadData, activeTab]);
 
   // Verificar se uma loja está realmente conectada e validada no cofre
   const isStoreConnected = useCallback((storeName: StoreName): boolean => {
