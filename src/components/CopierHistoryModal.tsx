@@ -14,6 +14,7 @@ import {
   Tag,
   CheckCircle2,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { InstagramIcon } from './SocialIcons';
 import { CopiedOfferHistoryItem } from '@/app/api/copier/history/route';
@@ -30,6 +31,7 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
   const [search, setSearch] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedOfferForStory, setSelectedOfferForStory] = useState<CopiedOfferHistoryItem | null>(null);
+  const [activeModalTab, setActiveModalTab] = useState<'story' | 'feed'>('story');
 
   const fetchHistory = async (query = '') => {
     setLoading(true);
@@ -225,7 +227,23 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
 
                       <button
                         type="button"
-                        onClick={() => setSelectedOfferForStory(item)}
+                        onClick={() => {
+                          setSelectedOfferForStory(item);
+                          setActiveModalTab('feed');
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#061225] border border-[#18334D] hover:border-[#1CCAF2]/60 text-xs font-bold text-[#F8FBFF] transition-all cursor-pointer"
+                        title="Criar Post de Feed com legenda gerada automaticamente"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#1CCAF2]" />
+                        <span>Criar Post</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedOfferForStory(item);
+                          setActiveModalTab('story');
+                        }}
                         className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCB045] text-white text-xs font-black shadow-md shadow-[#FD1D1D]/15 hover:opacity-95 transition-all cursor-pointer"
                         title="Gerar e Postar Story no Instagram"
                       >
@@ -241,13 +259,14 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
         </div>
       </div>
 
-      {/* Modal de Publicação do Story para a Oferta Selecionada */}
+      {/* Modal de Publicação (Story ou Feed Post) para a Oferta Selecionada */}
       {selectedOfferForStory && (
         <StoryPublisherModal
           isOpen={!!selectedOfferForStory}
           onClose={() => setSelectedOfferForStory(null)}
           offer={selectedOfferForStory}
-          onStoryPublished={(offerId) => {
+          initialTab={activeModalTab}
+          onPublished={(offerId) => {
             fetchHistory(search);
           }}
         />

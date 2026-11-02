@@ -21,6 +21,7 @@ export default function MetaConnectionPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
+  const [igIdInput, setIgIdInput] = useState('');
   const [showTutorial, setShowTutorial] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -58,7 +59,10 @@ export default function MetaConnectionPanel() {
       const res = await fetch('/api/meta/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken: tokenInput.trim() }),
+        body: JSON.stringify({
+          accessToken: tokenInput.trim(),
+          instagramAccountId: igIdInput.trim() || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -151,13 +155,16 @@ export default function MetaConnectionPanel() {
               .
             </li>
             <li>
-              Selecione seu aplicativo e certifique-se de marcar as permissões:
+              No campo <strong>User or Page</strong>, selecione a sua <strong>Página do Facebook</strong> vinculada ao seu Instagram Comercial (recomendado) ou selecione seu usuário.
+            </li>
+            <li>
+              Se selecionar seu usuário, clique em <strong>Add a Permission</strong> e adicione obrigatoriamente:
               <span className="block mt-1 font-mono text-[11px] text-[#20C997] bg-[#061225] p-2 rounded-lg border border-[#18334D]">
-                instagram_basic, instagram_content_publish, pages_show_list, pages_read_engagement
+                pages_show_list, instagram_basic, instagram_content_publish, pages_read_engagement
               </span>
             </li>
             <li>
-              Clique em <strong>Generate Access Token</strong>, aprove o acesso da sua Página e Conta Comercial do Instagram, copie o token gerado e cole no campo abaixo.
+              Clique em <strong>Generate Access Token</strong>, aprove o acesso das suas páginas, copie o token gerado e cole abaixo.
             </li>
           </ol>
         </div>
@@ -177,7 +184,7 @@ export default function MetaConnectionPanel() {
           ) : (
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           )}
-          <div className="flex-1 font-semibold">{feedback.message}</div>
+          <div className="flex-1 font-semibold whitespace-pre-line leading-relaxed">{feedback.message}</div>
         </div>
       )}
 
@@ -275,12 +282,28 @@ export default function MetaConnectionPanel() {
           </div>
 
           <div>
+            <label className="text-[11px] font-semibold text-[#8EADC7] block mb-1">
+              Token de Acesso da Meta (Obrigatório):
+            </label>
             <textarea
               rows={3}
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder="Cole aqui seu User ou Page Access Token (ex: EAAG...)"
-              className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-4 py-3 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
+              className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-4 py-2.5 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-[#8EADC7] block mb-1">
+              Instagram Account ID (Opcional - deixe vazio para detecção automática):
+            </label>
+            <input
+              type="text"
+              value={igIdInput}
+              onChange={(e) => setIgIdInput(e.target.value)}
+              placeholder="Ex: 17841400000000000 (preencha apenas se a detecção automática não encontrar)"
+              className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-4 py-2 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
             />
           </div>
 

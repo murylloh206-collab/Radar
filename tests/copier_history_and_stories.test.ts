@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
+import { generatePostCaption } from '../src/lib/client/post-copy-generator';
 
 test('1. Validação de Dimensões e Proporção do Story 9:16 (1080x1920)', async () => {
   const width = 1080;
@@ -35,3 +36,32 @@ test('3. Sharp compõe imagem 9:16 com elementos vetoriais SVG válidos', async 
   assert.equal(metadata.format, 'jpeg');
 });
 
+test('4. Geração de texto/legenda de post de feed a partir da oferta do histórico', () => {
+  const copy = generatePostCaption({
+    title: 'Camisa Térmica Voker Academia Proteção Solar',
+    priceOriginal: '69,99',
+    priceCurrent: '38,90',
+    discountPct: '44',
+    coupon: 'RADAR10',
+    affiliateUrl: 'https://is.gd/4Smf1n',
+    store: 'Mercado Livre',
+  }, 'promocional');
+
+  assert.match(copy, /Camisa Térmica Voker Academia/);
+  assert.match(copy, /38,90/);
+  assert.match(copy, /-44% OFF/);
+  assert.match(copy, /RADAR10/);
+  assert.match(copy, /https:\/\/is\.gd\/4Smf1n/);
+  assert.match(copy, /Produtos que valem a pena!/);
+});
+
+test('5. Geração de texto com estilo engajamento (Comente EU QUERO)', () => {
+  const copy = generatePostCaption({
+    title: 'Smartwatch Ultra Pro',
+    priceCurrent: '199,90',
+    affiliateUrl: 'https://is.gd/smart',
+  }, 'engajamento');
+
+  assert.match(copy, /EU QUERO/);
+  assert.match(copy, /Smartwatch Ultra Pro/);
+});

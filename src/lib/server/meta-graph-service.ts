@@ -13,7 +13,7 @@ export interface MetaIntegrationData {
   lastVerifiedAt?: string;
 }
 
-export interface PublishStoryResult {
+export interface PublishMediaResult {
   ok: boolean;
   creationId?: string;
   mediaId?: string;
@@ -67,7 +67,7 @@ export async function getMetaIntegration(userId: string): Promise<MetaIntegratio
 }
 
 /**
- * Conecta e valida a conta da Meta através de um Access Token
+ * Conecta e valida a conta da Meta através de um Access Token com detecção inteligente
  */
 export async function connectMetaAccount(userId: string, input: {
   accessToken: string;
@@ -100,46 +100,104 @@ export async function connectMetaAccount(userId: string, input: {
       });
     }
 
-    // 2. Caso contrário, inspecionar as Páginas do Usuário na Meta
+    // 2. Inspecionar o Token via /me para identificar se é Page Token ou User Token
+    const meRes = await fetch(
+      `${META_GRAPH_BASE}/me?fields=id,name,category,access_token&access_token=${encodeURIComponent(token)}`
+    );
+    const meJson = await meRes.json();
+
+    if (meJson.error) {
+      return {
+        ok: false,
+        error: `A Meta recusou a validação do token: ${meJson.error.message || 'Token inválido ou expirado.'}`,
+      };
+    }
+
+    // CASO A: O token colado já é um PAGE ACCESS TOKEN direto (possui categoria de página)
+    if (meJson.category) {
+      const pageId = meJson.id;
+      const pageName = meJson.name;
+
+      const pageDetailsRes = await fetch(
+        `${META_GRAPH_BASE}/${pageId}?fields=id,name,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
+      );
+      const pageDetailsJson = await pageDetailsRes.json();
+      const ig = pageDetailsJson.instagram_business_account;
+
+      if (!ig?.id) {
+        return {
+          ok: false,
+          error: `Página "${pageName}" identificada com sucesso, mas ela não possui um Instagram Comercial vinculado. No Meta Business Suite, acesse Configurações > Contas do Instagram e vincule seu perfil comercial.`,
+        };
+      }
+
+      return await persistMetaCredentials(userId, {
+        accessToken: token,
+        facebookPageId: pageId,
+        facebookPageName: pageName,
+        instagramAccountId: ig.id,
+        instagramUsername: ig.username,
+        instagramProfilePic: ig.profile_picture_url,
+      });
+    }
+
+    // CASO B: O token é um USER ACCESS TOKEN. Buscar as Páginas administradas pelo usuário
     const pagesRes = await fetch(
-      `${META_GRAPH_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
+      `${META_GRAPH_BASE}/me/accounts?fields=id,name,access_token,category,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(token)}`
     );
     const pagesJson = await pagesRes.json();
 
     if (pagesJson.error) {
       return {
         ok: false,
-        error: `A Meta recusou a validação do token: ${pagesJson.error.message || 'Token expirado ou sem permissões necessárias.'}`,
+        error: `Erro ao listar páginas da Meta: ${pagesJson.error.message}`,
       };
     }
 
     const pages = Array.isArray(pagesJson.data) ? pagesJson.data : [];
+
+    // Se não encontrou nenhuma página, investigar as permissões do token
     if (pages.length === 0) {
+      const permRes = await fetch(
+        `${META_GRAPH_BASE}/me/permissions?access_token=${encodeURIComponent(token)}`
+      );
+      const permJson = await permRes.json();
+      const grantedPerms = new Set(
+        (permJson.data || []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission)
+      );
+
+      if (!grantedPerms.has('pages_show_list')) {
+        return {
+          ok: false,
+          error:
+            "O token foi gerado sem a permissão 'pages_show_list'.\n\nComo resolver no Graph API Explorer:\n1. No campo 'User or Page', selecione sua Página do Facebook diretamente;\n2. OU no botão 'Add a Permission' à direita, adicione: pages_show_list, instagram_basic, instagram_content_publish e pages_read_engagement;\n3. Clique em 'Generate Access Token' e cole o novo token aqui.",
+        };
+      }
+
       return {
         ok: false,
-        error: 'Nenhuma Página do Facebook encontrada neste perfil da Meta. Crie ou seja administrador de uma Página com Instagram Comercial vinculado.',
+        error: `O perfil "${meJson.name || 'informado'}" não possui nenhuma Página do Facebook administrada ou aprovada. Crie uma Página no Facebook e vincule seu Instagram Comercial a ela.`,
       };
     }
 
-    // Encontrar a página que possui conta do Instagram conectada
-    const matchedPage = input.pageId
-      ? pages.find((p: any) => p.id === input.pageId) || pages[0]
-      : pages.find((p: any) => p.instagram_business_account?.id) || pages[0];
+    // Localizar a página que possui conta do Instagram conectada
+    const pageWithIg = pages.find((p: any) => p.instagram_business_account?.id);
 
-    const igAccount = matchedPage.instagram_business_account;
-    if (!igAccount?.id) {
+    if (!pageWithIg) {
+      const pageNames = pages.map((p: any) => p.name).join(', ');
       return {
         ok: false,
-        error: `A página "${matchedPage.name}" foi encontrada, mas não possui uma Conta Profissional do Instagram vinculada a ela. Vincule seu Instagram à sua Página do Facebook nos ajustes do Meta Business Suite.`,
+        error: `Página(s) encontrada(s): "${pageNames}", porém nenhuma delas tem um Instagram Comercial vinculado.\n\nPara resolver: acesse o Meta Business Suite da sua Página > Contas > Contas do Instagram > Adicionar/Vincular seu Instagram.`,
       };
     }
 
-    const effectiveToken = matchedPage.access_token || token;
+    const effectiveToken = pageWithIg.access_token || token;
+    const igAccount = pageWithIg.instagram_business_account;
 
     return await persistMetaCredentials(userId, {
       accessToken: effectiveToken,
-      facebookPageId: matchedPage.id,
-      facebookPageName: matchedPage.name,
+      facebookPageId: pageWithIg.id,
+      facebookPageName: pageWithIg.name,
       instagramAccountId: igAccount.id,
       instagramUsername: igAccount.username,
       instagramProfilePic: igAccount.profile_picture_url,
@@ -245,12 +303,44 @@ export async function publishStoryToInstagram(
     imageUrl: string;
     caption?: string;
   }
-): Promise<PublishStoryResult> {
+): Promise<PublishMediaResult> {
+  return publishToInstagramMedia(userId, {
+    imageUrl: params.imageUrl,
+    mediaType: 'STORIES',
+    caption: params.caption,
+  });
+}
+
+/**
+ * Publica um Post no FEED do Instagram através da Meta Graph API
+ */
+export async function publishFeedPostToInstagram(
+  userId: string,
+  params: {
+    imageUrl: string;
+    caption: string;
+  }
+): Promise<PublishMediaResult> {
+  return publishToInstagramMedia(userId, {
+    imageUrl: params.imageUrl,
+    caption: params.caption,
+  });
+}
+
+/**
+ * Publica uma Foto com Texto no Feed da Página do Facebook
+ */
+export async function publishFeedPostToFacebook(
+  userId: string,
+  params: {
+    imageUrl: string;
+    caption: string;
+  }
+): Promise<PublishMediaResult> {
   if (!isSupabaseConfigured || !supabase) {
     return { ok: false, error: 'Banco de dados não configurado.' };
   }
 
-  // 1. Obter token e ID da conta no cofre
   const { data: record, error } = await supabase
     .from('store_credentials_vault')
     .select('*')
@@ -259,7 +349,63 @@ export async function publishStoryToInstagram(
     .maybeSingle();
 
   if (error || !record || !record.is_active || record.connection_status !== 'conectado') {
-    return { ok: false, error: 'Nenhuma conta do Instagram/Facebook conectada no sistema. Conecte sua conta em Conexões > Redes Sociais.' };
+    return { ok: false, error: 'Nenhuma conta da Meta conectada.' };
+  }
+
+  const token = record.encrypted_user_token ? decryptSecret(record.encrypted_user_token) : null;
+  const pageId = record.app_id;
+
+  if (!token || !pageId) {
+    return { ok: false, error: 'Página do Facebook não configurada no cofre.' };
+  }
+
+  try {
+    const postUrl = new URL(`${META_GRAPH_BASE}/${pageId}/photos`);
+    postUrl.searchParams.set('url', params.imageUrl);
+    postUrl.searchParams.set('message', params.caption);
+    postUrl.searchParams.set('access_token', token);
+
+    const res = await fetch(postUrl.toString(), { method: 'POST' });
+    const json = await res.json();
+
+    if (json.error) {
+      return { ok: false, error: `Erro da Meta ao publicar no Facebook: ${json.error.message}` };
+    }
+
+    return {
+      ok: true,
+      mediaId: json.id || json.post_id,
+      publishedAt: new Date().toISOString(),
+    };
+  } catch (err: any) {
+    return { ok: false, error: `Falha ao publicar no Facebook: ${err.message}` };
+  }
+}
+
+/**
+ * Função interna reutilizável para criação e publicação de mídias no Instagram
+ */
+async function publishToInstagramMedia(
+  userId: string,
+  params: {
+    imageUrl: string;
+    mediaType?: 'STORIES' | 'IMAGE';
+    caption?: string;
+  }
+): Promise<PublishMediaResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    return { ok: false, error: 'Banco de dados não configurado.' };
+  }
+
+  const { data: record, error } = await supabase
+    .from('store_credentials_vault')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('store_name', 'meta')
+    .maybeSingle();
+
+  if (error || !record || !record.is_active || record.connection_status !== 'conectado') {
+    return { ok: false, error: 'Nenhuma conta do Instagram conectada. Conecte sua conta em Conexões > Redes Sociais.' };
   }
 
   const token = record.encrypted_user_token ? decryptSecret(record.encrypted_user_token) : null;
@@ -270,10 +416,15 @@ export async function publishStoryToInstagram(
   }
 
   try {
-    // 2. Passo 1 da Meta: Criar container de mídia tipo STORIES
+    // 1. Criar container de mídia
     const containerUrl = new URL(`${META_GRAPH_BASE}/${igUserId}/media`);
     containerUrl.searchParams.set('image_url', params.imageUrl);
-    containerUrl.searchParams.set('media_type', 'STORIES');
+    if (params.mediaType === 'STORIES') {
+      containerUrl.searchParams.set('media_type', 'STORIES');
+    }
+    if (params.caption) {
+      containerUrl.searchParams.set('caption', params.caption);
+    }
     containerUrl.searchParams.set('access_token', token);
 
     const createRes = await fetch(containerUrl.toString(), {
@@ -284,19 +435,19 @@ export async function publishStoryToInstagram(
     if (createJson.error) {
       return {
         ok: false,
-        error: `Erro da Meta ao preparar o Story: ${createJson.error.message || 'Falha no container de mídia'}`,
+        error: `Erro da Meta ao preparar a publicação: ${createJson.error.message || 'Falha no container de mídia'}`,
       };
     }
 
     const creationId = createJson.id;
     if (!creationId) {
-      return { ok: false, error: 'A Meta não retornou o identificador do Story para publicação.' };
+      return { ok: false, error: 'A Meta não retornou o identificador da publicação.' };
     }
 
-    // 3. Pequeno intervalo para o processador de CDN da Meta assimilar a imagem
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    // 2. Intervalo de segurança para CDN da Meta processar a imagem
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    // 4. Passo 2 da Meta: Publicar o container criado
+    // 3. Publicar o container
     const publishUrl = new URL(`${META_GRAPH_BASE}/${igUserId}/media_publish`);
     publishUrl.searchParams.set('creation_id', creationId);
     publishUrl.searchParams.set('access_token', token);
@@ -310,16 +461,14 @@ export async function publishStoryToInstagram(
       return {
         ok: false,
         creationId,
-        error: `Erro da Meta ao publicar o Story: ${publishJson.error.message || 'Falha na publicação'}`,
+        error: `Erro da Meta ao publicar: ${publishJson.error.message || 'Falha na publicação'}`,
       };
     }
-
-    const mediaId = publishJson.id;
 
     return {
       ok: true,
       creationId,
-      mediaId,
+      mediaId: publishJson.id,
       publishedAt: new Date().toISOString(),
     };
   } catch (err: any) {
@@ -329,4 +478,3 @@ export async function publishStoryToInstagram(
     };
   }
 }
-
