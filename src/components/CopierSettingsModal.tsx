@@ -323,7 +323,7 @@ export default function CopierSettingsModal({
         couponDiscount: '10% OFF extra',
         affiliateUrl: 'https://shope.ee/seu-link-afiliado',
         hookText: '🔥 *Achado imperdível do Radar*',
-        watermarkText: '🎯 _Radar de Ofertas_',
+        watermarkText: '🎯 *Radar de Ofertas* — Produtos que valem a pena!',
       });
     } catch {
       return 'Erro ao formatar prévia do template.';

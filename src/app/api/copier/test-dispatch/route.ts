@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
       discountPct: realProduct.discountPct,
       affiliateUrl: finalAffiliateUrl,
       couponCode: realProduct.coupon,
-      watermarkText: db.settings?.watermarkText || '🎯 *Radar de Ofertas* — Os melhores achadinhos',
+      watermarkText: db.settings?.watermarkText || '🎯 *Radar de Ofertas* — Produtos que valem a pena!',
     });
 
     // 8. MODO PRÉVIA SEM ENVIO (PREVIEW ONLY)

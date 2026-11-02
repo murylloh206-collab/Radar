@@ -424,7 +424,7 @@ export function getInitialDatabase(): DatabaseSchema {
       nightPauseEnd: '07:30:00',
       minSendIntervalSeconds: 60,
       maxDailyMessages: 120,
-      watermarkText: '🎯 *Radar de Ofertas* — Os melhores achadinhos',
+      watermarkText: '🎯 *Radar de Ofertas* — Produtos que valem a pena!',
       updatedAt: new Date().toISOString(),
     },
     whatsapp: {

@@ -70,7 +70,7 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     couponCode,
     couponDiscount,
     hookText = '⚡ *SUPER OFERTA EXCLUSIVA!*',
-    watermarkText = '🎯 _Radar de Ofertas_',
+    watermarkText = '🎯 *Radar de Ofertas* — Produtos que valem a pena!',
   } = options;
 
   let message = templateText;
