@@ -851,8 +851,9 @@ export async function processIncomingMessage(
     finalMediaUrl = undefined;
     finalMediaType = 'none';
   } else if (bestOfficialPhoto) {
-    // Formata a fotografia oficial no tamanho quadrado perfeito (1:1) com fundo limpo para visualização completa no WhatsApp sem abrir
-    finalMediaUrl = await optimizeProductImageForWhatsApp(bestOfficialPhoto, authorizedSource.userId);
+    // Formata a fotografia oficial no tamanho quadrado perfeito (1:1) com fundo limpo e marca d'água oficial da logo
+    const applyWatermark = authorizedSource.brandWatermarkEnabled !== false;
+    finalMediaUrl = await optimizeProductImageForWhatsApp(bestOfficialPhoto, authorizedSource.userId, { watermark: applyWatermark });
     finalMediaType = 'image';
   } else {
     finalMediaUrl = undefined;

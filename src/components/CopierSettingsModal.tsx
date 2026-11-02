@@ -763,6 +763,38 @@ export default function CopierSettingsModal({
                 </p>
               </div>
             </div>
+
+            {/* Controle da Marca d'Água com Logo Oficial */}
+            {imageMode !== 'none' && (
+              <div style={{ marginTop: 14 }}>
+                <div className="csm-watermark-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#0D1B31', border: '1px solid #18334D', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <img
+                      src="/radar-logo.jpg"
+                      alt="Logo Radar de Ofertas"
+                      style={{ width: 38, height: 38, borderRadius: 10, border: '1.5px solid #1CCAF2', objectFit: 'cover' }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>
+                        Marca d&apos;água com logo oficial
+                      </div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                        Aplica a logo oficial Radar de Ofertas de forma discreta e elegante no canto da foto.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`csm-segmented-btn ${watermarkEnabled ? 'csm-seg-active' : ''}`}
+                    onClick={() => !isRuleActive && setWatermarkEnabled(!watermarkEnabled)}
+                    disabled={isRuleActive}
+                    style={{ padding: '8px 14px', fontSize: 12, height: 36, whiteSpace: 'nowrap' }}
+                  >
+                    {watermarkEnabled ? 'Ativa na imagem' : 'Sem marca'}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* SEÇÃO 5: SELEÇÃO E CRIAÇÃO DE TEMPLATES POR CARDS */}
