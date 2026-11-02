@@ -192,40 +192,62 @@ export function extractOfferDetailsFromWhatsAppText(
   title?: string;
   originalPrice?: number;
   currentPrice?: number;
+  currentPriceCondition?: string;
+  ouText?: string;
+  couponCode?: string;
   discountPct?: number;
 } {
   let originalPrice: number | undefined;
   let currentPrice: number | undefined;
+  let currentPriceCondition: string | undefined;
+  let ouText: string | undefined;
+  let couponCode: string | undefined;
 
-  // 1. Padrão "De: 1.349 | Por: R$747" ou "De R$ 89,90 por R$ 36,00"
-  const dePorMatch = rawText.match(
-    /de:?\s*(?:r\$\s*)?~?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~?\s*(?:\||por:?|->|-|\n)+\s*(?:por(?:\s+apenas)?:?\s*)?(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)/i
+  // 1. Preço "De" (Preço Original / Anterior)
+  // Suporta: ~De R$ 349,99~, De: ~R$ 349,99~, De: R$ 349,99, De 349,90, etc.
+  const deMatch =
+    rawText.match(/~?\s*de:?\s*(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~/i) ||
+    rawText.match(/(?:^|\n)\s*~?\s*de:?\s*(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~?/i) ||
+    rawText.match(/de:?\s*(?:r\$\s*)?~?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~?\s*(?:\||por:?|->|-|\n)/i);
+
+  if (deMatch) {
+    const p = parseBRLNumber(deMatch[1]);
+    if (p > 0) originalPrice = p;
+  }
+
+  // 2. Preço "Por" (Preço Promocional Atual e Condição Pix / À vista)
+  // Suporta: *Por R$ 236,21 no Pix*, *Por R$ 3.149,00*, Por apenas R$ 99,90, etc.
+  const porMatch = rawText.match(
+    /(?:^|\n)\s*\*?\s*por(?:\s+apenas)?:?\s*(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)(\s*(?:no\s+pix|à\s+vista|no\s+boleto))?\*?/i
   );
-  if (dePorMatch) {
-    const p1 = parseBRLNumber(dePorMatch[1]);
-    const p2 = parseBRLNumber(dePorMatch[2]);
-    if (p1 > 0 && p2 > 0) {
-      originalPrice = p1 > p2 ? p1 : undefined;
-      currentPrice = p2;
+  if (porMatch) {
+    const p = parseBRLNumber(porMatch[1]);
+    if (p > 0) {
+      currentPrice = p;
+      if (porMatch[2]) currentPriceCondition = porMatch[2].trim();
     }
   }
 
-  // 2. Fallback: "Por: R$ 747" ou "Por apenas R$ 99,90"
+  // Fallback para Preço Por: "De ... por ..." na mesma linha
   if (!currentPrice) {
-    const porMatch = rawText.match(
-      /por(?:\s+apenas)?:?\s*\*?\s*(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+,[0-9]{1,2})/i
+    const dePorMatch = rawText.match(
+      /de:?\s*(?:r\$\s*)?~?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~?\s*(?:\||por:?|->|-|\n)+\s*(?:por(?:\s+apenas)?:?\s*)?(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)/i
     );
-    if (porMatch) {
-      const p = parseBRLNumber(porMatch[1]);
-      if (p > 0) currentPrice = p;
+    if (dePorMatch) {
+      const p1 = parseBRLNumber(dePorMatch[1]);
+      const p2 = parseBRLNumber(dePorMatch[2]);
+      if (p1 > 0 && p2 > 0) {
+        if (!originalPrice) originalPrice = p1 > p2 ? p1 : undefined;
+        currentPrice = p2;
+      }
     }
   }
 
-  // 3. Fallback: R$ explícito em linha que não seja cupom
+  // Fallback: R$ em linha que não seja De, Ou ou Cupom
   if (!currentPrice) {
     const lines = rawText.split(/\r?\n/);
     for (const line of lines) {
-      if (/cupom|off|desconto|resgate|frete/i.test(line) && !/por:?/i.test(line)) {
+      if (/cupom|off|desconto|resgate|frete|^[\s~*]*de:?|^[\s*]*ou\s/i.test(line)) {
         continue;
       }
       const rMatch = line.match(/r\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+)/i);
@@ -239,7 +261,25 @@ export function extractOfferDetailsFromWhatsAppText(
     }
   }
 
-  // 4. Extrair título real da oferta a partir das linhas do texto
+  // 3. Preço "Ou" (Parcelamento / Condição alternativa)
+  // Suporta: *Ou R$ 277,90 em até 6x*, *Ou R$ 3.499,00 em até 10x*, etc.
+  const ouMatch = rawText.match(
+    /(?:^|\n)\s*[*_~]?\s*(ou\s+(?:r\$\s*)?[0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?[^\n\r*~_]*)[*_~]?/i
+  );
+  if (ouMatch) {
+    ouText = ouMatch[1].trim();
+  }
+
+  // 4. Código do Cupom
+  // Suporta: `🔖Utilize o Cupom: OFERTADEZ`, `Utilize o Cupom: XYZ`, `Cupom: ABC`, etc.
+  const cupomMatch = rawText.match(
+    /(?:cupom|utilize\s+o\s+cupom|use\s+o\s+cupom)[\s:🔖]+[*_`~]?\s*([A-Z0-9_-]{3,25})/i
+  );
+  if (cupomMatch) {
+    couponCode = cupomMatch[1].trim().toUpperCase();
+  }
+
+  // 5. Extrair título real da oferta a partir das linhas do texto
   const rawLines = rawText
     .replace(/https?:\/\/[^\s]+/gi, '')
     .split(/\r?\n/)
@@ -248,15 +288,13 @@ export function extractOfferDetailsFromWhatsAppText(
 
   const candidateLines = rawLines.filter((line) => {
     const lower = line.toLowerCase();
-    if (lower.startsWith('de:') || lower.startsWith('por:') || lower.startsWith('por apenas')) return false;
+    if (lower.startsWith('de:') || lower.startsWith('por:') || lower.startsWith('por apenas') || lower.startsWith('ou')) return false;
     if (/de:?\s*(?:r\$)?\s*\d+.*por:?/i.test(line)) return false;
-    if (lower.includes('resgate aqui') || lower.includes('aplique o cupom') || lower.includes('resgate cupom')) return false;
+    if (lower.includes('resgate aqui') || lower.includes('aplique o cupom') || lower.includes('resgate cupom') || lower.includes('utilize o cupom')) return false;
     if (lower.includes('link do produto') || lower.includes('compre aqui') || lower === '🛒') return false;
     return true;
   });
 
-  // Se houver mais de uma linha candidata e a primeira for um gancho curto em caixa alta (ex: "ESSE É ELITE 😍"),
-  // preferir a segunda linha que contém o nome descritivo do produto
   let title: string | undefined;
   if (candidateLines.length >= 2) {
     const first = candidateLines[0];
@@ -280,6 +318,9 @@ export function extractOfferDetailsFromWhatsAppText(
     title: title && title !== `Produto ${storeName.toUpperCase()}` ? title : undefined,
     originalPrice,
     currentPrice,
+    currentPriceCondition,
+    ouText,
+    couponCode,
     discountPct,
   };
 }
@@ -627,15 +668,17 @@ export async function processIncomingMessage(
     productData.title = parsedFromWhatsApp.title;
   }
 
-  if ((!productData.currentPrice || productData.currentPrice <= 0) && parsedFromWhatsApp.currentPrice) {
+  if (parsedFromWhatsApp.currentPrice && parsedFromWhatsApp.currentPrice > 0) {
     productData.currentPrice = parsedFromWhatsApp.currentPrice;
   }
 
-  if ((!productData.originalPrice || productData.originalPrice <= 0) && parsedFromWhatsApp.originalPrice) {
+  if (parsedFromWhatsApp.originalPrice && parsedFromWhatsApp.originalPrice > 0) {
     productData.originalPrice = parsedFromWhatsApp.originalPrice;
   }
 
-  if ((!productData.discountPct || productData.discountPct <= 0) && parsedFromWhatsApp.discountPct) {
+  if (productData.originalPrice && productData.currentPrice && productData.originalPrice > productData.currentPrice) {
+    productData.discountPct = Math.round(((productData.originalPrice - productData.currentPrice) / productData.originalPrice) * 100);
+  } else if (parsedFromWhatsApp.discountPct) {
     productData.discountPct = parsedFromWhatsApp.discountPct;
   }
 
@@ -824,7 +867,10 @@ export async function processIncomingMessage(
     title: productData.title,
     originalPrice: productData.originalPrice,
     currentPrice: productData.currentPrice,
+    currentPriceCondition: parsedFromWhatsApp.currentPriceCondition,
+    ouPriceText: parsedFromWhatsApp.ouText,
     discountPct: productData.discountPct,
+    couponCode: parsedFromWhatsApp.couponCode,
     affiliateUrl: displayAffiliateUrl,
     watermarkText: db.settings.watermarkText,
   });

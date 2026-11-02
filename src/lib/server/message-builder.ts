@@ -3,6 +3,8 @@ export interface FormatMessageOptions {
   title: string;
   originalPrice?: number;
   currentPrice: number;
+  currentPriceCondition?: string;
+  ouPriceText?: string;
   discountPct?: number;
   affiliateUrl: string;
   couponCode?: string;
@@ -47,6 +49,7 @@ export const DEFAULT_TEMPLATE = `\
 
 {preco_de}
 🔥 *Por apenas {preco_por}* ({desconto})
+{preco_ou}
 {cupom}
 
 🛒 *Compre aqui com segurança:*
@@ -60,6 +63,8 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     title,
     originalPrice,
     currentPrice,
+    currentPriceCondition,
+    ouPriceText,
     discountPct,
     affiliateUrl,
     couponCode,
@@ -77,7 +82,7 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
   message = message.replace('{titulo}', title.trim());
 
   // Preço DE
-  if (originalPrice && currentPrice > 0 && originalPrice > currentPrice) {
+  if (originalPrice && originalPrice > 0 && (!currentPrice || originalPrice > currentPrice)) {
     message = message.replace(/~?R\$\s*\{preco_de\}~?/gi, `~${formatBRL(originalPrice)}~`);
     message = message.replace('{preco_de}', `De: ~${formatBRL(originalPrice)}~`);
   } else {
@@ -92,29 +97,50 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     message = message.replace('{desconto}', '');
   }
 
-  // Preço POR / Preço Atual
+  // Preço POR / Preço Atual (com condição de pagamento Pix / à vista se detectada)
   if (currentPrice && currentPrice > 0) {
-    message = message.replace(/R\$\s*\{preco_por\}/gi, formatBRL(currentPrice));
-    message = message.replace('{preco_por}', formatBRL(currentPrice));
-    message = message.replace(/R\$\s*\{preco\}/gi, formatBRL(currentPrice));
-    message = message.replace('{preco}', formatBRL(currentPrice));
+    const formattedPor = `${formatBRL(currentPrice)}${currentPriceCondition ? ' ' + currentPriceCondition : ''}`;
+    message = message.replace(/R\$\s*\{preco_por\}/gi, formattedPor);
+    message = message.replace('{preco_por}', formattedPor);
+    message = message.replace(/R\$\s*\{preco\}/gi, formattedPor);
+    message = message.replace('{preco}', formattedPor);
   } else {
     message = message.replace(/^.*\{preco_por\}.*$/gm, '');
     message = message.replace(/^.*\{preco\}.*$/gm, '');
   }
 
-  // Remover parênteses vazios residuais
-  message = message.replace(/\(\s*\)/g, '');
+  // Preço OU (Parcelamento / Condição alternativa)
+  const cleanOu = ouPriceText?.trim();
+  if (cleanOu) {
+    const formattedOu = cleanOu.toLowerCase().startsWith('ou') ? cleanOu : `Ou ${cleanOu}`;
+    if (message.includes('{preco_ou}') || message.includes('{ou}')) {
+      message = message.replace('{preco_ou}', `💳 *${formattedOu}*`);
+      message = message.replace('{ou}', `💳 *${formattedOu}*`);
+    } else {
+      message = message.replace(/(🔥\s*\*Por[^\n]+\*)/, `$1\n💳 *${formattedOu}*`);
+    }
+  } else {
+    message = message.replace(/^.*\{preco_ou\}.*$/gm, '');
+    message = message.replace(/^.*\{ou\}.*$/gm, '');
+  }
 
   // Cupom
   if (couponCode && couponCode.trim()) {
-    const couponLine = `🎟️ Cupom: *${couponCode.trim().toUpperCase()}*${
+    const cleanCoupon = couponCode.trim().toUpperCase();
+    const couponLine = `🎟️ Cupom: *${cleanCoupon}*${
       couponDiscount ? ` (${couponDiscount})` : ''
     }`;
-    message = message.replace('{cupom}', couponLine);
+    if (message.includes('{cupom}')) {
+      message = message.replace('{cupom}', couponLine);
+    } else {
+      message = message.replace(/(\n+🛒|\n+👉)/, `\n\n${couponLine}$1`);
+    }
   } else {
-    message = message.replace('{cupom}', '');
+    message = message.replace(/^.*\{cupom\}.*$/gm, '');
   }
+
+  // Remover parênteses vazios residuais
+  message = message.replace(/\(\s*\)/g, '');
 
   // Link
   message = message.replace('{link}', affiliateUrl);

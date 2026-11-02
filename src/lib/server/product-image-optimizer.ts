@@ -95,3 +95,4 @@ export async function optimizeProductImageForWhatsApp(
 
   return Promise.race([processPromise, timeoutPromise]);
 }
+

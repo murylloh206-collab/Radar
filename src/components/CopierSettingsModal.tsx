@@ -30,13 +30,14 @@ export const BUILTIN_TEMPLATES: Record<string, { id: string; name: string; templ
   essencial: {
     id: 'essencial',
     name: 'Oferta essencial',
-    description: 'Preço atual, preço anterior e link limpo. Ideal para promoções diárias rápidas.',
+    description: 'Preços De, Por, Ou parcelado, cupom e link limpo. Ideal para promoções diárias rápidas.',
     templateText: `{gancho}
 
 *{titulo}*
 
 {preco_de}
 🔥 *Por apenas {preco_por}* ({desconto})
+{preco_ou}
 {cupom}
 
 🛒 *Compre aqui com segurança:*
@@ -47,7 +48,7 @@ export const BUILTIN_TEMPLATES: Record<string, { id: string; name: string; templ
   cupom: {
     id: 'cupom',
     name: 'Oferta com cupom e destaque',
-    description: 'Destaque visual para cupons promocionais e grandes descontos.',
+    description: 'Destaque visual para cupons promocionais e parcelamento.',
     templateText: `{gancho}
 
 🏷️ *SUPER OFERTA COM CUPOM!*
@@ -55,6 +56,7 @@ export const BUILTIN_TEMPLATES: Record<string, { id: string; name: string; templ
 
 {preco_de}
 🔥 *Preço final: {preco_por}* ({desconto})
+{preco_ou}
 {cupom}
 
 👉 *Resgate o cupom e garanta já:*
@@ -65,9 +67,12 @@ export const BUILTIN_TEMPLATES: Record<string, { id: string; name: string; templ
   curto: {
     id: 'curto',
     name: 'Texto curto e direto',
-    description: 'Sem enrolação: apenas título, preço por e link de compra.',
+    description: 'Sem enrolação: apenas título, preços De / Por / Ou, cupom e link.',
     templateText: `*{titulo}*
+
+{preco_de}
 🔥 *{preco_por}* ({desconto})
+{preco_ou}
 {cupom}
 
 👉 {link}`,
@@ -76,8 +81,9 @@ export const BUILTIN_TEMPLATES: Record<string, { id: string; name: string; templ
 
 const VARIABLE_CHIPS = [
   { tag: '{titulo}', label: 'Título do produto' },
-  { tag: '{preco_por}', label: 'Preço com desconto' },
   { tag: '{preco_de}', label: 'Preço anterior (De)' },
+  { tag: '{preco_por}', label: 'Preço com desconto (Por)' },
+  { tag: '{preco_ou}', label: 'Parcelado / Alternativo (Ou)' },
   { tag: '{desconto}', label: '% de desconto' },
   { tag: '{cupom}', label: 'Código do cupom' },
   { tag: '{link}', label: 'Link de afiliado (Obrigatório)' },
@@ -310,6 +316,8 @@ export default function CopierSettingsModal({
         title: 'Fone de Ouvido Bluetooth Sem Fio Estéreo',
         originalPrice: 199.9,
         currentPrice: 129.9,
+        currentPriceCondition: 'no Pix',
+        ouPriceText: 'Ou R$ 144,90 em até 3x',
         discountPct: 35,
         couponCode: 'PROMO10',
         couponDiscount: '10% OFF extra',
