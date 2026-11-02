@@ -34,3 +34,4 @@ test('3. Sharp compõe imagem 9:16 com elementos vetoriais SVG válidos', async 
   assert.equal(metadata.height, 1920);
   assert.equal(metadata.format, 'jpeg');
 });
+

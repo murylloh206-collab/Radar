@@ -27,3 +27,4 @@ CREATE POLICY "Usuário gerencia suas próprias publicações de Stories"
     ON public.story_publications
     FOR ALL
     USING (auth.uid() = user_id OR user_id = '00000000-0000-0000-0000-000000000001'::uuid);
+
