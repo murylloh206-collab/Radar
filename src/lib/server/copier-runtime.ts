@@ -163,10 +163,13 @@ async function sendEntry(row: StoredJob) {
     return updateJob(row, { status: 'falha', error_details: 'Regra, conexão ou evidência do link inválida. Revalide a oferta.' });
   }
   const now = currentMinute();
-  if ((initial.settings.nightPauseEnabled && withinWindow(now, minuteOfDay(initial.settings.nightPauseStart), minuteOfDay(initial.settings.nightPauseEnd))) ||
-    !withinWindow(now, minuteOfDay(source.startTime || '00:00'), minuteOfDay(source.endTime || '00:00'))) {
-    return updateJob(row, { status: 'agendado', locked_at: null, runtime_delivery: null,
-      scheduled_for: new Date(Date.now() + 60000).toISOString(), attempts: Math.max(row.attempts - 1, 0), error_details: 'Aguardando horário permitido.' });
+  const isRule24h = Boolean(source.is24Hours) || (source.startTime === '00:00' && (source.endTime === '00:00' || source.endTime === '23:59'));
+  if (!isRule24h) {
+    if ((initial.settings.nightPauseEnabled && withinWindow(now, minuteOfDay(initial.settings.nightPauseStart), minuteOfDay(initial.settings.nightPauseEnd))) ||
+      !withinWindow(now, minuteOfDay(source.startTime || '00:00'), minuteOfDay(source.endTime || '00:00'))) {
+      return updateJob(row, { status: 'agendado', locked_at: null, runtime_delivery: null,
+        scheduled_for: new Date(Date.now() + 60000).toISOString(), attempts: Math.max(row.attempts - 1, 0), error_details: 'Aguardando horário permitido.' });
+    }
   }
   const validation = validateJobForDispatch(job, initial);
   if (!validation.valid) return updateJob(row, { status: 'falha', error_details: validation.error });
