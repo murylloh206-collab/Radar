@@ -39,3 +39,4 @@ test('Story and Feed Renderer: Parser de números brasileiros', () => {
   assert.equal(parsePriceToNumber('150'), 150);
   assert.equal(parsePriceToNumber(undefined), null);
 });
+

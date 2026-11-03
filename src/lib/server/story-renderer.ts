@@ -144,6 +144,7 @@ let cachedOfficialLogo: Map<number, Buffer> = new Map();
 
 /**
  * Carrega e recorta o logotipo oficial do Radar de Ofertas em alta resolução
+ * com borda sutil na cor da marca para garantir máxima nitidez e contraste.
  */
 async function getOfficialLogoBuffer(size = 80, radius = 22): Promise<Buffer | null> {
   if (cachedOfficialLogo.has(size)) {
@@ -175,9 +176,18 @@ async function getOfficialLogoBuffer(size = 80, radius = 22): Promise<Buffer | n
       </svg>
     `);
 
+    const border = Buffer.from(`
+      <svg width="${size}" height="${size}">
+        <rect x="1" y="1" width="${size - 2}" height="${size - 2}" rx="${radius}" ry="${radius}" fill="none" stroke="#1CCAF2" stroke-width="2" stroke-opacity="0.8"/>
+      </svg>
+    `);
+
     const logoBuffer = await sharp(logoFilePath)
       .resize(size, size, { fit: 'cover' })
-      .composite([{ input: mask, blend: 'dest-in' }])
+      .composite([
+        { input: mask, blend: 'dest-in' },
+        { input: border, top: 0, left: 0 },
+      ])
       .png()
       .toBuffer();
 
@@ -191,6 +201,7 @@ async function getOfficialLogoBuffer(size = 80, radius = 22): Promise<Buffer | n
 
 /**
  * Renderiza uma arte publicitária oficial (Story 9:16 ou Feed Post 1:1 / 4:5)
+ * respeitando 100% a paleta de cores original do Radar de Ofertas.
  */
 export async function renderStoryImage(input: StoryRenderInput): Promise<StoryRenderOutput> {
   const started = performance.now();
@@ -224,7 +235,6 @@ export async function renderStoryImage(input: StoryRenderInput): Promise<StoryRe
 
     // 2. Calcular preços, desconto automático e formatação
     const pricing = calculatePricingDetails(input.priceOriginal, input.priceCurrent, input.discountPct);
-    const { hasDiscount, discountLabel, priceOriginalFormatted, priceCurrentFormatted } = pricing;
 
     const couponText = input.coupon ? `🎟️ CUPOM: ${input.coupon.toUpperCase().trim()}` : '';
 
@@ -313,9 +323,10 @@ export async function renderStoryImage(input: StoryRenderInput): Promise<StoryRe
 
 /**
  * Layout oficial para Stories 9:16 (1080 × 1920)
- * - Cabeçalho na área segura do topo com logo oficial e slogan
- * - Cartão central de 780x780 com contain
- * - Preço DE (riscado) e POR (em destaque dourado)
+ * - Cores originais: Fundo gradiente azul-marinho escuro/obsidian (#040C1A, #091A30)
+ * - Destaques em Ciano (#1CCAF2) e gradiente (#0879DF a #1CCAF2)
+ * - Selo Superior: "OFERTA IMPERDÍVEL" (substituindo termos antigos)
+ * - Preço DE (riscado) e POR (em destaque máximo ciano com glow)
  * - Botão de compra no Instagram Stories
  */
 async function renderStory9x16Layout(params: {
@@ -359,71 +370,78 @@ async function renderStory9x16Layout(params: {
   // CTA personalizada ou padrão
   let callToAction = input.linkCallToAction?.trim();
   if (!callToAction) {
-    callToAction = hasDiscount
-      ? `👉 COMPRE DIRETO NO LINK (${discountLabel})`
-      : '👉 COMPRE DIRETO NO LINK';
+    callToAction = '👉 COMPRE DIRETO NO LINK';
   }
 
   const svg = `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="bgStory" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="#070A12"/>
-          <stop offset="35%" stop-color="#0E1626"/>
-          <stop offset="70%" stop-color="#0A101C"/>
-          <stop offset="100%" stop-color="#050810"/>
+        <!-- Fundo Original: Azul Marinho Escuro / Obsidian do Radar -->
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#040C1A"/>
+          <stop offset="35%" stop-color="#091A30"/>
+          <stop offset="70%" stop-color="#051022"/>
+          <stop offset="100%" stop-color="#020813"/>
         </linearGradient>
 
-        <linearGradient id="goldButton" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#F59E0B"/>
-          <stop offset="100%" stop-color="#FBBF24"/>
+        <!-- Gradiente Ciano Original -->
+        <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#0879DF"/>
+          <stop offset="100%" stop-color="#1CCAF2"/>
         </linearGradient>
 
-        <filter id="shadowCard" x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#000" flood-opacity="0.75"/>
+        <!-- Adesivo / Botão Original -->
+        <linearGradient id="stickerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1CCAF2"/>
+          <stop offset="100%" stop-color="#0080FF"/>
+        </linearGradient>
+
+        <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000" flood-opacity="0.65"/>
         </filter>
-        <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="6" result="blur"/>
+
+        <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="8" result="blur"/>
           <feComposite in="SourceGraphic" in2="blur" operator="over"/>
         </filter>
       </defs>
 
-      <!-- Fundo Preto/Grafite -->
-      <rect width="${width}" height="${height}" fill="url(#bgStory)"/>
+      <!-- Fundo Original -->
+      <rect width="${width}" height="${height}" fill="url(#bgGrad)"/>
 
-      <!-- Círculos de Radar no Fundo com Dourado Sutil -->
-      <circle cx="${width / 2}" cy="710" r="480" fill="none" stroke="#F59E0B" stroke-width="1.5" stroke-opacity="0.06"/>
-      <circle cx="${width / 2}" cy="710" r="640" fill="none" stroke="#F59E0B" stroke-width="1" stroke-opacity="0.04"/>
+      <!-- Círculos de Radar Originais -->
+      <circle cx="${width / 2}" cy="710" r="480" fill="none" stroke="#1CCAF2" stroke-width="1.5" stroke-opacity="0.08"/>
+      <circle cx="${width / 2}" cy="710" r="620" fill="none" stroke="#1CCAF2" stroke-width="1" stroke-opacity="0.05"/>
 
       <!-- ================= CABEÇALHO OFICIAL (ÁREA SEGURA DO TOPO) ================= -->
       <g transform="translate(80, 160)">
-        <text x="104" y="38" fill="#FFFFFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" letter-spacing="0.5">
+        <text x="104" y="38" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" letter-spacing="1">
           RADAR DE OFERTAS
         </text>
-        <text x="104" y="66" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="18" letter-spacing="0.3">
-          Achados que valem a pena.
+        <text x="104" y="66" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="18" letter-spacing="0.5">
+          @radar.ofertas.br1
         </text>
 
-        <!-- Selo de Destaque no Topo Direito -->
-        <g transform="translate(640, 10)">
-          <rect width="280" height="64" rx="20" fill="url(#goldButton)"/>
-          <text x="140" y="42" fill="#090E1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="28" text-anchor="middle" letter-spacing="0.5">
-            ${escapeXml(hasDiscount ? discountLabel : '🔥 ACHADO')}
+        <!-- SELO SUPERIOR REQUISITADO: OFERTA IMPERDÍVEL (SUBSTITUI ACHADO) -->
+        <g transform="translate(600, 10)">
+          <rect width="320" height="64" rx="20" fill="url(#cyanGrad)"/>
+          <text x="160" y="42" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="24" text-anchor="middle" letter-spacing="0.5">
+            OFERTA IMPERDÍVEL
           </text>
         </g>
       </g>
 
-      <!-- Moldura do Produto -->
-      <rect x="${productCardX - 3}" y="${productCardY - 3}" width="${productCardSize + 6}" height="${productCardSize + 6}" rx="46" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-opacity="0.4"/>
-      <rect x="${productCardX}" y="${productCardY}" width="${productCardSize}" height="${productCardSize}" rx="44" fill="#FFFFFF" filter="url(#shadowCard)"/>
+      <!-- ================= MOLDURA DO PRODUTO ================= -->
+      <rect x="${productCardX - 4}" y="${productCardY - 4}" width="${productCardSize + 8}" height="${productCardSize + 8}" rx="52" fill="none" stroke="#1CCAF2" stroke-width="3" stroke-opacity="0.35"/>
+      <rect x="${productCardX}" y="${productCardY}" width="${productCardSize}" height="${productCardSize}" rx="48" fill="#FFFFFF" filter="url(#cardShadow)"/>
 
-      <!-- Selo de Desconto flutuante no canto do produto -->
+      <!-- Selo de Desconto Flutuante Original no Card -->
       ${
         hasDiscount
           ? `
-        <g transform="translate(${productCardX + productCardSize - 210}, ${productCardY + 24})">
-          <rect width="190" height="62" rx="18" fill="#090E1A" stroke="#F59E0B" stroke-width="2"/>
-          <text x="95" y="41" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="26" text-anchor="middle">
+        <g transform="translate(${productCardX + productCardSize - 200}, ${productCardY + 24})">
+          <rect width="180" height="64" rx="20" fill="#20C997" filter="url(#cardShadow)"/>
+          <text x="90" y="42" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="28" text-anchor="middle">
             -${escapeXml(discountLabel)}
           </text>
         </g>
@@ -431,29 +449,29 @@ async function renderStory9x16Layout(params: {
           : ''
       }
 
-      <!-- ================= BLOCO DE TÍTULO E PREÇOS ================= -->
-      <g transform="translate(80, 1160)">
-        <text x="460" y="38" fill="#F8FAFC" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="40" text-anchor="middle">
+      <!-- ================= BLOCO DE TÍTULO E VALORES ================= -->
+      <g transform="translate(80, 1150)">
+        <text x="460" y="38" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="40" text-anchor="middle">
           ${escapeXml(t1)}
         </text>
         ${
           t2
-            ? `<text x="460" y="88" fill="#E2E8F0" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="800" font-size="34" text-anchor="middle">${escapeXml(t2)}</text>`
+            ? `<text x="460" y="88" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" text-anchor="middle">${escapeXml(t2)}</text>`
             : ''
         }
 
         <!-- Preços DE / POR -->
-        <g transform="translate(0, ${t2 ? 160 : 120})">
+        <g transform="translate(0, ${t2 ? 150 : 110})">
           ${
             priceOriginalFormatted
               ? `
-            <text x="460" y="0" fill="#94A3B8" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="30" text-anchor="middle" text-decoration="line-through">
+            <text x="460" y="0" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="28" text-anchor="middle" text-decoration="line-through">
               DE: ${escapeXml(priceOriginalFormatted)}
             </text>
           `
               : ''
           }
-          <text x="460" y="${priceOriginalFormatted ? 68 : 50}" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="68" text-anchor="middle" filter="url(#goldGlow)">
+          <text x="460" y="${priceOriginalFormatted ? 64 : 50}" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="68" text-anchor="middle" filter="url(#glowCyan)">
             POR: ${escapeXml(priceCurrentFormatted)}
           </text>
         </g>
@@ -462,9 +480,9 @@ async function renderStory9x16Layout(params: {
         ${
           couponText
             ? `
-          <g transform="translate(260, ${t2 ? 280 : 240})">
-            <rect width="400" height="54" rx="18" fill="#090E1A" stroke="#F59E0B" stroke-width="2"/>
-            <text x="200" y="35" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="800" font-size="24" text-anchor="middle">
+          <g transform="translate(260, ${t2 ? 260 : 220})">
+            <rect width="400" height="54" rx="18" fill="#1CCAF2" fill-opacity="0.15" stroke="#1CCAF2" stroke-width="2"/>
+            <text x="200" y="35" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="800" font-size="24" text-anchor="middle">
               ${escapeXml(couponText)}
             </text>
           </g>
@@ -473,22 +491,37 @@ async function renderStory9x16Layout(params: {
         }
       </g>
 
-      <!-- ================= BOTÃO / ADESIVO DE AÇÃO ================= -->
-      <g transform="translate(140, 1560)">
-        <rect width="800" height="106" rx="32" fill="#000" fill-opacity="0.5" y="6"/>
-        <rect width="800" height="106" rx="32" fill="url(#goldButton)"/>
-        <text x="400" y="66" fill="#090E1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" text-anchor="middle" letter-spacing="1">
+      <!-- ================= BOTÃO CTA ORIGINAL ================= -->
+      <g transform="translate(140, 1530)">
+        <text x="400" y="0" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="30" text-anchor="middle" letter-spacing="0.5">
           ${escapeXml(callToAction)}
         </text>
+
+        <g transform="translate(0, 30)">
+          <rect width="800" height="110" rx="32" fill="#000000" fill-opacity="0.4" y="8"/>
+          <rect width="800" height="110" rx="32" fill="url(#stickerGrad)"/>
+          <rect width="800" height="110" rx="32" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-opacity="0.4"/>
+
+          <g transform="translate(60, 32)">
+            <circle cx="24" cy="24" r="22" fill="#FFFFFF"/>
+            <path d="M16 18h16l-3 12H19l-3-12z" fill="#0080FF"/>
+            <circle cx="19" cy="34" r="2.5" fill="#0080FF"/>
+            <circle cx="29" cy="34" r="2.5" fill="#0080FF"/>
+          </g>
+
+          <text x="430" y="68" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" text-anchor="middle" letter-spacing="1">
+            COMPRE DIRETO NO LINK
+          </text>
+        </g>
       </g>
 
-      <!-- ================= IDENTIFICADOR E RODAPÉ ================= -->
-      <g transform="translate(80, 1780)">
-        <line x1="200" y1="0" x2="720" y2="0" stroke="#1E293B" stroke-width="2"/>
-        <text x="460" y="44" fill="#94A3B8" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="22" text-anchor="middle">
-          🎯 Radar de Ofertas • Achados que valem a pena.
+      <!-- ================= RODAPÉ ORIGINAL ================= -->
+      <g transform="translate(80, 1800)">
+        <line x1="160" y1="0" x2="760" y2="0" stroke="#18334D" stroke-width="2"/>
+        <text x="460" y="44" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="22" text-anchor="middle">
+          🎯 Radar de Ofertas
         </text>
-        <text x="460" y="76" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="800" font-size="20" text-anchor="middle">
+        <text x="460" y="74" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="800" font-size="18" text-anchor="middle">
           @radar.ofertas.br1
         </text>
       </g>
@@ -511,6 +544,7 @@ async function renderStory9x16Layout(params: {
 
 /**
  * Layout oficial para Publicações de Feed (1080 × 1080 ou 1080 × 1350)
+ * com a paleta original e selo "OFERTA IMPERDÍVEL".
  */
 async function renderFeedPostLayout(params: {
   input: StoryRenderInput;
@@ -553,44 +587,50 @@ async function renderFeedPostLayout(params: {
   const svg = `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
+        <!-- Fundo Original: Azul Marinho Escuro / Obsidian do Radar -->
         <linearGradient id="bgFeed" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="#070A12"/>
-          <stop offset="40%" stop-color="#0E1626"/>
-          <stop offset="100%" stop-color="#050810"/>
+          <stop offset="0%" stop-color="#040C1A"/>
+          <stop offset="40%" stop-color="#091A30"/>
+          <stop offset="100%" stop-color="#020813"/>
         </linearGradient>
 
-        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#F59E0B"/>
-          <stop offset="100%" stop-color="#FBBF24"/>
+        <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#0879DF"/>
+          <stop offset="100%" stop-color="#1CCAF2"/>
         </linearGradient>
 
         <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#000" flood-opacity="0.7"/>
+          <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#000" flood-opacity="0.65"/>
+        </filter>
+
+        <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="6" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
         </filter>
       </defs>
 
       <rect width="${width}" height="${height}" fill="url(#bgFeed)"/>
 
-      <!-- Topo: Logo oficial + Selo de Destaque -->
+      <!-- Topo: Logo oficial + Selo OFERTA IMPERDÍVEL -->
       <g transform="translate(60, ${isSquare ? 46 : 60})">
-        <text x="82" y="30" fill="#FFFFFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="28" letter-spacing="0.5">
+        <text x="82" y="30" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="28" letter-spacing="1">
           RADAR DE OFERTAS
         </text>
-        <text x="82" y="54" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="15">
-          Achados que valem a pena.
+        <text x="82" y="54" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="15">
+          @radar.ofertas.br1
         </text>
 
-        <!-- Selo de desconto no topo direito -->
-        <g transform="translate(740, 4)">
-          <rect width="220" height="52" rx="16" fill="url(#goldGrad)"/>
-          <text x="110" y="34" fill="#090E1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="23" text-anchor="middle">
-            ${escapeXml(hasDiscount ? discountLabel : '⚡ OFERTA')}
+        <!-- Selo Superior Requisitado -->
+        <g transform="translate(710, 4)">
+          <rect width="250" height="52" rx="16" fill="url(#cyanGrad)"/>
+          <text x="125" y="34" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="20" text-anchor="middle" letter-spacing="0.5">
+            OFERTA IMPERDÍVEL
           </text>
         </g>
       </g>
 
       <!-- Moldura do Produto -->
-      <rect x="${productCardX - 2}" y="${productCardY - 2}" width="${productCardSize + 4}" height="${productCardSize + 4}" rx="34" fill="none" stroke="#F59E0B" stroke-width="2" stroke-opacity="0.35"/>
+      <rect x="${productCardX - 2}" y="${productCardY - 2}" width="${productCardSize + 4}" height="${productCardSize + 4}" rx="34" fill="none" stroke="#1CCAF2" stroke-width="2" stroke-opacity="0.35"/>
       <rect x="${productCardX}" y="${productCardY}" width="${productCardSize}" height="${productCardSize}" rx="32" fill="#FFFFFF" filter="url(#cardShadow)"/>
 
       <!-- Selo flutuante no produto -->
@@ -598,8 +638,8 @@ async function renderFeedPostLayout(params: {
         hasDiscount
           ? `
         <g transform="translate(${productCardX + productCardSize - 180}, ${productCardY + 18})">
-          <rect width="160" height="48" rx="14" fill="#090E1A" stroke="#F59E0B" stroke-width="2"/>
-          <text x="80" y="32" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="20" text-anchor="middle">
+          <rect width="160" height="48" rx="14" fill="#20C997" filter="url(#cardShadow)"/>
+          <text x="80" y="32" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="20" text-anchor="middle">
             -${escapeXml(discountLabel)}
           </text>
         </g>
@@ -609,7 +649,7 @@ async function renderFeedPostLayout(params: {
 
       <!-- Bloco de Informações Inferior -->
       <g transform="translate(60, ${isSquare ? 785 : 910})">
-        <text x="480" y="34" fill="#F8FAFC" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="${isSquare ? 29 : 32}" text-anchor="middle">
+        <text x="480" y="34" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="${isSquare ? 29 : 32}" text-anchor="middle">
           ${escapeXml(t1)}
         </text>
         ${
@@ -623,21 +663,21 @@ async function renderFeedPostLayout(params: {
           ${
             priceOriginalFormatted
               ? `
-            <text x="480" y="0" fill="#94A3B8" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="24" text-anchor="middle" text-decoration="line-through">
+            <text x="480" y="0" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="24" text-anchor="middle" text-decoration="line-through">
               DE: ${escapeXml(priceOriginalFormatted)}
             </text>
           `
               : ''
           }
-          <text x="480" y="${priceOriginalFormatted ? 52 : 38}" fill="#FBBF24" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="${isSquare ? 54 : 60}" text-anchor="middle">
+          <text x="480" y="${priceOriginalFormatted ? 52 : 38}" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="${isSquare ? 54 : 60}" text-anchor="middle" filter="url(#glowCyan)">
             POR: ${escapeXml(priceCurrentFormatted)}
           </text>
         </g>
 
         <!-- Barra de Rodapé / Identificador -->
         <g transform="translate(0, ${t2 ? (isSquare ? 208 : 230) : (isSquare ? 180 : 204)})">
-          <text x="480" y="16" fill="#94A3B8" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="16" text-anchor="middle">
-            👉 Link nos Stories e na Bio • <tspan fill="#FBBF24">@radar.ofertas.br1</tspan>
+          <text x="480" y="16" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="16" text-anchor="middle">
+            👉 Link nos Stories e na Bio • <tspan fill="#1CCAF2">@radar.ofertas.br1</tspan>
           </text>
         </g>
       </g>

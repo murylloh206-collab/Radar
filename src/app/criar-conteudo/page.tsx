@@ -315,57 +315,57 @@ function CriarConteudoContent() {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      // Borda sutil de destaque
-      ctx.strokeStyle = '#F59E0B';
+      // Borda sutil de destaque original
+      ctx.strokeStyle = '#1CCAF2';
       ctx.lineWidth = 3;
       ctx.strokeRect(36, 36, 1008, 1848);
 
       // Marca superior oficial: RADAR DE OFERTAS
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = '#F8FBFF';
       ctx.font = 'bold 38px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('RADAR DE OFERTAS', 540, 180);
 
-      ctx.fillStyle = '#FBBF24';
+      ctx.fillStyle = '#1CCAF2';
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillText('Achados que valem a pena.', 540, 226);
+      ctx.fillText('OFERTA IMPERDÍVEL', 540, 226);
 
       // Caixa da imagem central
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(100, 320, 880, 880);
-      ctx.strokeStyle = '#F59E0B';
+      ctx.strokeStyle = '#1CCAF2';
       ctx.lineWidth = 3;
       ctx.strokeRect(100, 320, 880, 880);
 
       // Ícone ou texto representativo no centro da foto
-      ctx.fillStyle = '#090E1A';
+      ctx.fillStyle = '#061225';
       ctx.font = 'bold 44px sans-serif';
       ctx.fillText(storyTitle.slice(0, 30), 540, 760);
 
       // Título do Produto
-      ctx.fillStyle = '#F8FAFC';
+      ctx.fillStyle = '#F8FBFF';
       ctx.font = 'bold 50px sans-serif';
       ctx.fillText(storyTitle, 540, 1300);
 
       // Preço e Cupom
       if (showStoryPrice) {
-        ctx.fillStyle = '#FBBF24';
+        ctx.fillStyle = '#1CCAF2';
         ctx.font = 'bold 76px sans-serif';
         ctx.fillText(`R$ ${storyPrice}`, 540, 1420);
 
         if (storyCoupon) {
-          ctx.fillStyle = '#F59E0B';
+          ctx.fillStyle = '#20C997';
           ctx.font = 'bold 36px sans-serif';
           ctx.fillText(`CUPOM: ${storyCoupon}`, 540, 1500);
         }
       }
 
       // Rodapé CTA oficial
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = '#F8FBFF';
       ctx.font = 'bold 32px sans-serif';
       ctx.fillText('👉 COMPRE DIRETO NO LINK', 540, 1680);
 
-      ctx.fillStyle = '#FBBF24';
+      ctx.fillStyle = '#1CCAF2';
       ctx.font = 'bold 22px sans-serif';
       ctx.fillText('@radar.ofertas.br1', 540, 1740);
 

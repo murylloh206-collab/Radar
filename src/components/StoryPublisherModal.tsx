@@ -368,34 +368,34 @@ export default function StoryPublisherModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-[#090E1A] border border-[#1E293B] shadow-2xl flex flex-col text-white">
+      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-[#061225] border border-[#18334D] shadow-2xl flex flex-col text-white">
         {/* Cabeçalho do Modal */}
-        <div className="p-4 sm:p-5 border-b border-[#1E293B] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0A101D]">
+        <div className="p-4 sm:p-5 border-b border-[#18334D] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0D1B31]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#F59E0B]/50 flex items-center justify-center shadow-md">
+            <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#1CCAF2]/50 flex items-center justify-center shadow-md">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/radar-logo.jpg" alt="Radar de Ofertas" className="w-full h-full object-cover" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-black text-[#F8FAFC]">
+              <h2 className="text-sm sm:text-base font-black text-[#F8FBFF]">
                 Publicar no Instagram & Facebook
               </h2>
-              <p className="text-[11px] sm:text-xs text-[#94A3B8]">
-                Radar de Ofertas • Achados que valem a pena.
+              <p className="text-[11px] sm:text-xs text-[#8EADC7]">
+                Radar de Ofertas • @radar.ofertas.br1
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-center">
-            {/* Seletor de Abas */}
-            <div className="flex bg-[#0F172A] p-1 rounded-xl border border-[#1E293B]">
+            {/* Seletor de Abas com a cor original ciano (#1CCAF2) */}
+            <div className="flex bg-[#061225] p-1 rounded-xl border border-[#18334D]">
               <button
                 type="button"
                 onClick={() => setActiveTab('story')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'story'
-                    ? 'bg-[#F59E0B] text-[#090E1A] shadow-sm'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                    ? 'bg-[#1CCAF2] text-[#061225] shadow-sm'
+                    : 'text-[#8EADC7] hover:text-[#F8FBFF]'
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
@@ -406,8 +406,8 @@ export default function StoryPublisherModal({
                 onClick={() => setActiveTab('feed')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'feed'
-                    ? 'bg-[#F59E0B] text-[#090E1A] shadow-sm'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                    ? 'bg-[#1CCAF2] text-[#061225] shadow-sm'
+                    : 'text-[#8EADC7] hover:text-[#F8FBFF]'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -417,7 +417,7 @@ export default function StoryPublisherModal({
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B] transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-[#8EADC7] hover:text-[#F8FBFF] hover:bg-[#18334D] transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -432,7 +432,7 @@ export default function StoryPublisherModal({
           </div>
         )}
         {successNotice && (
-          <div className="mx-5 mt-4 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center gap-2.5 text-xs text-emerald-400">
+          <div className="mx-5 mt-4 p-3 rounded-xl bg-[#20C997]/15 border border-[#20C997]/40 flex items-center gap-2.5 text-xs text-[#20C997]">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <div>{successNotice}</div>
           </div>
@@ -445,27 +445,27 @@ export default function StoryPublisherModal({
           <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
             <div className="md:col-span-7 space-y-4">
               {/* Card com Detalhes da Oferta */}
-              <div className="p-4 rounded-xl bg-[#0F172A] border border-[#1E293B] space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-[#94A3B8]">
-                  <span className="font-bold text-[#F59E0B] uppercase tracking-wider">
+              <div className="p-4 rounded-xl bg-[#0D1B31] border border-[#18334D] space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-[#8EADC7]">
+                  <span className="font-bold text-[#1CCAF2] uppercase tracking-wider">
                     {offer.store}
                   </span>
                   <span>{new Date(offer.sentAt).toLocaleDateString('pt-BR')}</span>
                 </div>
-                <h3 className="text-xs sm:text-sm font-bold text-[#F8FAFC] line-clamp-2">
+                <h3 className="text-xs sm:text-sm font-bold text-[#F8FBFF] line-clamp-2">
                   {offer.title}
                 </h3>
                 <div className="flex items-baseline gap-2 pt-0.5">
                   {priceDeFormatted && (
-                    <span className="text-xs text-[#94A3B8] line-through">
+                    <span className="text-xs text-[#8EADC7] line-through">
                       DE: {priceDeFormatted}
                     </span>
                   )}
-                  <span className="text-base font-black text-[#FBBF24]">
+                  <span className="text-base font-black text-[#1CCAF2]">
                     POR: {pricePorFormatted}
                   </span>
                   {discountVal && (
-                    <span className="px-2 py-0.5 rounded-md bg-[#F59E0B]/20 border border-[#F59E0B]/50 text-[#FBBF24] text-[10px] font-black">
+                    <span className="px-2 py-0.5 rounded-md bg-[#20C997]/20 border border-[#20C997]/50 text-[#20C997] text-[10px] font-black">
                       {discountVal}% OFF
                     </span>
                   )}
@@ -473,8 +473,8 @@ export default function StoryPublisherModal({
               </div>
 
               {/* Botão de Chamada para Ação */}
-              <div className="p-4 rounded-xl bg-[#0F172A] border border-[#1E293B] space-y-3">
-                <label className="text-xs font-bold text-[#F8FAFC] block">
+              <div className="p-4 rounded-xl bg-[#0D1B31] border border-[#18334D] space-y-3">
+                <label className="text-xs font-bold text-[#F8FBFF] block">
                   Texto do botão de compra no Story:
                 </label>
                 <div className="flex flex-wrap gap-1.5">
@@ -484,8 +484,8 @@ export default function StoryPublisherModal({
                       onClick={() => setCallToAction(`👉 COMPRE AQUI COM ${discountVal}% OFF`)}
                       className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                         callToAction.includes(`${discountVal}%`)
-                          ? 'bg-[#F59E0B] text-[#090E1A] border-[#F59E0B]'
-                          : 'bg-[#090E1A] text-[#94A3B8] border-[#1E293B]'
+                          ? 'bg-[#1CCAF2] text-[#061225] border-[#1CCAF2]'
+                          : 'bg-[#061225] text-[#8EADC7] border-[#18334D]'
                       }`}
                     >
                       Compre com {discountVal}% OFF
@@ -496,22 +496,22 @@ export default function StoryPublisherModal({
                     onClick={() => setCallToAction('👉 COMPRE DIRETO NO LINK')}
                     className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                       callToAction === '👉 COMPRE DIRETO NO LINK'
-                        ? 'bg-[#F59E0B] text-[#090E1A] border-[#F59E0B]'
-                        : 'bg-[#090E1A] text-[#94A3B8] border-[#1E293B]'
+                        ? 'bg-[#1CCAF2] text-[#061225] border-[#1CCAF2]'
+                        : 'bg-[#061225] text-[#8EADC7] border-[#18334D]'
                     }`}
                   >
                     Compre direto no link
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCallToAction('👉 PEGUE ESTA OFERTA NO GRUPO')}
+                    onClick={() => setCallToAction('👉 CONFIRA A OFERTA NO GRUPO')}
                     className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                       callToAction.includes('NO GRUPO')
-                        ? 'bg-[#F59E0B] text-[#090E1A] border-[#F59E0B]'
-                        : 'bg-[#090E1A] text-[#94A3B8] border-[#1E293B]'
+                        ? 'bg-[#1CCAF2] text-[#061225] border-[#1CCAF2]'
+                        : 'bg-[#061225] text-[#8EADC7] border-[#18334D]'
                     }`}
                   >
-                    Pegue no grupo
+                    Confira no grupo
                   </button>
                 </div>
 
@@ -520,7 +520,7 @@ export default function StoryPublisherModal({
                   value={callToAction}
                   onChange={(e) => setCallToAction(e.target.value)}
                   placeholder="Texto do botão..."
-                  className="w-full bg-[#090E1A] border border-[#1E293B] rounded-xl px-3 py-2 text-xs text-[#F8FAFC] focus:outline-none focus:border-[#F59E0B]"
+                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
                 />
               </div>
 
@@ -531,24 +531,24 @@ export default function StoryPublisherModal({
                     type="button"
                     onClick={handlePublishStory}
                     disabled={isPublishingStory || isRenderingStory}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#FBBF24] text-[#090E1A] text-xs sm:text-sm font-black shadow-lg shadow-[#F59E0B]/20 hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] text-xs sm:text-sm font-black shadow-lg shadow-[#1CCAF2]/20 hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {isPublishingStory ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin text-[#090E1A]" />
+                        <Loader2 className="w-4 h-4 animate-spin text-[#061225]" />
                         Publicando no Instagram Stories...
                       </>
                     ) : (
                       <>
-                        <InstagramIcon className="w-4 h-4 text-[#090E1A]" />
+                        <InstagramIcon className="w-4 h-4 text-[#061225]" />
                         📲 Postar Direto no Instagram Stories
                       </>
                     )}
                   </button>
                 ) : (
-                  <div className="p-3 rounded-xl bg-[#0F172A] border border-[#F59E0B]/30 text-xs text-[#94A3B8] flex items-center justify-between">
+                  <div className="p-3 rounded-xl bg-[#0D1B31] border border-[#1CCAF2]/30 text-xs text-[#8EADC7] flex items-center justify-between">
                     <span>Conta Meta desconectada. Vincule para publicar com 1 clique.</span>
-                    <a href="/conexoes?aba=redes" className="font-bold text-[#F59E0B] hover:underline">
+                    <a href="/conexoes?aba=redes" className="font-bold text-[#1CCAF2] hover:underline">
                       Vincular ↗
                     </a>
                   </div>
@@ -559,16 +559,16 @@ export default function StoryPublisherModal({
                     type="button"
                     onClick={handleRenderStory}
                     disabled={isRenderingStory}
-                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#0F172A] border border-[#1E293B] text-xs font-bold text-[#F8FAFC] hover:border-[#F59E0B] transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#0D1B31] border border-[#18334D] text-xs font-bold text-[#F8FBFF] hover:border-[#1CCAF2] transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {isRenderingStory ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#F59E0B]" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1CCAF2]" />
                         Gerando Arte...
                       </>
                     ) : (
                       <>
-                        <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
+                        <Sparkles className="w-3.5 h-3.5 text-[#1CCAF2]" />
                         Gerar Arte 9:16
                       </>
                     )}
@@ -578,7 +578,7 @@ export default function StoryPublisherModal({
                     type="button"
                     onClick={handleDownloadStoryImage}
                     disabled={isRenderingStory}
-                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#0F172A] border border-[#1E293B] text-xs font-bold text-[#94A3B8] hover:text-[#F8FAFC] hover:border-[#94A3B8] transition-all cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#0D1B31] border border-[#18334D] text-xs font-bold text-[#8EADC7] hover:text-[#F8FBFF] hover:border-[#8EADC7] transition-all cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Baixar Story (JPG)
@@ -587,37 +587,38 @@ export default function StoryPublisherModal({
               </div>
             </div>
 
-            {/* Coluna Direita: Prévia do Story 9:16 */}
+            {/* Coluna Direita: Prévia do Story 9:16 com a paleta original e selo OFERTA IMPERDÍVEL */}
             <div className="md:col-span-5 flex flex-col items-center justify-center">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#F59E0B]" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#8EADC7] mb-2 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-[#1CCAF2]" />
                 Prévia do Story (9:16)
               </span>
 
-              <div className="w-full max-w-[280px] aspect-[9/16] rounded-2xl bg-gradient-to-b from-[#070A12] via-[#0E1626] to-[#050810] border-2 border-[#F59E0B]/40 p-4 flex flex-col justify-between shadow-2xl relative overflow-hidden text-center">
+              <div className="w-full max-w-[280px] aspect-[9/16] rounded-2xl bg-gradient-to-b from-[#040C1A] via-[#091A30] to-[#020813] border-2 border-[#1CCAF2]/40 p-4 flex flex-col justify-between shadow-2xl relative overflow-hidden text-center">
                 {/* Header oficial */}
                 <div className="flex items-center justify-between text-left">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-6 h-6 rounded-lg overflow-hidden border border-[#F59E0B]">
+                    <div className="w-6 h-6 rounded-lg overflow-hidden border border-[#1CCAF2]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src="/radar-logo.jpg" alt="Logo" className="w-full h-full object-cover" />
                     </div>
                     <div>
-                      <span className="text-[10px] font-black text-[#F8FAFC] block leading-none">
+                      <span className="text-[10px] font-black text-[#F8FBFF] block leading-none">
                         RADAR DE OFERTAS
                       </span>
-                      <span className="text-[7.5px] font-bold text-[#FBBF24] block leading-none">
-                        Achados que valem a pena.
+                      <span className="text-[7.5px] font-bold text-[#8EADC7] block leading-none">
+                        @radar.ofertas.br1
                       </span>
                     </div>
                   </div>
-                  <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-[#F59E0B] text-[#090E1A]">
-                    {discountVal ? `${discountVal}% OFF` : '🔥 ACHADO'}
+                  {/* SELO SUPERIOR REQUISITADO: OFERTA IMPERDÍVEL */}
+                  <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#040C1A]">
+                    OFERTA IMPERDÍVEL
                   </span>
                 </div>
 
                 {/* Imagem do Produto no Card Branco com Contain */}
-                <div className="my-auto relative rounded-xl overflow-hidden border border-[#F59E0B]/30 bg-white shadow-lg p-2">
+                <div className="my-auto relative rounded-xl overflow-hidden border border-[#1CCAF2]/30 bg-white shadow-lg p-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={offer.mediaUrl}
@@ -625,7 +626,7 @@ export default function StoryPublisherModal({
                     className="w-full h-36 object-contain"
                   />
                   {discountVal && (
-                    <div className="absolute top-1.5 right-1.5 bg-[#090E1A] border border-[#F59E0B] text-[#FBBF24] text-[9px] font-black px-1.5 py-0.5 rounded-md shadow">
+                    <div className="absolute top-1.5 right-1.5 bg-[#20C997] text-[#040C1A] text-[9px] font-black px-1.5 py-0.5 rounded-md shadow">
                       -{discountVal}% OFF
                     </div>
                   )}
@@ -633,16 +634,16 @@ export default function StoryPublisherModal({
 
                 {/* Título e Preços */}
                 <div className="space-y-1">
-                  <h4 className="text-[11px] font-extrabold text-[#F8FAFC] line-clamp-2 leading-tight">
+                  <h4 className="text-[11px] font-extrabold text-[#F8FBFF] line-clamp-2 leading-tight">
                     {offer.title}
                   </h4>
                   <div className="flex items-baseline justify-center gap-1.5">
                     {priceDeFormatted && (
-                      <span className="text-[9px] text-[#94A3B8] line-through">
+                      <span className="text-[9px] text-[#8EADC7] line-through">
                         DE: {priceDeFormatted}
                       </span>
                     )}
-                    <span className="text-sm font-black text-[#FBBF24]">
+                    <span className="text-sm font-black text-[#1CCAF2]">
                       POR: {pricePorFormatted}
                     </span>
                   </div>
@@ -650,15 +651,15 @@ export default function StoryPublisherModal({
 
                 {/* Botão de Compra no Story */}
                 <div className="mt-2 space-y-1">
-                  <div className="py-2 px-2 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#FBBF24] text-[#090E1A] text-[10px] font-black shadow-md flex items-center justify-center gap-1">
-                    <ShoppingBag className="w-3 h-3 text-[#090E1A]" />
+                  <div className="py-2 px-2 rounded-xl bg-gradient-to-r from-[#1CCAF2] to-[#0080FF] text-[#040C1A] text-[10px] font-black shadow-md flex items-center justify-center gap-1">
+                    <ShoppingBag className="w-3 h-3 text-[#040C1A]" />
                     {callToAction}
                   </div>
                 </div>
 
                 {/* Rodapé Oficial */}
-                <div className="mt-1 pt-1 border-t border-[#1E293B] text-[8px] text-[#94A3B8]">
-                  🎯 Radar de Ofertas • <span className="text-[#FBBF24]">@radar.ofertas.br1</span>
+                <div className="mt-1 pt-1 border-t border-[#18334D] text-[8px] text-[#8EADC7]">
+                  🎯 Radar de Ofertas • <span className="text-[#1CCAF2]">@radar.ofertas.br1</span>
                 </div>
               </div>
             </div>
@@ -673,8 +674,8 @@ export default function StoryPublisherModal({
             <div className="md:col-span-7 space-y-4">
               {/* Opção da Imagem: Arte Publicitária vs Imagem Pura */}
               <div className="space-y-2">
-                <label className="text-xs font-bold text-[#F8FAFC] flex items-center gap-1.5">
-                  <ImageIcon className="w-3.5 h-3.5 text-[#F59E0B]" />
+                <label className="text-xs font-bold text-[#F8FBFF] flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-[#1CCAF2]" />
                   Tipo de Imagem para o Feed:
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -683,15 +684,15 @@ export default function StoryPublisherModal({
                     onClick={() => setFeedImageMode('art')}
                     className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                       feedImageMode === 'art'
-                        ? 'bg-[#0F172A] border-[#F59E0B] text-[#F8FAFC]'
-                        : 'bg-[#0A101D] border-[#1E293B] text-[#94A3B8]'
+                        ? 'bg-[#0D1B31] border-[#1CCAF2] text-[#F8FBFF]'
+                        : 'bg-[#061225] border-[#18334D] text-[#8EADC7]'
                     }`}
                   >
-                    <span className="text-xs font-black block text-[#FBBF24]">
+                    <span className="text-xs font-black block text-[#1CCAF2]">
                       🎨 Arte Publicitária (1:1)
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] block">
-                      Com Logo, Preço DE/POR e Desconto oficial.
+                    <span className="text-[10px] text-[#8EADC7] block">
+                      Com Logo, Preço DE/POR e Selo Oficial.
                     </span>
                   </button>
 
@@ -700,14 +701,14 @@ export default function StoryPublisherModal({
                     onClick={() => setFeedImageMode('product')}
                     className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                       feedImageMode === 'product'
-                        ? 'bg-[#0F172A] border-[#F59E0B] text-[#F8FAFC]'
-                        : 'bg-[#0A101D] border-[#1E293B] text-[#94A3B8]'
+                        ? 'bg-[#0D1B31] border-[#1CCAF2] text-[#F8FBFF]'
+                        : 'bg-[#061225] border-[#18334D] text-[#8EADC7]'
                     }`}
                   >
-                    <span className="text-xs font-black block text-[#F8FAFC]">
+                    <span className="text-xs font-black block text-[#F8FBFF]">
                       📸 Foto Limpa do Produto
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] block">
+                    <span className="text-[10px] text-[#8EADC7] block">
                       Imagem de catálogo padronizada 1080x1080.
                     </span>
                   </button>
@@ -721,16 +722,16 @@ export default function StoryPublisherModal({
                     type="button"
                     onClick={handleRenderFeedPost}
                     disabled={isRenderingFeed}
-                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#0F172A] border border-[#1E293B] text-xs font-bold text-[#F8FAFC] hover:border-[#F59E0B] transition-all cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#0D1B31] border border-[#18334D] text-xs font-bold text-[#F8FBFF] hover:border-[#1CCAF2] transition-all cursor-pointer"
                   >
                     {isRenderingFeed ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#F59E0B]" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1CCAF2]" />
                         Renderizando Arte 1:1...
                       </>
                     ) : (
                       <>
-                        <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
+                        <Sparkles className="w-3.5 h-3.5 text-[#1CCAF2]" />
                         Gerar Arte Feed 1:1
                       </>
                     )}
@@ -740,7 +741,7 @@ export default function StoryPublisherModal({
                     type="button"
                     onClick={handleDownloadFeedImage}
                     disabled={isRenderingFeed}
-                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#0F172A] border border-[#1E293B] text-xs font-bold text-[#94A3B8] hover:text-[#F8FAFC] transition-all cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#0D1B31] border border-[#18334D] text-xs font-bold text-[#8EADC7] hover:text-[#F8FBFF] transition-all cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Baixar Arte (JPG)
@@ -751,14 +752,14 @@ export default function StoryPublisherModal({
               {/* Estilos de Legenda Automática */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#F8FAFC] flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-[#F59E0B]" />
+                  <label className="text-xs font-bold text-[#F8FBFF] flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-[#1CCAF2]" />
                     Legenda para Instagram & Facebook:
                   </label>
                   <button
                     type="button"
                     onClick={handleCopyCaption}
-                    className="text-[11px] font-bold text-[#F59E0B] hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] font-bold text-[#1CCAF2] hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     {copiedCaption ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                     {copiedCaption ? 'Copiada!' : 'Copiar Texto'}
@@ -771,8 +772,8 @@ export default function StoryPublisherModal({
                     onClick={() => setCopyStyle('promocional')}
                     className={`flex-1 py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
                       copyStyle === 'promocional'
-                        ? 'bg-[#F59E0B] text-[#090E1A] border-[#F59E0B]'
-                        : 'bg-[#0F172A] text-[#94A3B8] border-[#1E293B]'
+                        ? 'bg-[#1CCAF2] text-[#061225] border-[#1CCAF2]'
+                        : 'bg-[#0D1B31] text-[#8EADC7] border-[#18334D]'
                     }`}
                   >
                     ⚡ Promocional
@@ -782,8 +783,8 @@ export default function StoryPublisherModal({
                     onClick={() => setCopyStyle('engajamento')}
                     className={`flex-1 py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
                       copyStyle === 'engajamento'
-                        ? 'bg-[#F59E0B] text-[#090E1A] border-[#F59E0B]'
-                        : 'bg-[#0F172A] text-[#94A3B8] border-[#1E293B]'
+                        ? 'bg-[#1CCAF2] text-[#061225] border-[#1CCAF2]'
+                        : 'bg-[#0D1B31] text-[#8EADC7] border-[#18334D]'
                     }`}
                   >
                     💬 Comente EU QUERO
@@ -793,8 +794,8 @@ export default function StoryPublisherModal({
                     onClick={() => setCopyStyle('curto')}
                     className={`flex-1 py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
                       copyStyle === 'curto'
-                        ? 'bg-[#F59E0B] text-[#090E1A] border-[#F59E0B]'
-                        : 'bg-[#0F172A] text-[#94A3B8] border-[#1E293B]'
+                        ? 'bg-[#1CCAF2] text-[#061225] border-[#1CCAF2]'
+                        : 'bg-[#0D1B31] text-[#8EADC7] border-[#18334D]'
                     }`}
                   >
                     🎯 Curto & Direto
@@ -807,28 +808,28 @@ export default function StoryPublisherModal({
                   value={postCaption}
                   onChange={(e) => setPostCaption(e.target.value)}
                   placeholder="Edite a legenda do post..."
-                  className="w-full bg-[#070A12] border border-[#1E293B] rounded-xl p-3 text-xs text-[#F8FAFC] font-sans leading-relaxed focus:outline-none focus:border-[#F59E0B]"
+                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl p-3 text-xs text-[#F8FBFF] font-sans leading-relaxed focus:outline-none focus:border-[#1CCAF2]"
                 />
-                <div className="flex justify-between text-[10px] text-[#94A3B8]">
+                <div className="flex justify-between text-[10px] text-[#8EADC7]">
                   <span>Caracteres: {postCaption.length}</span>
                   <span>Link de afiliado incluso na legenda</span>
                 </div>
               </div>
 
               {/* Opção de Publicar também no Facebook */}
-              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0F172A] border border-[#1E293B] cursor-pointer">
+              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0D1B31] border border-[#18334D] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={publishToFacebook}
                   onChange={(e) => setPublishToFacebook(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#F59E0B] focus:ring-0 bg-[#070A12] border-[#1E293B]"
+                  className="w-4 h-4 rounded text-[#1CCAF2] focus:ring-0 bg-[#061225] border-[#18334D]"
                 />
                 <div className="flex-1 text-xs">
-                  <span className="font-bold text-[#F8FAFC] flex items-center gap-1.5">
+                  <span className="font-bold text-[#F8FBFF] flex items-center gap-1.5">
                     <FacebookIcon size={14} className="text-[#1877F2]" />
                     Publicar também na Página do Facebook
                   </span>
-                  <span className="text-[10px] text-[#94A3B8] block">
+                  <span className="text-[10px] text-[#8EADC7] block">
                     Sincroniza foto e texto na sua Página conectada.
                   </span>
                 </div>
@@ -840,24 +841,24 @@ export default function StoryPublisherModal({
                   type="button"
                   onClick={handlePublishFeedPost}
                   disabled={isPublishingPost}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#FBBF24] text-[#090E1A] text-xs sm:text-sm font-black shadow-lg shadow-[#F59E0B]/20 hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] text-xs sm:text-sm font-black shadow-lg shadow-[#1CCAF2]/20 hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isPublishingPost ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-[#090E1A]" />
+                      <Loader2 className="w-4 h-4 animate-spin text-[#061225]" />
                       Publicando no Feed do Instagram & Facebook...
                     </>
                   ) : (
                     <>
-                      <Send className="w-4 h-4 text-[#090E1A]" />
+                      <Send className="w-4 h-4 text-[#061225]" />
                       🚀 Publicar Post no Feed Agora
                     </>
                   )}
                 </button>
               ) : (
-                <div className="p-3 rounded-xl bg-[#0F172A] border border-[#F59E0B]/30 text-xs text-[#94A3B8] flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-[#0D1B31] border border-[#1CCAF2]/30 text-xs text-[#8EADC7] flex items-center justify-between">
                   <span>Conecte sua conta em Conexões para postar no Feed com 1 clique.</span>
-                  <a href="/conexoes?aba=redes" className="font-bold text-[#F59E0B] hover:underline">
+                  <a href="/conexoes?aba=redes" className="font-bold text-[#1CCAF2] hover:underline">
                     Vincular ↗
                   </a>
                 </div>
@@ -866,23 +867,23 @@ export default function StoryPublisherModal({
 
             {/* Coluna Direita: Prévia do Post de Feed */}
             <div className="md:col-span-5 flex flex-col items-center">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2 flex items-center gap-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#8EADC7] mb-2 flex items-center gap-1">
                 <InstagramIcon size={14} className="text-[#E1306C]" />
                 Prévia do Post no Feed
               </span>
 
-              <div className="w-full max-w-[300px] rounded-2xl bg-[#0F172A] border border-[#1E293B] shadow-xl overflow-hidden text-left">
+              <div className="w-full max-w-[300px] rounded-2xl bg-[#0D1B31] border border-[#18334D] shadow-xl overflow-hidden text-left">
                 {/* Cabeçalho do Post */}
-                <div className="p-2.5 flex items-center gap-2 border-b border-[#1E293B] bg-[#070A12]">
-                  <div className="w-7 h-7 rounded-lg overflow-hidden border border-[#F59E0B]">
+                <div className="p-2.5 flex items-center gap-2 border-b border-[#18334D] bg-[#061225]">
+                  <div className="w-7 h-7 rounded-lg overflow-hidden border border-[#1CCAF2]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/radar-logo.jpg" alt="Logo" className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-[#F8FAFC] block leading-none">
+                    <span className="text-[11px] font-bold text-[#F8FBFF] block leading-none">
                       {metaIntegration?.instagramUsername || 'radar.ofertas.br1'}
                     </span>
-                    <span className="text-[8px] text-[#FBBF24]">Radar de Ofertas</span>
+                    <span className="text-[8px] text-[#1CCAF2]">Radar de Ofertas</span>
                   </div>
                 </div>
 
@@ -895,15 +896,15 @@ export default function StoryPublisherModal({
                     className="w-full h-full object-contain"
                   />
                   {feedImageMode === 'product' && discountVal && (
-                    <div className="absolute top-2 right-2 bg-[#090E1A] border border-[#F59E0B] text-[#FBBF24] text-[10px] font-black px-2 py-0.5 rounded-md shadow">
+                    <div className="absolute top-2 right-2 bg-[#20C997] text-[#061225] text-[10px] font-black px-2 py-0.5 rounded-md shadow">
                       {discountVal}% OFF
                     </div>
                   )}
                 </div>
 
                 {/* Legenda com quebra */}
-                <div className="p-3 space-y-1 bg-[#070A12]/80 max-h-36 overflow-y-auto">
-                  <p className="text-[10px] text-[#F8FAFC] whitespace-pre-line leading-relaxed font-sans">
+                <div className="p-3 space-y-1 bg-[#061225]/80 max-h-36 overflow-y-auto">
+                  <p className="text-[10px] text-[#F8FBFF] whitespace-pre-line leading-relaxed font-sans">
                     {postCaption}
                   </p>
                 </div>

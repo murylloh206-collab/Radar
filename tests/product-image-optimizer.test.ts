@@ -85,3 +85,4 @@ test('Sistema Inteligente de Tratamento de Imagens: Enquadramento 1080x1080 sem 
   assert.equal(finalMeta.height, 1080, 'Canvas deve ter exatamente 1080px de altura');
   assert.equal(finalMeta.format, 'jpeg', 'Formato final deve ser JPEG');
 });
+
