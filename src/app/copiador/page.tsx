@@ -171,6 +171,34 @@ function CopierContent() {
   const [rulesReady, setRulesReady] = useState(false);
   const [rulesList, setRulesList] = useState<CopySource[]>([]);
   const selectedRuleChoice = useRef<string | null>(null);
+  const [reviving, setReviving] = useState(false);
+
+  const handleReviveConnection = async () => {
+    setReviving(true);
+    try {
+      const res = await fetch('/api/copier/watchdog?restart=true', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setFeedback({
+          type: 'success',
+          message: `Conexão WhatsApp revivida com sucesso! ${data.cycle?.processed || 0} eventos processados e ${data.cycle?.dispatched || 0} envios avaliados.`,
+        });
+        await loadData(selectedConnectionId, true);
+      } else {
+        setFeedback({
+          type: 'warning',
+          message: data.error || 'Não foi possível reiniciar a conexão no momento.',
+        });
+      }
+    } catch {
+      setFeedback({
+        type: 'warning',
+        message: 'Erro ao comunicar com o sentinela de auto-cura.',
+      });
+    } finally {
+      setReviving(false);
+    }
+  };
 
   const applyRule = useCallback((source: CopySource | null, origin = '') => {
     savedRule.current = source;
@@ -593,14 +621,39 @@ function CopierContent() {
           </div>
         </div>
 
-        <div style={{ textAlign: 'right', fontSize: 11, color: '#889dae' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-            <ShieldCheck size={14} style={{ color: isConnected ? '#56c288' : '#889dae' }} />
-            <span>Última verificação:</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <div style={{ textAlign: 'right', fontSize: 11, color: '#889dae' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+              <ShieldCheck size={14} style={{ color: isConnected ? '#56c288' : '#889dae' }} />
+              <span>Última verificação:</span>
+            </div>
+            <strong style={{ color: '#b9cad6', display: 'block', marginTop: 2 }}>
+              {formatDateTimeBR(activeConnection?.lastPingAt)}
+            </strong>
           </div>
-          <strong style={{ color: '#b9cad6', display: 'block', marginTop: 2 }}>
-            {formatDateTimeBR(activeConnection?.lastPingAt)}
-          </strong>
+          <button
+            type="button"
+            onClick={handleReviveConnection}
+            disabled={reviving}
+            title="Reinicia a sessão Baileys na Evolution API e processa ofertas acumuladas"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              fontWeight: 600,
+              padding: '5px 12px',
+              borderRadius: 8,
+              background: '#0D1B31',
+              border: '1px solid #1CCAF2',
+              color: '#1CCAF2',
+              cursor: reviving ? 'wait' : 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            <RefreshCw size={12} className={reviving ? 'wa-spin' : ''} />
+            {reviving ? 'Revivendo conexão...' : 'Reviver / Sincronizar'}
+          </button>
         </div>
       </div>
 

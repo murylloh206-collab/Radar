@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { acceptCopierEvent, CopierRuntimeError } from '@/lib/server/copier-runtime';
+import { acceptCopierEvent, runDurableCopierCycle, CopierRuntimeError } from '@/lib/server/copier-runtime';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -18,7 +18,18 @@ export async function POST(req: NextRequest) {
     if (!payload || typeof payload !== 'object') return NextResponse.json({ ok: false }, { status: 400 });
     const secret = req.headers.get('x-webhook-secret') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
     const result = await acceptCopierEvent(payload, secret);
-    return NextResponse.json({ ok: true, ...result }, { status: 202,
+
+    // Auto-processamento imediato na nuvem: não depende de worker no PC do usuário!
+    let cycleResult = null;
+    if (result.inserted > 0) {
+      try {
+        cycleResult = await runDurableCopierCycle();
+      } catch (cycleErr) {
+        console.error('[Webhook] Falha no ciclo imediato pós-recebimento:', cycleErr);
+      }
+    }
+
+    return NextResponse.json({ ok: true, ...result, cycle: cycleResult }, { status: 202,
       headers: { 'Cache-Control': 'no-store', 'Server-Timing': `durable-inbox;dur=${(performance.now() - started).toFixed(1)}` } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof CopierRuntimeError ? error.message : 'Não foi possível persistir o evento. O gateway deve tentar novamente.' },

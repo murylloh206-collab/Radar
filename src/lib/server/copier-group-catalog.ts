@@ -11,9 +11,9 @@ const pending = new Map<string, Promise<WhatsAppGroup[]>>();
 
 function environmentGateway() {
   return {
-    baseUrl: (process.env.EVOLUTION_BASE_URL || process.env.WHATSAPP_GATEWAY_URL || '').trim(),
-    apiKey: (process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || '').trim(),
-    instanceName: (process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_GATEWAY_INSTANCE || '').trim(),
+    baseUrl: (process.env.EVOLUTION_BASE_URL || process.env.EVOLUTION_API_URL || process.env.WHATSAPP_GATEWAY_URL || 'https://radar-whatsapp-gateway.onrender.com').trim(),
+    apiKey: (process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || 'radar_wa_key_88392104').trim(),
+    instanceName: (process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_GATEWAY_INSTANCE || 'radar_00000000_4453f2').trim(),
   };
 }
 
@@ -31,8 +31,8 @@ export async function copierConnections(session: UserSession): Promise<Registere
   if (error && !['42P01', 'PGRST205'].includes(error.code)) {
     throw new WhatsAppPhotoError('CONNECTIONS_UNAVAILABLE', 503, 'Não foi possível consultar suas conexões.');
   }
-  const { data: legacy, error: legacyError } = registered?.length ? { data: [], error: null } : await supabase.from('integrations_whatsapp').select('*').eq('user_id', session.userId);
-  if (legacyError) throw new WhatsAppPhotoError('CONNECTIONS_UNAVAILABLE', 503, 'Não foi possível consultar a conexão salva.');
+  const { data: legacy, error: legacyError } = await supabase.from('integrations_whatsapp').select('*').eq('user_id', session.userId);
+  if (legacyError && !['42P01', 'PGRST205'].includes(legacyError.code)) throw new WhatsAppPhotoError('CONNECTIONS_UNAVAILABLE', 503, 'Não foi possível consultar a conexão salva.');
   const rows: Record<string, unknown>[] = registered?.length ? registered : legacy || [];
   const environment = environmentGateway();
   return rows.map(row => {
