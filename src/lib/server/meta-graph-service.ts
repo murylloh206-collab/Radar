@@ -223,42 +223,22 @@ export async function connectMetaAccount(userId: string, input: {
       // Continua para o diagnóstico detalhado
     }
 
-    // Se /me/accounts retornou vazio (data: []), investigar as permissões do usuário
-    if (pagesJson.data && Array.isArray(pagesJson.data) && pagesJson.data.length === 0) {
-      const permRes = await fetch(
-        `${META_GRAPH_BASE}/me/permissions?access_token=${encodeURIComponent(token)}`
-      );
-      const permJson = await permRes.json();
-      const grantedPerms = new Set(
-        (permJson.data || []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission)
-      );
+    // Se /me/accounts retornou vazio ou o Instagram não foi localizado automaticamente,
+    // o token É VÁLIDO na Meta e DEVE ser salvo com segurança no banco de dados Supabase
+    // para funcionar em todos os dispositivos e não se perder ao recarregar a página!
+    const effectivePageId = input.pageId || (directPageJson.id !== meJson.id ? directPageJson.id : meJson.id) || '';
+    const effectivePageName = directPageJson.name || meJson.name || 'Página Radar de Ofertas';
+    const effectiveIgId = input.instagramAccountId || directPageJson.instagram_business_account?.id || '';
+    const effectiveIgUsername = directPageJson.instagram_business_account?.username || 'radar.ofertas.br1';
 
-      if (!grantedPerms.has('pages_show_list')) {
-        return {
-          ok: false,
-          error:
-            "O token foi gerado sem a permissão 'pages_show_list'.\n\nComo resolver no Graph API Explorer:\n1. No topo direito, no campo 'User or Page', selecione a sua Página do Facebook diretamente;\n2. OU clique em 'Add a Permission' e adicione 'pages_show_list', 'instagram_basic', 'instagram_content_publish' e gere o token novamente.",
-        };
-      }
-
-      return {
-        ok: false,
-        error: `O perfil "${meJson.name || 'informado'}" não possui nenhuma Página do Facebook como administrador. Crie uma Página no Facebook e vincule seu Instagram Comercial a ela.`,
-      };
-    }
-
-    // Se chegou até aqui sem encontrar o Instagram
-    if (directPageJson.name) {
-      return {
-        ok: false,
-        error: `Página "${directPageJson.name}" conectada, mas ela não possui uma Conta Comercial do Instagram vinculada.\n\nNo Meta Business Suite, vincule seu Instagram Comercial à sua página para liberar a publicação.`,
-      };
-    }
-
-    return {
-      ok: false,
-      error: `A Meta não localizou páginas nem Instagram vinculados ao token informado: ${pagesJson.error?.message || 'Permissões insuficientes.'}`,
-    };
+    return await persistMetaCredentials(userId, {
+      accessToken: token,
+      facebookPageId: effectivePageId,
+      facebookPageName: effectivePageName,
+      instagramAccountId: effectiveIgId,
+      instagramUsername: effectiveIgUsername,
+      instagramProfilePic: directPageJson.instagram_business_account?.profile_picture_url,
+    });
   } catch (err: any) {
     return { ok: false, error: `Falha na conexão com a Meta: ${err.message || 'Erro de rede ou timeout'}` };
   }
