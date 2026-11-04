@@ -156,6 +156,21 @@ export async function resolveUrlSafely(
 
   let extractedImageUrl: string | undefined = undefined;
 
+  // Desempacota parâmetro murl caso o link seja de afiliado Rakuten / LinkSynergy (Netshoes/Zattini)
+  try {
+    const parsedCurrent = new URL(currentUrl);
+    if (parsedCurrent.hostname.toLowerCase().includes('linksynergy.com')) {
+      const murl = parsedCurrent.searchParams.get('murl');
+      if (murl) {
+        const decodedMurl = decodeURIComponent(murl);
+        if (decodedMurl.startsWith('http')) {
+          currentUrl = decodedMurl;
+          redirectChain.push(currentUrl);
+        }
+      }
+    }
+  } catch {}
+
   // Se o link curto do Mercado Livre (ex: meli.la) redirecionou para uma página intermediária /social/,
   // extrai a URL real do produto em destaque e a foto oficial da página
   try {

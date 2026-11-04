@@ -236,7 +236,7 @@ export async function renderStoryImage(input: StoryRenderInput): Promise<StoryRe
     // 2. Calcular preços, desconto automático e formatação
     const pricing = calculatePricingDetails(input.priceOriginal, input.priceCurrent, input.discountPct);
 
-    const couponText = input.coupon ? `🎟️ CUPOM: ${input.coupon.toUpperCase().trim()}` : '';
+    const couponText = input.coupon ? `CUPOM: ${input.coupon.toUpperCase().trim()}` : '';
 
     // 3. Renderizar de acordo com o formato escolhido
     let finalBuffer: Buffer;
@@ -370,10 +370,13 @@ async function renderStory9x16Layout(params: {
   // CTA personalizada ou padrão
   let callToAction = input.linkCallToAction?.trim();
   if (!callToAction) {
-    callToAction = '👉 COMPRE DIRETO NO LINK';
+    callToAction = 'COMPRE DIRETO NO LINK';
+  } else {
+    callToAction = callToAction.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
+    if (!callToAction) callToAction = 'COMPRE DIRETO NO LINK';
   }
 
-  const svg = `
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <!-- Fundo Original: Azul Marinho Escuro / Obsidian do Radar -->
@@ -415,17 +418,17 @@ async function renderStory9x16Layout(params: {
 
       <!-- ================= CABEÇALHO OFICIAL (ÁREA SEGURA DO TOPO) ================= -->
       <g transform="translate(80, 160)">
-        <text x="104" y="38" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" letter-spacing="1">
+        <text x="104" y="38" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="34" letter-spacing="1">
           RADAR DE OFERTAS
         </text>
-        <text x="104" y="66" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="18" letter-spacing="0.5">
+        <text x="104" y="66" fill="#8EADC7" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="18" letter-spacing="0.5">
           @radar.ofertas.br1
         </text>
 
         <!-- SELO SUPERIOR REQUISITADO: OFERTA IMPERDÍVEL (SUBSTITUI ACHADO) -->
         <g transform="translate(600, 10)">
           <rect width="320" height="64" rx="20" fill="url(#cyanGrad)"/>
-          <text x="160" y="42" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="24" text-anchor="middle" letter-spacing="0.5">
+          <text x="160" y="42" fill="#040C1A" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="24" text-anchor="middle" letter-spacing="0.5">
             OFERTA IMPERDÍVEL
           </text>
         </g>
@@ -441,7 +444,7 @@ async function renderStory9x16Layout(params: {
           ? `
         <g transform="translate(${productCardX + productCardSize - 200}, ${productCardY + 24})">
           <rect width="180" height="64" rx="20" fill="#20C997" filter="url(#cardShadow)"/>
-          <text x="90" y="42" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="28" text-anchor="middle">
+          <text x="90" y="42" fill="#040C1A" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="28" text-anchor="middle">
             -${escapeXml(discountLabel)}
           </text>
         </g>
@@ -451,12 +454,12 @@ async function renderStory9x16Layout(params: {
 
       <!-- ================= BLOCO DE TÍTULO E VALORES ================= -->
       <g transform="translate(80, 1150)">
-        <text x="460" y="38" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="40" text-anchor="middle">
+        <text x="460" y="38" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="40" text-anchor="middle">
           ${escapeXml(t1)}
         </text>
         ${
           t2
-            ? `<text x="460" y="88" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" text-anchor="middle">${escapeXml(t2)}</text>`
+            ? `<text x="460" y="88" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="34" text-anchor="middle">${escapeXml(t2)}</text>`
             : ''
         }
 
@@ -465,13 +468,13 @@ async function renderStory9x16Layout(params: {
           ${
             priceOriginalFormatted
               ? `
-            <text x="460" y="0" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="28" text-anchor="middle" text-decoration="line-through">
+            <text x="460" y="0" fill="#8EADC7" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="28" text-anchor="middle" text-decoration="line-through">
               DE: ${escapeXml(priceOriginalFormatted)}
             </text>
           `
               : ''
           }
-          <text x="460" y="${priceOriginalFormatted ? 64 : 50}" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="68" text-anchor="middle" filter="url(#glowCyan)">
+          <text x="460" y="${priceOriginalFormatted ? 64 : 50}" fill="#1CCAF2" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="68" text-anchor="middle" filter="url(#glowCyan)">
             POR: ${escapeXml(priceCurrentFormatted)}
           </text>
         </g>
@@ -482,7 +485,7 @@ async function renderStory9x16Layout(params: {
             ? `
           <g transform="translate(260, ${t2 ? 260 : 220})">
             <rect width="400" height="54" rx="18" fill="#1CCAF2" fill-opacity="0.15" stroke="#1CCAF2" stroke-width="2"/>
-            <text x="200" y="35" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="800" font-size="24" text-anchor="middle">
+            <text x="200" y="35" fill="#1CCAF2" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="800" font-size="24" text-anchor="middle">
               ${escapeXml(couponText)}
             </text>
           </g>
@@ -493,7 +496,7 @@ async function renderStory9x16Layout(params: {
 
       <!-- ================= BOTÃO CTA ORIGINAL ================= -->
       <g transform="translate(140, 1530)">
-        <text x="400" y="0" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="30" text-anchor="middle" letter-spacing="0.5">
+        <text x="400" y="0" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="30" text-anchor="middle" letter-spacing="0.5">
           ${escapeXml(callToAction)}
         </text>
 
@@ -509,7 +512,7 @@ async function renderStory9x16Layout(params: {
             <circle cx="29" cy="34" r="2.5" fill="#0080FF"/>
           </g>
 
-          <text x="430" y="68" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="34" text-anchor="middle" letter-spacing="1">
+          <text x="430" y="68" fill="#040C1A" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="34" text-anchor="middle" letter-spacing="1">
             COMPRE DIRETO NO LINK
           </text>
         </g>
@@ -518,10 +521,14 @@ async function renderStory9x16Layout(params: {
       <!-- ================= RODAPÉ ORIGINAL ================= -->
       <g transform="translate(80, 1800)">
         <line x1="160" y1="0" x2="760" y2="0" stroke="#18334D" stroke-width="2"/>
-        <text x="460" y="44" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="22" text-anchor="middle">
-          🎯 Radar de Ofertas
+        <g transform="translate(340, 26)">
+          <circle cx="12" cy="12" r="10" fill="#0D1B31" stroke="#1CCAF2" stroke-width="2"/>
+          <circle cx="12" cy="12" r="4" fill="#1CCAF2"/>
+        </g>
+        <text x="475" y="44" fill="#8EADC7" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="22" text-anchor="middle">
+          Radar de Ofertas
         </text>
-        <text x="460" y="74" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="800" font-size="18" text-anchor="middle">
+        <text x="460" y="74" fill="#1CCAF2" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="800" font-size="18" text-anchor="middle">
           @radar.ofertas.br1
         </text>
       </g>
@@ -584,7 +591,7 @@ async function renderFeedPostLayout(params: {
 
   const [t1, t2] = wrapTitle(input.title, 38);
 
-  const svg = `
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <!-- Fundo Original: Azul Marinho Escuro / Obsidian do Radar -->
@@ -613,17 +620,17 @@ async function renderFeedPostLayout(params: {
 
       <!-- Topo: Logo oficial + Selo OFERTA IMPERDÍVEL -->
       <g transform="translate(60, ${isSquare ? 46 : 60})">
-        <text x="82" y="30" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="28" letter-spacing="1">
+        <text x="82" y="30" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="28" letter-spacing="1">
           RADAR DE OFERTAS
         </text>
-        <text x="82" y="54" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="15">
+        <text x="82" y="54" fill="#8EADC7" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="15">
           @radar.ofertas.br1
         </text>
 
         <!-- Selo Superior Requisitado -->
         <g transform="translate(710, 4)">
           <rect width="250" height="52" rx="16" fill="url(#cyanGrad)"/>
-          <text x="125" y="34" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="20" text-anchor="middle" letter-spacing="0.5">
+          <text x="125" y="34" fill="#040C1A" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="20" text-anchor="middle" letter-spacing="0.5">
             OFERTA IMPERDÍVEL
           </text>
         </g>
@@ -639,7 +646,7 @@ async function renderFeedPostLayout(params: {
           ? `
         <g transform="translate(${productCardX + productCardSize - 180}, ${productCardY + 18})">
           <rect width="160" height="48" rx="14" fill="#20C997" filter="url(#cardShadow)"/>
-          <text x="80" y="32" fill="#040C1A" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="20" text-anchor="middle">
+          <text x="80" y="32" fill="#040C1A" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="20" text-anchor="middle">
             -${escapeXml(discountLabel)}
           </text>
         </g>
@@ -649,12 +656,12 @@ async function renderFeedPostLayout(params: {
 
       <!-- Bloco de Informações Inferior -->
       <g transform="translate(60, ${isSquare ? 785 : 910})">
-        <text x="480" y="34" fill="#F8FBFF" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="${isSquare ? 29 : 32}" text-anchor="middle">
+        <text x="480" y="34" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="${isSquare ? 29 : 32}" text-anchor="middle">
           ${escapeXml(t1)}
         </text>
         ${
           t2
-            ? `<text x="480" y="68" fill="#CBD5E1" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="${isSquare ? 23 : 26}" text-anchor="middle">${escapeXml(t2)}</text>`
+            ? `<text x="480" y="68" fill="#CBD5E1" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="${isSquare ? 23 : 26}" text-anchor="middle">${escapeXml(t2)}</text>`
             : ''
         }
 
@@ -663,21 +670,21 @@ async function renderFeedPostLayout(params: {
           ${
             priceOriginalFormatted
               ? `
-            <text x="480" y="0" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="24" text-anchor="middle" text-decoration="line-through">
+            <text x="480" y="0" fill="#8EADC7" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="24" text-anchor="middle" text-decoration="line-through">
               DE: ${escapeXml(priceOriginalFormatted)}
             </text>
           `
               : ''
           }
-          <text x="480" y="${priceOriginalFormatted ? 52 : 38}" fill="#1CCAF2" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="900" font-size="${isSquare ? 54 : 60}" text-anchor="middle" filter="url(#glowCyan)">
+          <text x="480" y="${priceOriginalFormatted ? 52 : 38}" fill="#1CCAF2" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="${isSquare ? 54 : 60}" text-anchor="middle" filter="url(#glowCyan)">
             POR: ${escapeXml(priceCurrentFormatted)}
           </text>
         </g>
 
         <!-- Barra de Rodapé / Identificador -->
         <g transform="translate(0, ${t2 ? (isSquare ? 208 : 230) : (isSquare ? 180 : 204)})">
-          <text x="480" y="16" fill="#8EADC7" font-family="system-ui, -apple-system, Roboto, sans-serif" font-weight="700" font-size="16" text-anchor="middle">
-            👉 Link nos Stories e na Bio • <tspan fill="#1CCAF2">@radar.ofertas.br1</tspan>
+          <text x="480" y="16" fill="#8EADC7" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="16" text-anchor="middle">
+            Link nos Stories e na Bio • <tspan fill="#1CCAF2">@radar.ofertas.br1</tspan>
           </text>
         </g>
       </g>

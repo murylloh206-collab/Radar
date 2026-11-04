@@ -33,6 +33,11 @@ function EnviosContent() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<'all' | 'sent' | 'failed'>('all');
+  const [searchHistory, setSearchHistory] = useState('');
+  const [storeHistoryFilter, setStoreHistoryFilter] = useState<'all' | 'mercadolivre' | 'shopee' | 'amazon' | 'netshoes'>('all');
+  const [copiedAffiliateId, setCopiedAffiliateId] = useState<string | null>(null);
+  const [inspectingJob, setInspectingJob] = useState<PublicationJob | null>(null);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Modais
@@ -122,14 +127,83 @@ function EnviosContent() {
     return jobs.filter((j) => j.status === 'agendado');
   }, [jobs]);
 
-  // Histórico
-  const historyJobs = useMemo(() => {
+  const detectJobStore = (j: PublicationJob): 'mercadolivre' | 'shopee' | 'amazon' | 'netshoes' | 'magalu' | 'outro' => {
+    const raw = `${j.affiliateUrl || ''} ${j.cleanUrl || ''} ${j.originalUrl || ''} ${j.messageText || ''}`.toLowerCase();
+    if (raw.includes('mercadolivre') || raw.includes('meli.la')) return 'mercadolivre';
+    if (raw.includes('shopee') || raw.includes('shope.ee')) return 'shopee';
+    if (raw.includes('amazon') || raw.includes('amzn.to') || raw.includes('a.co')) return 'amazon';
+    if (raw.includes('netshoes') || raw.includes('linksynergy') || raw.includes('zattini')) return 'netshoes';
+    if (raw.includes('magalu') || raw.includes('magazineluiza')) return 'magalu';
+    return 'outro';
+  };
+
+  const extractPriceFromJob = (text: string) => {
+    const porMatch = text.match(/POR(?:\s+APENAS)?:\s*(R\$\s*[\d.,]+)/i) || text.match(/(?:R\$\s*[\d.,]+)/i);
+    const deMatch = text.match(/DE:\s*(R\$\s*[\d.,]+)/i);
+    return {
+      current: porMatch ? porMatch[1] : undefined,
+      original: deMatch ? deMatch[1] : undefined,
+    };
+  };
+
+  const handleCopyAffiliate = async (url: string, id: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        setCopiedAffiliateId(id);
+      }
+    } catch {}
+    setTimeout(() => setCopiedAffiliateId(null), 2500);
+  };
+
+  const handleRetryJob = async (jobId: string) => {
+    setRetryingJobId(jobId);
+    try {
+      const res = await fetch('/api/copier/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'retry', jobId }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setNotice('Oferta reenviada para disparo imediato!');
+        await loadData();
+      } else {
+        setNotice(data.error || 'Falha ao reenviar publicação.');
+      }
+    } catch {
+      setNotice('Erro de rede ao reenviar publicação.');
+    } finally {
+      setRetryingJobId(null);
+    }
+  };
+
+  // Histórico com filtros e pesquisa
+  const filteredHistoryJobs = useMemo(() => {
     return jobs.filter((j) => {
-      if (historyFilter === 'sent') return j.status === 'enviado';
-      if (historyFilter === 'failed') return j.status === 'falha' || j.status === 'quarentena';
-      return j.status === 'enviado' || j.status === 'falha' || j.status === 'quarentena';
+      // 1. Status
+      if (historyFilter === 'sent' && j.status !== 'enviado') return false;
+      if (historyFilter === 'failed' && j.status !== 'falha' && j.status !== 'quarentena') return false;
+      if (historyFilter === 'all' && j.status !== 'enviado' && j.status !== 'falha' && j.status !== 'quarentena' && j.status !== 'cancelado') return false;
+
+      // 2. Marketplace
+      if (storeHistoryFilter !== 'all') {
+        const store = detectJobStore(j);
+        if (store !== storeHistoryFilter) return false;
+      }
+
+      // 3. Pesquisa por texto
+      if (searchHistory.trim()) {
+        const q = searchHistory.toLowerCase().trim();
+        const titleMatch = (j.targetName || '').toLowerCase().includes(q);
+        const msgMatch = (j.messageText || '').toLowerCase().includes(q);
+        const linkMatch = (j.affiliateUrl || '').toLowerCase().includes(q);
+        if (!titleMatch && !msgMatch && !linkMatch) return false;
+      }
+
+      return true;
     });
-  }, [jobs, historyFilter]);
+  }, [jobs, historyFilter, storeHistoryFilter, searchHistory]);
 
   // Aprovar publicação
   const handleApprove = async (jobId: string) => {
@@ -590,70 +664,378 @@ function EnviosContent() {
         {/* Aba 4: Histórico */}
         {activeTab === 'historico' && (
           <div data-panel="historico" role="tabpanel">
-            <div className="rp-panel">
-              <div className="rp-row">
-                <h2>Histórico de publicações</h2>
-                <label className="rp-field">
-                  Filtrar
+            <div className="rp-panel" style={{ padding: 20 }}>
+              <div className="rp-row" style={{ flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Histórico de publicações</h2>
+                  <p className="rp-sub" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                    Registro detalhado dos envios, links de afiliados publicados e status da entrega.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {/* Busca por texto */}
+                  <input
+                    type="text"
+                    placeholder="Buscar produto, loja ou link..."
+                    value={searchHistory}
+                    onChange={(e) => setSearchHistory(e.target.value)}
+                    style={{
+                      background: '#061225',
+                      border: '1px solid #1c2b3e',
+                      borderRadius: 8,
+                      padding: '6px 12px',
+                      color: '#F8FBFF',
+                      fontSize: 13,
+                      minWidth: 220,
+                    }}
+                  />
+
+                  {/* Filtro de Status */}
                   <select
                     id="rp-history-filter"
                     value={historyFilter}
-                    onChange={(e) =>
-                      setHistoryFilter(e.target.value as 'all' | 'sent' | 'failed')
-                    }
+                    onChange={(e) => setHistoryFilter(e.target.value as 'all' | 'sent' | 'failed')}
+                    style={{
+                      background: '#061225',
+                      border: '1px solid #1c2b3e',
+                      borderRadius: 8,
+                      padding: '6px 10px',
+                      color: '#F8FBFF',
+                      fontSize: 13,
+                    }}
                   >
-                    <option value="all">Todos os estados</option>
-                    <option value="sent">Enviados</option>
-                    <option value="failed">Falhas</option>
+                    <option value="all">Todos os status</option>
+                    <option value="sent">Apenas enviados</option>
+                    <option value="failed">Apenas falhas</option>
                   </select>
-                </label>
+                </div>
               </div>
 
-              <div className="rp-list">
+              {/* Filtro rápido por Marketplace */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #182738' }}>
+                {[
+                  { key: 'all', label: 'Todos os canais' },
+                  { key: 'mercadolivre', label: 'Mercado Livre' },
+                  { key: 'shopee', label: 'Shopee' },
+                  { key: 'amazon', label: 'Amazon' },
+                  { key: 'netshoes', label: 'Netshoes' },
+                ].map((st) => (
+                  <button
+                    key={st.key}
+                    type="button"
+                    onClick={() => setStoreHistoryFilter(st.key as any)}
+                    style={{
+                      background: storeHistoryFilter === st.key ? '#1CCAF2' : '#0B1728',
+                      color: storeHistoryFilter === st.key ? '#040C1A' : '#8EADC7',
+                      border: storeHistoryFilter === st.key ? '1px solid #1CCAF2' : '1px solid #1C2E46',
+                      borderRadius: 20,
+                      padding: '4px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="rp-list" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {loading ? (
-                  <p className="rp-sub" style={{ padding: '24px 0', textAlign: 'center' }}>
-                    Consultando histórico...
+                  <p className="rp-sub" style={{ padding: '32px 0', textAlign: 'center' }}>
+                    Consultando histórico de publicações no servidor...
                   </p>
-                ) : historyJobs.length === 0 ? (
-                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
-                    <p className="rp-sub">Nenhum envio registrado no histórico com o filtro selecionado.</p>
+                ) : filteredHistoryJobs.length === 0 ? (
+                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '40px 16px' }}>
+                    <p className="rp-sub">Nenhum envio registrado com os filtros e busca informados.</p>
                   </div>
                 ) : (
-                  historyJobs.map((j) => (
-                    <div key={j.id} className="rp-list-item">
-                      {j.mediaUrl && (
-                        <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
-                          <img
-                            src={j.mediaUrl}
-                            alt={j.targetName || 'Foto do produto'}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
+                  filteredHistoryJobs.map((j) => {
+                    const store = detectJobStore(j);
+                    const prices = extractPriceFromJob(j.messageText || '');
+                    const isSuccess = j.status === 'enviado';
+                    const isFailed = j.status === 'falha' || j.status === 'quarentena';
+                    const targetGroup = groups.find((g) => g.groupJid === j.targetJid);
+                    const groupLabel = targetGroup ? targetGroup.name : (j.targetJid.includes('@') ? j.targetJid.split('@')[0] : 'Grupo WhatsApp');
+
+                    const storeColors: Record<string, { bg: string; text: string; border: string }> = {
+                      mercadolivre: { bg: '#292500', text: '#FFE600', border: 'rgba(255, 230, 0, 0.4)' },
+                      shopee: { bg: '#291008', text: '#FF5722', border: 'rgba(255, 87, 34, 0.4)' },
+                      amazon: { bg: '#291800', text: '#FF9900', border: 'rgba(255, 153, 0, 0.4)' },
+                      netshoes: { bg: '#23082E', text: '#C084FC', border: 'rgba(192, 132, 252, 0.4)' },
+                      magalu: { bg: '#081D33', text: '#0086FF', border: 'rgba(0, 134, 255, 0.4)' },
+                      outro: { bg: '#0D1B31', text: '#1CCAF2', border: 'rgba(28, 202, 242, 0.3)' },
+                    };
+
+                    const sc = storeColors[store] || storeColors.outro;
+
+                    return (
+                      <div
+                        key={j.id}
+                        style={{
+                          background: '#091526',
+                          border: '1px solid #18283D',
+                          borderRadius: 12,
+                          padding: 16,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 12,
+                          transition: 'border-color 0.2s',
+                        }}
+                      >
+                        {/* Linha superior: Marketplace + Grupo + Data + Status */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span
+                              style={{
+                                background: sc.bg,
+                                color: sc.text,
+                                border: `1px solid ${sc.border}`,
+                                borderRadius: 6,
+                                padding: '2px 8px',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: 0.5,
+                              }}
+                            >
+                              {store}
+                            </span>
+                            <span style={{ fontSize: 12, color: '#8EADC7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              👥 {groupLabel}
+                            </span>
+                            <span style={{ fontSize: 12, color: '#627D98' }}>•</span>
+                            <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                              {j.sentAt
+                                ? new Date(j.sentAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                : j.createdAt
+                                ? new Date(j.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                : 'Registrado'}
+                            </span>
+                          </div>
+
+                          <div>
+                            {isSuccess ? (
+                              <span
+                                style={{
+                                  background: 'rgba(32, 201, 151, 0.12)',
+                                  color: '#20C997',
+                                  border: '1px solid rgba(32, 201, 151, 0.35)',
+                                  borderRadius: 20,
+                                  padding: '3px 10px',
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                ✓ Enviado com sucesso
+                              </span>
+                            ) : isFailed ? (
+                              <span
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.12)',
+                                  color: '#F87171',
+                                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                                  borderRadius: 20,
+                                  padding: '3px 10px',
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                ✕ Falha no envio
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  background: 'rgba(100, 116, 139, 0.12)',
+                                  color: '#94A3B8',
+                                  border: '1px solid rgba(100, 116, 139, 0.35)',
+                                  borderRadius: 20,
+                                  padding: '3px 10px',
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {j.status}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="rp-list-copy">
-                        <strong>{j.targetName || 'Disparo WhatsApp'}</strong>
-                        <p>
-                          {j.sentAt
-                            ? new Date(j.sentAt).toLocaleString('pt-BR')
-                            : 'Registrado'}{' '}
-                          {j.errorDetails ? `· Motivo: ${j.errorDetails}` : ''}
-                        </p>
+
+                        {/* Linha intermediária: Foto + Título + Preços + Link Afiliado */}
+                        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                          {j.mediaUrl ? (
+                            <div
+                              style={{
+                                width: 72,
+                                height: 72,
+                                flexShrink: 0,
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                border: '1px solid #1E344F',
+                                background: '#FFFFFF',
+                              }}
+                            >
+                              <img
+                                src={j.mediaUrl}
+                                alt={j.targetName || 'Foto do produto'}
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                width: 72,
+                                height: 72,
+                                flexShrink: 0,
+                                borderRadius: 10,
+                                border: '1px solid #1E344F',
+                                background: '#0D1B31',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#1CCAF2',
+                                fontSize: 24,
+                              }}
+                            >
+                              🎯
+                            </div>
+                          )}
+
+                          <div style={{ flex: 1, minWidth: 240 }}>
+                            <strong style={{ fontSize: 14, color: '#F8FBFF', display: 'block', lineHeight: 1.4, marginBottom: 4 }}>
+                              {j.targetName || 'Oferta enviada ao WhatsApp'}
+                            </strong>
+
+                            {/* Preços */}
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 6 }}>
+                              {prices.original && (
+                                <span style={{ fontSize: 12, color: '#64748B', textDecoration: 'line-through' }}>
+                                  De {prices.original}
+                                </span>
+                              )}
+                              {prices.current ? (
+                                <span style={{ fontSize: 14, color: '#1CCAF2', fontWeight: 800 }}>
+                                  Por {prices.current}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 12, color: '#8EADC7' }}>Preço na oferta</span>
+                              )}
+                            </div>
+
+                            {/* Link Afiliado com botão de copiar */}
+                            {j.affiliateUrl ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    background: '#040C1A',
+                                    border: '1px solid #18283D',
+                                    borderRadius: 6,
+                                    padding: '3px 8px',
+                                    color: '#8EADC7',
+                                    maxWidth: 320,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={j.affiliateUrl}
+                                >
+                                  {j.affiliateUrl}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyAffiliate(j.affiliateUrl, j.id)}
+                                  style={{
+                                    background: copiedAffiliateId === j.id ? '#20C997' : '#0D213B',
+                                    color: copiedAffiliateId === j.id ? '#040C1A' : '#1CCAF2',
+                                    border: '1px solid rgba(28, 202, 242, 0.35)',
+                                    borderRadius: 6,
+                                    padding: '3px 10px',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                >
+                                  {copiedAffiliateId === j.id ? '✓ Copiado!' : 'Copiar link'}
+                                </button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: '#F59E0B' }}>Link afiliado não registrado</span>
+                            )}
+                          </div>
+
+                          {/* Botões de Ação na Direita */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignSelf: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => setInspectingJob(j)}
+                              style={{
+                                background: '#0D1B31',
+                                border: '1px solid #1C2E46',
+                                borderRadius: 8,
+                                padding: '6px 12px',
+                                color: '#F8FBFF',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Ver mensagem
+                            </button>
+
+                            {isFailed && (
+                              <button
+                                type="button"
+                                disabled={retryingJobId === j.id}
+                                onClick={() => handleRetryJob(j.id)}
+                                style={{
+                                  background: '#1CCAF2',
+                                  border: 'none',
+                                  borderRadius: 8,
+                                  padding: '6px 12px',
+                                  color: '#040C1A',
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {retryingJobId === j.id ? 'Reenviando...' : 'Reenviar'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Motivo do erro se falhou */}
+                        {isFailed && j.errorDetails && (
+                          <div
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.08)',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              borderRadius: 8,
+                              padding: '8px 12px',
+                              fontSize: 12,
+                              color: '#FCA5A5',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                            }}
+                          >
+                            <span>⚠️</span>
+                            <span>
+                              <strong>Motivo:</strong> {j.errorDetails}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      {j.status === 'enviado' ? (
-                        <span className="rp-tag rp-good">Enviado</span>
-                      ) : (
-                        <>
-                          <span className="rp-tag rp-warn">Não enviado</span>
-                          <Link href="/conexoes" className="rp-btn">
-                            Ver conexão
-                          </Link>
-                        </>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -801,6 +1183,144 @@ function EnviosContent() {
             </button>
           </div>
         </dialog>
+      )}
+
+      {/* Modal de Inspeção da Mensagem Publicada */}
+      {inspectingJob && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setInspectingJob(null);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 8, 19, 0.78)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: '#091526',
+              border: '1px solid #1C2E46',
+              borderRadius: 16,
+              maxWidth: 580,
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#1CCAF2', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Detalhes do Envio
+                </span>
+                <h3 style={{ margin: '2px 0 0', fontSize: 17, color: '#F8FBFF', fontWeight: 700 }}>
+                  {inspectingJob.targetName || 'Mensagem WhatsApp'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingJob(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#8EADC7',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  padding: 4,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {inspectingJob.mediaUrl && (
+              <div style={{ width: '100%', maxHeight: 240, overflow: 'hidden', borderRadius: 10, background: '#FFFFFF', display: 'flex', justifyContent: 'center' }}>
+                <img
+                  src={inspectingJob.mediaUrl}
+                  alt="Produto"
+                  style={{ maxHeight: 240, objectFit: 'contain' }}
+                />
+              </div>
+            )}
+
+            <div>
+              <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                Texto publicado no WhatsApp:
+              </span>
+              <pre
+                style={{
+                  background: '#040C1A',
+                  border: '1px solid #18283D',
+                  borderRadius: 10,
+                  padding: 14,
+                  color: '#E2E8F0',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontFamily: 'inherit',
+                  margin: 0,
+                }}
+              >
+                {inspectingJob.messageText}
+              </pre>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 8 }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(inspectingJob.messageText);
+                    setNotice('Mensagem copiada para a área de transferência!');
+                  } catch {}
+                }}
+                style={{
+                  background: '#0D213B',
+                  border: '1px solid rgba(28, 202, 242, 0.4)',
+                  borderRadius: 8,
+                  padding: '8px 16px',
+                  color: '#1CCAF2',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Copiar mensagem inteira
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInspectingJob(null)}
+                style={{
+                  background: '#1CCAF2',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 18px',
+                  color: '#040C1A',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

@@ -32,13 +32,18 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       {
+        source: '/resultados',
+        destination: '/estatisticas',
+        permanent: false,
+      },
+      {
         source: '/analytics',
-        destination: '/resultados?aba=grupos',
+        destination: '/estatisticas',
         permanent: false,
       },
       {
         source: '/relatorios',
-        destination: '/resultados?aba=vendas',
+        destination: '/estatisticas',
         permanent: false,
       },
       {

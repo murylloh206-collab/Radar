@@ -495,12 +495,12 @@ export async function composeProductOnScenario(options: ComposeOptions): Promise
 
     const pillW = 270;
     const pillH = 42;
-    const watermarkSvg = `
+    const watermarkSvg = `<?xml version="1.0" encoding="UTF-8"?>
       <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg">
         <rect x="0" y="1" width="${pillW - 2}" height="${pillH - 2}" rx="20" fill="rgba(6, 18, 37, 0.72)" stroke="rgba(28, 202, 242, 0.40)" stroke-width="1.5"/>
         <circle cx="21" cy="21" r="12" fill="#0D1B31" stroke="#1CCAF2" stroke-width="1.6"/>
         <circle cx="21" cy="21" r="5" fill="#1CCAF2"/>
-        <text x="42" y="26" fill="#F8FBFF" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="700" letter-spacing="0.3">${handleText}</text>
+        <text x="42" y="26" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-size="15" font-weight="700" letter-spacing="0.3">${handleText}</text>
       </svg>
     `;
     const watermarkBuf = await sharp(Buffer.from(watermarkSvg)).toBuffer();

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PublicationJob } from '@/lib/types';
-import { readDatabase, writeDatabase, ensureValidUuid, savePublicationJob } from '@/lib/server/storage';
+import { readDatabase, writeDatabase, ensureValidUuid, savePublicationJob, getDatabase } from '@/lib/server/storage';
 import { getSessionFromRequest } from '@/lib/server/auth';
 import { validateJobForDispatch } from '@/lib/server/job-validator';
 import { runWorkerCycle } from '@/lib/server/worker-engine';
@@ -18,7 +18,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
 
-    const db = readDatabase();
+    let db;
+    try {
+      db = await getDatabase();
+    } catch {
+      db = readDatabase();
+    }
     let list = [...db.jobs];
 
     if (status) {

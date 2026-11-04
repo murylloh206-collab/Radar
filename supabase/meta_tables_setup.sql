@@ -100,3 +100,4 @@ GRANT ALL ON public.story_publications TO authenticated, service_role, anon;
 
 -- 6. Recarregar o cache do PostgREST imediatamente (evita erro de coluna não encontrada)
 NOTIFY pgrst, 'reload schema';
+

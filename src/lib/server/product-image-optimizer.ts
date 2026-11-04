@@ -43,29 +43,41 @@ async function getWatermarkBadgeBuffer(): Promise<Buffer | null> {
     }
   }
 
-  if (!logoFilePath) {
-    return null;
-  }
-
   try {
     const width = 310;
     const height = 48;
     const iconSize = 36;
 
-    // Recorta o logotipo oficial em formato circular de alta definição
-    const circleMask = Buffer.from(
-      `<svg width="${iconSize}" height="${iconSize}"><circle cx="${iconSize / 2}" cy="${iconSize / 2}" r="${iconSize / 2}" fill="#fff"/></svg>`
-    );
+    let circularIcon: Buffer | null = null;
 
-    const circularIcon = await sharp(logoFilePath)
-      .resize(iconSize, iconSize, { fit: 'cover' })
-      .composite([{ input: circleMask, blend: 'dest-in' }])
-      .png()
-      .toBuffer();
+    if (logoFilePath) {
+      try {
+        const circleMask = Buffer.from(
+          `<svg width="${iconSize}" height="${iconSize}"><circle cx="${iconSize / 2}" cy="${iconSize / 2}" r="${iconSize / 2}" fill="#fff"/></svg>`
+        );
 
-    // Cria a cápsula estilizada com identidade oficial (Preto/Grafite + Amarelo Dourado + Radar)
-    const svgBadge = Buffer.from(`
-      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        circularIcon = await sharp(logoFilePath)
+          .resize(iconSize, iconSize, { fit: 'cover' })
+          .composite([{ input: circleMask, blend: 'dest-in' }])
+          .png()
+          .toBuffer();
+      } catch (err) {
+        console.warn('[Watermark] Aviso ao recortar ícone do logo, utilizando vetor nativo:', err);
+      }
+    }
+
+    // Cria a cápsula estilizada com identidade oficial e fontes padrão compatíveis com Linux / Vercel
+    const vectorRadarIcon = !circularIcon
+      ? `<g transform="translate(8, 6)">
+           <circle cx="18" cy="18" r="17" fill="#090E1A" stroke="#F59E0B" stroke-width="1.5"/>
+           <circle cx="18" cy="18" r="10" fill="none" stroke="#FBBF24" stroke-width="1.2" stroke-opacity="0.7"/>
+           <circle cx="18" cy="18" r="4" fill="#FBBF24"/>
+           <path d="M18 18 L25 11" stroke="#FBBF24" stroke-width="1.5" stroke-linecap="round"/>
+         </g>`
+      : '';
+
+    const svgBadge = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+      <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="badgeBg" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stop-color="#090E1A" stop-opacity="0.94"/>
@@ -74,16 +86,21 @@ async function getWatermarkBadgeBuffer(): Promise<Buffer | null> {
         </defs>
         <rect x="1" y="1" width="${width - 2}" height="${height - 2}" rx="23" ry="23" 
               fill="url(#badgeBg)" stroke="#F59E0B" stroke-width="1.5" stroke-opacity="0.85"/>
-        <text x="52" y="30" font-family="system-ui, -apple-system, Roboto, 'Segoe UI', sans-serif" font-size="14.5" font-weight="700" fill="#FFFFFF" letter-spacing="0.3">
+        ${vectorRadarIcon}
+        <text x="52" y="30" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-size="14.5" font-weight="700" fill="#FFFFFF" letter-spacing="0.3">
           <tspan fill="#FBBF24">@</tspan>radar.ofertas.br1
         </text>
       </svg>
     `);
 
-    cachedWatermarkBadge = await sharp(svgBadge)
-      .composite([{ input: circularIcon, top: 6, left: 7 }])
-      .png()
-      .toBuffer();
+    if (circularIcon) {
+      cachedWatermarkBadge = await sharp(svgBadge)
+        .composite([{ input: circularIcon, top: 6, left: 7 }])
+        .png()
+        .toBuffer();
+    } else {
+      cachedWatermarkBadge = await sharp(svgBadge).png().toBuffer();
+    }
 
     return cachedWatermarkBadge;
   } catch (error) {

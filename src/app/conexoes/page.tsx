@@ -118,11 +118,46 @@ function ConexoesContent() {
     if (activeTab === 'lojas') void loadData();
   }, [loadData, activeTab]);
 
-  // Verificar se uma loja está realmente conectada e validada no cofre
-  const isStoreConnected = useCallback((storeName: StoreName): boolean => {
+  // Verificar se uma loja está realmente conectada e com credenciais completas
+  const getStoreConnectionState = useCallback((storeName: StoreName): 'conectado' | 'incompleto' | 'desconectado' => {
     const found = vaultStores.find((s) => s.storeName === storeName);
-    return found?.connectionStatus === 'conectado';
+    if (!found || found.connectionStatus !== 'conectado') return 'desconectado';
+
+    if (storeName === 'netshoes') {
+      const hasId = Boolean(found.appId && found.appId.trim());
+      const hasTag = Boolean((found.affiliateTag && found.affiliateTag.trim()) || (found.tagIdentified && found.tagIdentified.trim()));
+      if (hasId && hasTag) return 'conectado';
+      if (hasId || hasTag) return 'incompleto';
+      return 'desconectado';
+    }
+
+    if (storeName === 'mercadolivre') {
+      const hasTag = Boolean(found.affiliateTag || found.tagIdentified);
+      const hasApp = Boolean(found.appId);
+      const hasCookies = Boolean(found.hasUserToken);
+      if (hasTag || hasApp || hasCookies) return 'conectado';
+      return 'incompleto';
+    }
+
+    if (storeName === 'shopee') {
+      const hasTag = Boolean(found.affiliateTag || found.tagIdentified);
+      const hasApi = Boolean(found.appId && found.hasAppSecret);
+      if (hasTag || hasApi) return 'conectado';
+      return 'incompleto';
+    }
+
+    if (storeName === 'amazon') {
+      const hasTag = Boolean(found.affiliateTag || found.tagIdentified);
+      if (hasTag) return 'conectado';
+      return 'incompleto';
+    }
+
+    return 'conectado';
   }, [vaultStores]);
+
+  const isStoreConnected = useCallback((storeName: StoreName): boolean => {
+    return getStoreConnectionState(storeName) === 'conectado';
+  }, [getStoreConnectionState]);
 
   // Abrir modal de configuração direta populando campos se já existirem metadados
   const handleOpenStoreConfig = (store: StoreName) => {
@@ -569,12 +604,17 @@ function ConexoesContent() {
                 onClick={() => handleCardClick('netshoes')}
                 aria-label={`Netshoes${isStoreConnected('netshoes') ? ', conectado' : ''}. Configurar integração`}
               >
-                {isStoreConnected('netshoes') && (
+                {isStoreConnected('netshoes') ? (
                   <span className="cc-card-connection" aria-hidden="true">
                     <span className="cc-connected-label">Conectado</span>
                     <span className="cc-connected-dot"></span>
                   </span>
-                )}
+                ) : getStoreConnectionState('netshoes') === 'incompleto' ? (
+                  <span className="cc-card-connection" aria-hidden="true">
+                    <span className="cc-connected-label" style={{ color: '#F59E0B' }}>Incompleto</span>
+                    <span className="cc-connected-dot" style={{ background: '#F59E0B' }}></span>
+                  </span>
+                ) : null}
                 <span className="cc-store-head">
                   <span className="cc-mark">
                     <BrandLogo brand="netshoes" variant="integracao" size={38} containerSize={50} />
@@ -1037,25 +1077,35 @@ function ConexoesContent() {
               {selectedStoreConfig === 'netshoes' && (
                 <>
                   <label>
-                    ID do anunciante
+                    ID do anunciante (Merchant ID)
                     <input
                       type="text"
-                      placeholder="Identificador da Netshoes no seu programa"
+                      placeholder="ID do anunciante Netshoes (padrão: 43360)"
                       value={configForm.appId}
                       onChange={(e) => setConfigForm({ ...configForm, appId: e.target.value })}
                       autoFocus
                     />
-                    <small>Utilize o ID aprovado para a sua integração.</small>
+                    <small>ID da Netshoes na rede Rakuten LinkSynergy (padrão: 43360).</small>
                   </label>
                   <label>
-                    Token de acesso Rakuten
+                    Site ID Rakuten (Seu ID de afiliado)
+                    <input
+                      type="text"
+                      placeholder="Seu ID publisher da Rakuten (ex: 3958210)"
+                      value={configForm.affiliateTag}
+                      onChange={(e) => setConfigForm({ ...configForm, affiliateTag: e.target.value })}
+                    />
+                    <small>Identificador numérico exclusivo da sua conta publisher na Rakuten.</small>
+                  </label>
+                  <label>
+                    Token Bearer Rakuten (Opcional)
                     <input
                       type="password"
-                      placeholder="Token da sua aplicação"
+                      placeholder="Token para autenticação via API de Deep Links"
                       value={configForm.userToken}
                       onChange={(e) => setConfigForm({ ...configForm, userToken: e.target.value })}
                     />
-                    <small>Usado pela integração da API de deep links da Rakuten.</small>
+                    <small>Necessário apenas se utilizar a API direta de links da Rakuten.</small>
                   </label>
                 </>
               )}

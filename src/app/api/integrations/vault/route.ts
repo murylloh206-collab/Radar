@@ -120,16 +120,22 @@ export async function POST(req: NextRequest) {
 
       if (storeName === 'netshoes') {
         const appId = String(data.appId || '').trim();
-        const token = String(data.userToken || '').trim();
-        if (!appId || !token) {
+        const tag = String(data.affiliateTag || '').trim();
+        if (!appId) {
           return NextResponse.json({
             ok: false,
-            error: 'ID do anunciante e Token de acesso Rakuten são obrigatórios.',
+            error: 'ID do anunciante Netshoes (Merchant ID) é obrigatório.',
+          });
+        }
+        if (!tag) {
+          return NextResponse.json({
+            ok: false,
+            error: 'Site ID Rakuten (seu ID de afiliado) é obrigatório.',
           });
         }
         return NextResponse.json({
           ok: true,
-          message: 'Parâmetros Rakuten Advertising validados com sucesso.',
+          message: 'Parâmetros Rakuten Advertising (Site ID e Merchant ID) validados com sucesso.',
         });
       }
 
@@ -193,13 +199,18 @@ export async function POST(req: NextRequest) {
         saveInput.authType = 'credentials';
       } else if (storeName === 'netshoes') {
         const appId = String(data.appId || '').trim();
+        const tag = String(data.affiliateTag || '').trim();
         const token = String(data.userToken || '').trim();
         if (!appId) {
-          return NextResponse.json({ ok: false, error: 'ID do anunciante Netshoes é obrigatório.' }, { status: 400 });
+          return NextResponse.json({ ok: false, error: 'ID do anunciante Netshoes (Merchant ID) é obrigatório.' }, { status: 400 });
+        }
+        if (!tag) {
+          return NextResponse.json({ ok: false, error: 'Site ID Rakuten (seu ID de afiliado) é obrigatório.' }, { status: 400 });
         }
         saveInput.appId = appId;
+        saveInput.affiliateTag = tag;
         if (token) saveInput.userToken = token;
-        saveInput.authType = 'rakuten_token';
+        saveInput.authType = token ? 'rakuten_token' : 'credentials';
       } else if (storeName === 'mercadolivre') {
         const appId = String(data.appId || '').trim();
         const tag = String(data.affiliateTag || '').trim();

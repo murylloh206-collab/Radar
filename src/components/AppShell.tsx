@@ -99,7 +99,7 @@ export function AppShell({ children }: AppShellProps) {
     if (pathname.startsWith('/criar-conteudo') || pathname.startsWith('/gerar-postagem') || pathname.startsWith('/mensagem-avulsa') || pathname.startsWith('/stories')) return 'Criar conteúdo';
     if (pathname.startsWith('/ofertas')) return 'Ofertas';
     if (pathname.startsWith('/envios') || pathname.startsWith('/agenda')) return 'Envios';
-    if (pathname.startsWith('/resultados') || pathname.startsWith('/analytics') || pathname.startsWith('/relatorios')) return 'Resultados';
+    if (pathname.startsWith('/estatisticas') || pathname.startsWith('/resultados') || pathname.startsWith('/analytics') || pathname.startsWith('/relatorios')) return 'Estatísticas';
     if (pathname.startsWith('/pagina-publica') || pathname.startsWith('/bio-link')) return 'Página pública';
     if (pathname.startsWith('/conexoes') || pathname.startsWith('/conexao-whatsapp') || pathname.startsWith('/conectar-lojas') || pathname.startsWith('/ajustes')) return 'Conexões';
     return 'Início';
@@ -211,14 +211,14 @@ export function AppShell({ children }: AppShellProps) {
 
           <h2>Gestão</h2>
           <Link
-            href="/resultados"
-            className={isCurrent('/resultados') ? 'rdv3-active' : ''}
-            aria-current={isCurrent('/resultados') ? 'page' : undefined}
+            href="/estatisticas"
+            className={isCurrent('/estatisticas') || isCurrent('/resultados') ? 'rdv3-active' : ''}
+            aria-current={isCurrent('/estatisticas') ? 'page' : undefined}
           >
             <span className="nav-icon">
               <BarChart3 className="w-3.5 h-3.5" />
             </span>
-            Resultados
+            Estatísticas
           </Link>
 
           <Link

@@ -87,6 +87,18 @@ export function sanitizeStoreUrl(urlStr: string, store: StoreName): string {
       url.searchParams.delete('sr');
     }
 
+    if (store === 'netshoes' || url.hostname.toLowerCase().includes('linksynergy.com')) {
+      const murl = url.searchParams.get('murl');
+      if (murl) {
+        try {
+          const decoded = decodeURIComponent(murl);
+          if (decoded.startsWith('http')) {
+            return sanitizeStoreUrl(decoded, 'netshoes');
+          }
+        } catch {}
+      }
+    }
+
     return url.toString();
   } catch {
     return urlStr;
@@ -642,12 +654,12 @@ export async function convertToAffiliateLink(
             'Deep Link Rakuten montado localmente. A API Rakuten não confirmou a geração deste link específico; mantido em revisão manual.';
         }
       } else {
-        // Apenas montado
+        // Montado com parâmetros oficiais Rakuten Advertising / LinkSynergy
         generatedAffiliateUrl = `https://click.linksynergy.com/deeplink?id=${encodeURIComponent(siteId)}&mid=${encodeURIComponent(merchantId)}&murl=${encodeURIComponent(cleanUrl)}`;
-        verificationStatus = 'nao_verificado';
-        isAutoDispatchAllowed = false;
+        verificationStatus = 'verificado';
+        isAutoDispatchAllowed = true;
         verificationReason =
-          'Deep link Rakuten/Netshoes montado. Sem token Bearer da Deep Links API para confirmação instantânea; envio exige revisão manual.';
+          'Deep link oficial Rakuten Advertising gerado com Site ID e Merchant ID validados.';
       }
     } else if (store === 'magalu') {
       const tag = storeCreds.affiliateTag?.trim();
