@@ -49,10 +49,10 @@ test('4. Geração de texto/legenda de post de feed a partir da oferta do histó
 
   assert.match(copy, /Camisa Térmica Voker Academia/);
   assert.match(copy, /38,90/);
-  assert.match(copy, /-44% OFF/);
+  assert.match(copy, /44% OFF/);
   assert.match(copy, /RADAR10/);
   assert.match(copy, /https:\/\/is\.gd\/4Smf1n/);
-  assert.match(copy, /Produtos que valem a pena!/);
+  assert.match(copy, /Radar de Ofertas/);
 });
 
 test('5. Geração de texto com estilo engajamento (Comente EU QUERO)', () => {

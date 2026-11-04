@@ -77,15 +77,18 @@ test('4. Template renderiza De, Por, Ou e Cupom sem repetições nem linhas vazi
     discountPct: 33,
     affiliateUrl: 'https://meli.la/meu-afiliado',
     hookText: '⚡ *SUPER OFERTA EXCLUSIVA!*',
-    watermarkText: '🎯 _Radar de Ofertas_',
+    watermarkText: '🎯 Radar de Ofertas',
   });
 
   assert.match(rendered, /De: ~R\$\s*349,99~/);
-  assert.match(rendered, /Por apenas R\$\s*236,21 no Pix/);
-  assert.match(rendered, /-33% OFF/);
+  assert.match(rendered, /Por R\$\s*236,21 no Pix/);
+  assert.match(rendered, /33% OFF/);
+  assert.doesNotMatch(rendered, /-33% OFF/);
+  assert.doesNotMatch(rendered, /\(\(/);
   assert.match(rendered, /💳 \*Ou R\$\s*277,90 em até 6x\*/);
   assert.match(rendered, /🎟️ Cupom: \*OFERTADEZ\*/);
   assert.match(rendered, /https:\/\/meli\.la\/meu-afiliado/);
+  assert.match(rendered, /🎯 Radar de Ofertas/);
   assert.doesNotMatch(rendered, /\{preco_de\}/);
   assert.doesNotMatch(rendered, /\{preco_ou\}/);
   assert.doesNotMatch(rendered, /\{cupom\}/);
@@ -102,10 +105,11 @@ test('5. Template limpa tags ausentes quando não há cupom nem ou', () => {
   });
 
   assert.match(rendered, /De: ~R\$\s*100,00~/);
-  assert.match(rendered, /Por apenas R\$\s*80,00/);
+  assert.match(rendered, /Por R\$\s*80,00/);
+  assert.match(rendered, /20% OFF/);
+  assert.doesNotMatch(rendered, /-20% OFF/);
   assert.doesNotMatch(rendered, /Cupom/);
   assert.doesNotMatch(rendered, /💳/);
   assert.doesNotMatch(rendered, /\{preco_ou\}/);
   assert.doesNotMatch(rendered, /\{cupom\}/);
 });
-

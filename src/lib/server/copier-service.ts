@@ -185,6 +185,42 @@ function parseBRLNumber(rawNum: string): number {
   return parseFloat(cleaned) || 0;
 }
 
+export function isPromotionalHookLine(line: string): boolean {
+  const clean = line.trim();
+  if (!clean || clean.length < 4) return true;
+  const lower = clean.toLowerCase();
+
+  // Termina com exclamação ou emoji promocional comum
+  if (/[!🔥🚨✨⚡👏💥😱👇👉]$/u.test(clean)) return true;
+
+  // Frases de abertura ou slogans de marketing comuns em grupos de ofertas
+  const hookPrefixes = [
+    'quando a', 'um desconto', 'quem curte', 'olha esse', 'olha essa',
+    'corre que', 'super oferta', 'oportunidade', 'promoção', 'oferta',
+    'preço que', 'cheiroso e', 'até a', 'qual dos', 'esse é o', 'essa é a',
+    'bora aproveitar', 'não perca', 'achado', 'achadinho', 'imperdível',
+    'apenas hoje', 'atenção', 'alerta de', 'baixou o preço', 'caiu o preço',
+    '100ml de', '50ml de', 'até o nome', 'de r$', 'por r$', 'de:', 'por:',
+  ];
+  if (hookPrefixes.some((prefix) => lower.startsWith(prefix))) return true;
+
+  // Linhas em CAIXA ALTA contendo termos comerciais
+  const lettersOnly = clean.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+  const isAllCaps = lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
+  if (isAllCaps) {
+    const commercialWords = [
+      'DESCONTO', 'OFERTA', 'PREÇO', 'PROMOÇÃO', 'ECONOMIA', 'FESTA',
+      'OPORTUNIDADE', 'ROTINA', 'QUALIDADE', 'ATENÇÃO', 'SUPER', 'ESPECIAL',
+      'IMPERDÍVEL', 'TECNOLOGIA', 'CELULAR', 'COMPRA', 'LIMPEZA',
+    ];
+    if (commercialWords.some((word) => clean.toUpperCase().includes(word))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function extractOfferDetailsFromWhatsAppText(
   rawText: string,
   storeName: string
@@ -291,21 +327,13 @@ export function extractOfferDetailsFromWhatsAppText(
     if (lower.startsWith('de:') || lower.startsWith('por:') || lower.startsWith('por apenas') || lower.startsWith('ou')) return false;
     if (/de:?\s*(?:r\$)?\s*\d+.*por:?/i.test(line)) return false;
     if (lower.includes('resgate aqui') || lower.includes('aplique o cupom') || lower.includes('resgate cupom') || lower.includes('utilize o cupom')) return false;
-    if (lower.includes('link do produto') || lower.includes('compre aqui') || lower === '🛒') return false;
+    if (lower.includes('link do produto') || lower.includes('compre aqui') || lower.includes('link direto') || lower === '🛒') return false;
+    if (isPromotionalHookLine(line)) return false;
     return true;
   });
 
   let title: string | undefined;
-  if (candidateLines.length >= 2) {
-    const first = candidateLines[0];
-    const lettersOnly = first.replace(/[^a-zA-ZÀ-ÿ]/g, '');
-    const isAllCapsHook =
-      lettersOnly.length > 0 &&
-      lettersOnly === lettersOnly.toUpperCase() &&
-      first.length < 40 &&
-      !/\d/.test(first);
-    title = isAllCapsHook ? candidateLines[1] : first;
-  } else if (candidateLines.length === 1) {
+  if (candidateLines.length > 0) {
     title = candidateLines[0];
   }
 
@@ -664,7 +692,14 @@ export async function processIncomingMessage(
   }
   const parsedFromWhatsApp = extractOfferDetailsFromWhatsAppText(rawText, conversionResult.store);
 
-  if (parsedFromWhatsApp.title) {
+  const isGenericStoreTitle =
+    !productData.title ||
+    productData.title.toLowerCase().startsWith('produto ') ||
+    productData.title.toLowerCase().startsWith('oferta ') ||
+    productData.title.toLowerCase() === 'oferta exclusiva' ||
+    productData.title.length < 5;
+
+  if (isGenericStoreTitle && parsedFromWhatsApp.title) {
     productData.title = parsedFromWhatsApp.title;
   }
 
@@ -854,22 +889,29 @@ export async function processIncomingMessage(
   if (authorizedSource.imageMode === 'none') {
     finalMediaUrl = undefined;
     finalMediaType = 'none';
-  } else if (bestOfficialPhoto) {
-    // Formata a fotografia oficial no tamanho quadrado perfeito (1:1, 1080x1080) com enquadramento adaptativo 'contain', fundo limpo e marca d'água oficial
-    const applyWatermark = authorizedSource.brandWatermarkEnabled !== false;
-    finalMediaUrl = await optimizeProductImageForWhatsApp(
-      bestOfficialPhoto,
-      authorizedSource.userId,
-      {
-        watermark: applyWatermark,
-        productPageUrl: conversionResult.cleanUrl,
-        store: conversionResult.store,
-      }
-    );
-    finalMediaType = 'image';
   } else {
-    finalMediaUrl = undefined;
-    finalMediaType = 'none';
+    finalMediaType = 'image';
+    if (bestOfficialPhoto) {
+      // Formata a fotografia oficial no tamanho quadrado perfeito (1:1, 1080x1080) com enquadramento adaptativo 'contain', fundo limpo e marca d'água oficial
+      const applyWatermark = authorizedSource.brandWatermarkEnabled !== false;
+      finalMediaUrl = await optimizeProductImageForWhatsApp(
+        bestOfficialPhoto,
+        authorizedSource.userId,
+        {
+          watermark: applyWatermark,
+          watermarkHandle: authorizedSource.brandWatermarkHandle || '@radar.ofertas.br1',
+          productPageUrl: conversionResult.cleanUrl,
+          store: conversionResult.store,
+        }
+      );
+    }
+
+    // Regra inegociável de qualidade: Toda publicação que requer imagem DEVE ter fotografia pronta e válida
+    // Se a foto não puder ser baixada ou processada, NUNCA enviar somente texto silenciosamente.
+    if (!finalMediaUrl) {
+      requiresManualReviewDueToImage = true;
+      imageReviewReason = 'Fotografia do produto indisponível ou falha no processamento da imagem com marca d’água. Publicação sem imagem bloqueada para proteção de qualidade.';
+    }
   }
 
   // 8. Encurtar link de afiliado longo (ex: Mercado Livre) e montar mensagem final para envio
@@ -891,11 +933,12 @@ export async function processIncomingMessage(
   const createdJobIds: string[] = [];
 
   // Regra de Envio Automático:
-  // Só agenda automaticamente se o modo da origem for 'automatico', não houver palavras bloqueadas
-  // e o link próprio de afiliado tiver sido gerado e confirmado com sucesso.
+  // Só agenda automaticamente se o modo da origem for 'automatico', não houver palavras bloqueadas,
+  // a fotografia obrigatória estiver pronta e válida, e o link de afiliado tiver sido confirmado.
   const isAutomaticAllowed =
     authorizedSource.operationMode === 'automatico' &&
     !hasBlockedKeyword &&
+    !requiresManualReviewDueToImage &&
     Boolean(conversionResult.success && conversionResult.affiliateUrl && conversionResult.verificationStatus === 'verificado' && conversionResult.isAutoDispatchAllowed);
 
   const delaySeconds =

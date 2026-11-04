@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { supabase, isSupabaseConfigured, isTestIsolationActive } from '@/lib/supabase';
 import type { ScenarioCategory, ScenarioCompositionRecord, StoreName } from '../types';
+import { getOfficialWatermarkBadge } from './watermark-vector';
 
 let modelPromise: Promise<any> | null = null;
 
@@ -488,38 +489,34 @@ export async function composeProductOnScenario(options: ComposeOptions): Promise
     top: posY,
   });
 
-  // 5. Assinatura da conta (Marca d'água discreta posicionada próxima ao produto)
+  // 5. Assinatura da conta (Marca d'água oficial do Radar de Ofertas)
   if (watermarkEnabled && watermarkHandle) {
-    const handleClean = watermarkHandle.trim();
-    const handleText = handleClean.startsWith('@') ? handleClean : `@${handleClean}`;
-
-    const pillW = 270;
-    const pillH = 42;
-    const watermarkSvg = `<?xml version="1.0" encoding="UTF-8"?>
-      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="1" width="${pillW - 2}" height="${pillH - 2}" rx="20" fill="rgba(6, 18, 37, 0.72)" stroke="rgba(28, 202, 242, 0.40)" stroke-width="1.5"/>
-        <circle cx="21" cy="21" r="12" fill="#0D1B31" stroke="#1CCAF2" stroke-width="1.6"/>
-        <circle cx="21" cy="21" r="5" fill="#1CCAF2"/>
-        <text x="42" y="26" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-size="15" font-weight="700" letter-spacing="0.3">${handleText}</text>
-      </svg>
-    `;
-    const watermarkBuf = await sharp(Buffer.from(watermarkSvg)).toBuffer();
-
-    // Posicionar a assinatura mais próxima da base/lateral do produto
-    // sem cobrir o produto e sem ficar isolada no extremo da borda
-    let wmX = Math.round(posX + prodW - pillW + 20);
-    wmX = Math.max(16, Math.min(wmX, targetSize - pillW - 16));
-
-    let wmY = Math.round(posY + prodH + 25);
-    if (wmY + pillH > targetSize - 16) {
-      wmY = targetSize - pillH - 18;
-    }
-
-    layers.push({
-      input: watermarkBuf,
-      left: wmX,
-      top: wmY,
+    const badgeResult = await getOfficialWatermarkBadge({
+      handle: watermarkHandle,
+      targetImageWidth: targetSize,
+      targetImageHeight: targetSize,
     });
+
+    if (badgeResult?.buffer) {
+      const pillW = badgeResult.width;
+      const pillH = badgeResult.height;
+
+      // Posicionar a assinatura mais próxima da base/lateral do produto
+      // sem cobrir o produto e sem ficar isolada no extremo da borda
+      let wmX = Math.round(posX + prodW - pillW + 20);
+      wmX = Math.max(16, Math.min(wmX, targetSize - pillW - 16));
+
+      let wmY = Math.round(posY + prodH + 25);
+      if (wmY + pillH > targetSize - 16) {
+        wmY = targetSize - pillH - 18;
+      }
+
+      layers.push({
+        input: badgeResult.buffer,
+        left: wmX,
+        top: wmY,
+      });
+    }
   }
 
   // 6. Composição final e exportação em JPEG alta qualidade

@@ -177,6 +177,9 @@ async function sendEntry(row: StoredJob) {
   if (!ready) throw new CopierRuntimeError('Publicação cancelada ou conexão removida antes do envio.');
   row.sendStarted = true;
   const media = !!job.mediaUrl;
+  if (!media && job.mediaType !== 'none') {
+    return updateJob(row, { status: 'falha', runtime_delivery: 'blocked', error_details: 'Oferta exige fotografia, mas a mídia processada não está disponível. Envio bloqueado para evitar publicação incompleta.' });
+  }
   let response: Response;
   try {
     response = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/${media ? 'sendMedia' : 'sendText'}/${encodeURIComponent(connection.instanceName)}`, {

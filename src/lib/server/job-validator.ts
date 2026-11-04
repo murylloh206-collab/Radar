@@ -95,6 +95,25 @@ export function validateJobForDispatch(job: PublicationJob, db: DatabaseSchema):
     };
   }
 
+  // 3.1 Exigência estrita de fotografia válida quando o envio requer imagem
+  // NUNCA permitir que uma oferta configurada para mídia seja enviada silenciosamente apenas com texto
+  if (job.mediaType !== 'none') {
+    const mediaUrl = job.mediaUrl?.trim();
+    if (!mediaUrl) {
+      return {
+        valid: false,
+        error: 'Oferta exige imagem, mas a fotografia processada não está disponível. Envio bloqueado para evitar publicação incompleta no WhatsApp.',
+      };
+    }
+
+    if (!mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://')) {
+      return {
+        valid: false,
+        error: `URL da imagem do produto inválida ou inacessível (${mediaUrl}). Envio bloqueado para revisão.`,
+      };
+    }
+  }
+
   // 4. Link próprio de afiliado confirmado (NUNCA link original de terceiros)
   const affiliateUrl = job.affiliateUrl?.trim();
   if (!affiliateUrl) {

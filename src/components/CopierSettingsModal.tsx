@@ -322,8 +322,8 @@ export default function CopierSettingsModal({
         couponCode: 'PROMO10',
         couponDiscount: '10% OFF extra',
         affiliateUrl: 'https://shope.ee/seu-link-afiliado',
-        hookText: '🔥 *Achado imperdível do Radar*',
-        watermarkText: '🎯 *Radar de Ofertas* — Produtos que valem a pena!',
+        hookText: '🔥 OFERTA COM UM EXCELENTE DESCONTO!',
+        watermarkText: '🎯 Radar de Ofertas',
       });
     } catch {
       return 'Erro ao formatar prévia do template.';

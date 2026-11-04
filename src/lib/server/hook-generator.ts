@@ -2,10 +2,12 @@
  * Gerador inteligente de ganchos de abertura para o Radar de Ofertas.
  * 
  * Produz chamadas comerciais atrativas, contextuais e variadas por categoria,
- * sem afirmações falsas de escassez e sem depender de chamadas externas de IA.
+ * com exatamente 1 único gancho por oferta, sem termos como 'achadinhos' ou 'achado',
+ * e sem promessas falsas de escassez.
  */
 
 export type ProductHookCategory =
+  | 'caixa_de_som'
   | 'suplementos'
   | 'tenis'
   | 'smartphones'
@@ -27,6 +29,20 @@ interface CategoryKeywords {
 
 const CATEGORY_MAP: CategoryKeywords[] = [
   {
+    category: 'caixa_de_som',
+    patterns: [
+      /caixa\s+(?:de\s+)?som/i,
+      /soundbar/i,
+      /partybox/i,
+      /boombox/i,
+      /jbl\s+(?:flip|charge|boombox|partybox|go|clip)/i,
+      /alto[- ]falante/i,
+      /echo\s+dot/i,
+      /echo\s+pop/i,
+      /alexa/i,
+    ],
+  },
+  {
     category: 'suplementos',
     patterns: [
       /creatina/i,
@@ -41,6 +57,8 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /soldiers nutrition/i,
       /growth/i,
       /max titanium/i,
+      /dark lab/i,
+      /integralmedica/i,
     ],
   },
   {
@@ -98,7 +116,6 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /amazfit/i,
       /orient/i,
       /casio/i,
-      /technos/i,
     ],
   },
   {
@@ -108,45 +125,47 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /eau de parfum/i,
       /eau de toilette/i,
       /col[oô]nia/i,
-      /desodorante/i,
-      /o botic[aá]rio/i,
-      /natura/i,
+      /fragr[aâ]ncia/i,
+      /botic[aá]rio/i,
       /malbec/i,
-      /hugo boss/i,
-      /carolina herrera/i,
-      /yves saint/i,
+      /zaad/i,
+      /natura/i,
+      /versace/i,
+      /dior/i,
+      /sauvage/i,
+      /one million/i,
+      /invictus/i,
     ],
   },
   {
     category: 'ferramentas',
     patterns: [
-      /parafusadeira/i,
       /furadeira/i,
+      /parafusadeira/i,
       /esmerilhadeira/i,
-      /martelete/i,
       /serra/i,
-      /jogo de chaves/i,
+      /jogo de ferramentas/i,
       /maleta de ferramentas/i,
-      /makita/i,
-      /bosch/i,
-      /dewalt/i,
-      /wap/i,
+      /trena/i,
+      /alicate/i,
+      /martele/i,
       /lavadora de alta press[aã]o/i,
     ],
   },
   {
     category: 'eletrodomesticos',
     patterns: [
-      /air\s*fryer/i,
+      /airfryer/i,
       /fritadeira/i,
       /liquidificador/i,
       /cafeteira/i,
       /micro-ondas/i,
       /aspirador/i,
       /ventilador/i,
-      /ar-condicionado/i,
       /geladeira/i,
-      /lavadora/i,
+      /fog[aã]o/i,
+      /m[aá]quina de lavar/i,
+      /lava e seca/i,
       /smart tv/i,
       /televis[aã]o/i,
     ],
@@ -198,7 +217,6 @@ const CATEGORY_MAP: CategoryKeywords[] = [
     patterns: [
       /fone/i,
       /headphone/i,
-      /caixa de som/i,
       /bluetooth/i,
       /carregador/i,
       /power\s*bank/i,
@@ -212,24 +230,32 @@ const CATEGORY_MAP: CategoryKeywords[] = [
 
 /**
  * Banco de ganchos profissionais e comerciais organizados por categoria.
- * Não utiliza afirmações falsas de escassez e mantém leitura direta.
+ * Não utiliza termos como 'achado' ou 'achadinhos'. Mantém leitura direta e limpa.
  */
 const HOOK_LIBRARY: Record<ProductHookCategory, string[]> = {
+  caixa_de_som: [
+    '🔥 CAIXA DE SOM COM UM EXCELENTE DESCONTO!',
+    'CAIXA DE SOM COM PREÇO QUE MERECE ATENÇÃO! 🔥',
+    'ÓTIMA OPORTUNIDADE PRA QUEM CURTE SOM DE QUALIDADE! 🔊',
+    'POTÊNCIA E QUALIDADE DE SOM COM UM ÓTIMO PREÇO! 🎶',
+    'ESSE MODELO BAIXOU O VALOR E VALE CONFERIR! 🔊',
+  ],
   suplementos: [
+    'CREATINA COM DESCONTO ESPECIAL! 💪',
     'PREÇO BOM PRA QUEM NÃO ABRE MÃO DA CREATINA! 💪',
     'OPORTUNIDADE CERTA PRA COMPLETAR SEU KIT DE TREINO! 💪',
     'ESSA PROMOÇÃO DE SUPLEMENTO MERECE SUA ATENÇÃO! 🔥',
-    'VALE A PENA GARANTIR ANTES QUE O VALOR MUDE! 🏋️',
-    'EXCELENTE CUSTO-BENEFÍCIO PRA QUEM TREINA PESADO! 💪',
+    'EXCELENTE CUSTO-BENEFÍCIO PRA QUEM TREINA PESADO! 🏋️',
   ],
   tenis: [
+    'ESSE TÊNIS ENTROU EM PROMOÇÃO! 👟',
     'PRA QUEM TAVA DE OLHO NESSE TÊNIS, VALE CONFERIR! 👟',
     'BOA OPORTUNIDADE PRA RENOVAR O CALÇADO NO PREÇO CERTO! 🔥',
     'ESSE MODELO COBROU UM VALOR QUE CHAMA ATENÇÃO! 👟',
     'CONFORTO E QUALIDADE COM UM DESCONTO QUE VALE A PENA! 🏃',
-    'ACHADO INTERESSANTE PRA QUEM BUSCA ESTILO E ECONOMIA! ✨',
   ],
   smartphones: [
+    'ÓTIMA OPORTUNIDADE PRA TROCAR DE CELULAR! 📱',
     'BOA CHANCE PRA QUEM QUERIA TROCAR DE SMARTPHONE! 📱',
     'ESSE PREÇO NO CELULAR MERECE UMA OLHADA ATENTA! 🔥',
     'UM VALOR BEM MAIS ACESSÍVEL PRA ESSE APARELHO HOJE! 📲',
@@ -237,7 +263,7 @@ const HOOK_LIBRARY: Record<ProductHookCategory, string[]> = {
   ],
   games: [
     'DE OLHO NO SETUP? ESSA PROMOÇÃO VALE CONFERIR! 🎮',
-    'ACHADO MUITO BOM PRA QUEM CURTE JOGAR COM QUALIDADE! 🕹️',
+    'EXCELENTE ESCOLHA PRA QUEM CURTE JOGAR COM QUALIDADE! 🕹️',
     'ESSE ACESSÓRIO BAIXOU O PREÇO E VALE APROVEITAR! 🔥',
     'DESCONTO INTERESSANTE PRA COMPLETAR SEU CANTINHO GAMER! 🎮',
   ],
@@ -268,7 +294,7 @@ const HOOK_LIBRARY: Record<ProductHookCategory, string[]> = {
   roupas: [
     'BOA OPORTUNIDADE PRA RENOVAR O GUARDA-ROUPA! 👕',
     'PEÇA CONFORTÁVEL COM UM VALOR MUITO ACESSÍVEL HOJE! ✨',
-    'ACHADO LEGAL PRA QUEM CURTE ROUPA BOA SEM PAGAR CARO! 🔥',
+    'ROUPA DE QUALIDADE PRA RENOVAR O VISUAL PAGANDO MENOS! 🔥',
     'PREÇO INTERESSANTE PRA GARANTIR MAIS UMA PEÇA CORINGA! 👔',
   ],
   automotivo: [
@@ -285,11 +311,11 @@ const HOOK_LIBRARY: Record<ProductHookCategory, string[]> = {
     'ESSE PREÇO NO FONE MERECE ATENÇÃO! 🔥',
     'UM DESCONTO INTERESSANTE PRA QUEM CURTE TECNOLOGIA! 🎧',
     'BOA OPORTUNIDADE PRA QUEM PRECISA DE UM ELETRÔNICO NOVO! ⚡',
-    'QUALIDADE DE SOM E ÁUDIO COM PREÇO ACESSÍVEL HOJE! 🔊',
+    'QUALIDADE DE ÁUDIO E TECNOLOGIA COM PREÇO ACESSÍVEL! 📱',
   ],
   geral: [
     'OFERTA INTERESSANTE QUE VALE SUA ATENÇÃO HOJE! 🔥',
-    'ACHADO COM UM VALOR BEM MAIS ACESSÍVEL NO ANÚNCIO! ✨',
+    'PREÇO DIFERENCIADO PRA VOCÊ APROVEITAR ESSA OFERTA! ✨',
     'BOA OPORTUNIDADE DE COMPRA PRA VOCÊ CONFERIR! 🛒',
     'ESSE PRODUTO APARECEU COM UM PREÇO QUE VALE A PENA! 💡',
   ],
@@ -319,6 +345,12 @@ export function detectProductCategory(title: string): ProductHookCategory {
 /**
  * Gera um gancho profissional com rotação controlada para nunca repetir
  * a mesma frase consecutiva, adaptado ao contexto do produto.
+ * 
+ * Regras:
+ * - Apenas um gancho.
+ * - Curto e direto.
+ * - Relacionado ao produto.
+ * - Sem termos 'achado' ou 'achadinhos'.
  */
 export function generateSmartHook(title: string, options?: { discountPct?: number }): string {
   const category = detectProductCategory(title);
@@ -328,7 +360,6 @@ export function generateSmartHook(title: string, options?: { discountPct?: numbe
   if (category === lastUsedCategory && hooks.length > 1) {
     nextIdx = (lastUsedIndex + 1) % hooks.length;
   } else {
-    // Escolhe índice baseado em hash simples do título para estabilidade da prévia
     let hash = 0;
     for (let i = 0; i < title.length; i++) {
       hash = (hash << 5) - hash + title.charCodeAt(i);
@@ -352,4 +383,3 @@ export function generateSmartHook(title: string, options?: { discountPct?: numbe
 
   return selectedHook;
 }
-

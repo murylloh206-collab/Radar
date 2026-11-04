@@ -200,6 +200,27 @@ async function getOfficialLogoBuffer(size = 80, radius = 22): Promise<Buffer | n
 }
 
 /**
+ * Carrega assets permanentes pré-renderizados de marca (PNG com transparência)
+ * Garante que @radar.ofertas.br1 e os textos de marca nunca dependam de fontes instaladas no SO.
+ */
+function getBrandAssetBuffer(filename: string): Buffer | null {
+  const candidates = [
+    path.join(process.cwd(), 'public', filename),
+    path.join(process.cwd(), 'src', 'assets', 'images', filename),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      try {
+        return fs.readFileSync(c);
+      } catch {
+        // tentar próximo
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Renderiza uma arte publicitária oficial (Story 9:16 ou Feed Post 1:1 / 4:5)
  * respeitando 100% a paleta de cores original do Radar de Ofertas.
  */
@@ -219,19 +240,31 @@ export async function renderStoryImage(input: StoryRenderInput): Promise<StoryRe
   }
 
   try {
-    // 1. Baixar a imagem original tratada do produto
-    const imageRes = await fetch(input.imageUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      },
-    });
+    // 1. Obter buffer da imagem tratada do produto (suporta URL remota e caminho local)
+    let originalImageBuffer: Buffer;
+    if (input.imageUrl.startsWith('http://') || input.imageUrl.startsWith('https://')) {
+      const imageRes = await fetch(input.imageUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        },
+      });
 
-    if (!imageRes.ok) {
-      throw new Error(`Não foi possível carregar a imagem do produto: HTTP ${imageRes.status}`);
+      if (!imageRes.ok) {
+        throw new Error(`Não foi possível carregar a imagem do produto: HTTP ${imageRes.status}`);
+      }
+      const imageArrayBuffer = await imageRes.arrayBuffer();
+      originalImageBuffer = Buffer.from(imageArrayBuffer);
+    } else {
+      const localCandidate = input.imageUrl.startsWith('/')
+        ? path.join(process.cwd(), 'public', input.imageUrl)
+        : input.imageUrl;
+      if (fs.existsSync(localCandidate)) {
+        originalImageBuffer = fs.readFileSync(localCandidate);
+      } else {
+        throw new Error(`Imagem local não encontrada: ${input.imageUrl}`);
+      }
     }
-    const imageArrayBuffer = await imageRes.arrayBuffer();
-    const originalImageBuffer = Buffer.from(imageArrayBuffer);
 
     // 2. Calcular preços, desconto automático e formatação
     const pricing = calculatePricingDetails(input.priceOriginal, input.priceCurrent, input.discountPct);
@@ -342,6 +375,8 @@ async function renderStory9x16Layout(params: {
 
   const logoSize = 84;
   const logoBuffer = await getOfficialLogoBuffer(logoSize, 22);
+  const storyHeaderBrand = getBrandAssetBuffer('story-header-brand.png');
+  const storyFooterBrand = getBrandAssetBuffer('story-footer-brand.png');
 
   const productCardSize = 780;
   const productCardX = (width - productCardSize) / 2;
@@ -417,6 +452,7 @@ async function renderStory9x16Layout(params: {
       <circle cx="${width / 2}" cy="710" r="620" fill="none" stroke="#1CCAF2" stroke-width="1" stroke-opacity="0.05"/>
 
       <!-- ================= CABEÇALHO OFICIAL (ÁREA SEGURA DO TOPO) ================= -->
+      ${!storyHeaderBrand ? `
       <g transform="translate(80, 160)">
         <text x="104" y="38" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="34" letter-spacing="1">
           RADAR DE OFERTAS
@@ -432,7 +468,7 @@ async function renderStory9x16Layout(params: {
             OFERTA IMPERDÍVEL
           </text>
         </g>
-      </g>
+      </g>` : ''}
 
       <!-- ================= MOLDURA DO PRODUTO ================= -->
       <rect x="${productCardX - 4}" y="${productCardY - 4}" width="${productCardSize + 8}" height="${productCardSize + 8}" rx="52" fill="none" stroke="#1CCAF2" stroke-width="3" stroke-opacity="0.35"/>
@@ -519,6 +555,7 @@ async function renderStory9x16Layout(params: {
       </g>
 
       <!-- ================= RODAPÉ ORIGINAL ================= -->
+      ${!storyFooterBrand ? `
       <g transform="translate(80, 1800)">
         <line x1="160" y1="0" x2="760" y2="0" stroke="#18334D" stroke-width="2"/>
         <g transform="translate(340, 26)">
@@ -531,7 +568,7 @@ async function renderStory9x16Layout(params: {
         <text x="460" y="74" fill="#1CCAF2" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="800" font-size="18" text-anchor="middle">
           @radar.ofertas.br1
         </text>
-      </g>
+      </g>` : ''}
     </svg>
   `;
 
@@ -539,8 +576,14 @@ async function renderStory9x16Layout(params: {
     { input: productBuffer, top: productCardY, left: productCardX },
   ];
 
-  if (logoBuffer) {
+  if (storyHeaderBrand) {
+    compositeLayers.push({ input: storyHeaderBrand, top: 160, left: 80 });
+  } else if (logoBuffer) {
     compositeLayers.push({ input: logoBuffer, top: 160, left: 80 });
+  }
+
+  if (storyFooterBrand) {
+    compositeLayers.push({ input: storyFooterBrand, top: 1800, left: Math.round((width - 600) / 2) });
   }
 
   return sharp(Buffer.from(svg))
@@ -567,6 +610,8 @@ async function renderFeedPostLayout(params: {
   const isSquare = height === 1080;
   const logoSize = isSquare ? 64 : 72;
   const logoBuffer = await getOfficialLogoBuffer(logoSize, 18);
+  const feedHeaderBrand = getBrandAssetBuffer('feed-header-brand.png');
+  const feedFooterBrand = getBrandAssetBuffer('feed-footer-brand.png');
 
   const productCardSize = isSquare ? 620 : 700;
   const productCardX = (width - productCardSize) / 2;
@@ -619,6 +664,7 @@ async function renderFeedPostLayout(params: {
       <rect width="${width}" height="${height}" fill="url(#bgFeed)"/>
 
       <!-- Topo: Logo oficial + Selo OFERTA IMPERDÍVEL -->
+      ${!feedHeaderBrand ? `
       <g transform="translate(60, ${isSquare ? 46 : 60})">
         <text x="82" y="30" fill="#F8FBFF" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="900" font-size="28" letter-spacing="1">
           RADAR DE OFERTAS
@@ -634,7 +680,7 @@ async function renderFeedPostLayout(params: {
             OFERTA IMPERDÍVEL
           </text>
         </g>
-      </g>
+      </g>` : ''}
 
       <!-- Moldura do Produto -->
       <rect x="${productCardX - 2}" y="${productCardY - 2}" width="${productCardSize + 4}" height="${productCardSize + 4}" rx="34" fill="none" stroke="#1CCAF2" stroke-width="2" stroke-opacity="0.35"/>
@@ -682,11 +728,12 @@ async function renderFeedPostLayout(params: {
         </g>
 
         <!-- Barra de Rodapé / Identificador -->
+        ${!feedFooterBrand ? `
         <g transform="translate(0, ${t2 ? (isSquare ? 208 : 230) : (isSquare ? 180 : 204)})">
           <text x="480" y="16" fill="#8EADC7" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-weight="700" font-size="16" text-anchor="middle">
             Link nos Stories e na Bio • <tspan fill="#1CCAF2">@radar.ofertas.br1</tspan>
           </text>
-        </g>
+        </g>` : ''}
       </g>
     </svg>
   `;
@@ -695,8 +742,17 @@ async function renderFeedPostLayout(params: {
     { input: productBuffer, top: productCardY, left: productCardX },
   ];
 
-  if (logoBuffer) {
+  if (feedHeaderBrand) {
+    compositeLayers.push({ input: feedHeaderBrand, top: isSquare ? 46 : 60, left: 60 });
+  } else if (logoBuffer) {
     compositeLayers.push({ input: logoBuffer, top: isSquare ? 46 : 60, left: 60 });
+  }
+
+  if (feedFooterBrand) {
+    const footerTop = isSquare
+      ? (t2 ? 1005 : 975)
+      : (t2 ? 1145 : 1115);
+    compositeLayers.push({ input: feedFooterBrand, top: footerTop, left: Math.round((width - 600) / 2) });
   }
 
   return sharp(Buffer.from(svg))

@@ -38,6 +38,9 @@ export function sanitizeCopiedText(rawText: string): string {
   cleaned = cleaned.replace(/@(todos|canalde|achadinhos|promos|canal\w+|achados\w*)/gi, '');
   cleaned = cleaned.replace(/entre no nosso grupo|canal vip|siga nosso canal|link na bio|corre que acaba|últimas unidades/gi, '');
 
+  // Remove termos como achados/achadinhos
+  cleaned = cleaned.replace(/\b(achadinhos?|achados?)\b/gi, 'ofertas');
+
   // Remove emojis repetitivos consecutivos (ex: 🔥🔥🔥🔥 -> 🔥)
   cleaned = cleaned.replace(/([🔥⚡🚨💥👏💪👟📱⌚💎✨🎉🛒])\1+/gu, '$1');
 
@@ -49,19 +52,27 @@ export function sanitizeCopiedText(rawText: string): string {
 
 /**
  * Modelo padrão comercial aprovado do Radar de Ofertas:
- * Organizado, legível, com gancho contextual, preços claros e fechamento discreto.
+ * - 1 único gancho comercial de abertura
+ * - Nome do produto em linha dedicada
+ * - Bloco de preços compacto com formatação nativa do WhatsApp (riscado ~ e negrito *)
+ * - Desconto positivo e limpo: 34% OFF (sem sinal negativo e sem parênteses extras)
+ * - Condição Pix opcional somente quando confirmada
+ * - Cupom opcional somente quando válido
+ * - Link destacado
+ * - Assinatura curta: 🎯 Radar de Ofertas
  */
 export const DEFAULT_TEMPLATE = `\
 {gancho}
 
-*{titulo}*
+{titulo}
 
 {preco_de}
-🔥 *Por: {preco_por}* {desconto}
+🔥 *Por {preco_por}*
+{desconto}
 {preco_ou}
 {cupom}
 
-🛒 *Confira a oferta:*
+🛒 Confira a oferta:
 {link}
 
 {marca_dagua}`;
@@ -78,33 +89,41 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     affiliateUrl,
     couponCode,
     couponDiscount,
-    watermarkText = '🎯 *Radar de Ofertas*',
+    watermarkText = '🎯 Radar de Ofertas',
   } = options;
 
   let message = templateText;
 
-  // 1. Título limpo
-  const cleanTitle = title.trim().replace(/^[\s*~_-]+|[\s*~_-]+$/g, '');
+  // 1. Título limpo do produto
+  let cleanTitle = (title || '').trim().replace(/^[\s*~_-]+|[\s*~_-]+$/g, '');
 
-  // 2. Gancho Inteligente: Se não foi fornecido gancho customizado, gera baseado na categoria do produto
-  let hook = options.hookText?.trim();
-  if (!hook) {
-    hook = generateSmartHook(cleanTitle, { discountPct });
-  }
-  message = message.replace('{gancho}', hook);
-  message = message.replace('{titulo}', cleanTitle);
-
-  // 3. Validação Matemática de Desconto
-  let calculatedDiscount = discountPct;
-  if (originalPrice && currentPrice && originalPrice > currentPrice) {
+  // 2. Validação Matemática Rigorosa de Desconto
+  // Fórmula: ((precoOriginal - precoPromocional) / precoOriginal) * 100
+  let calculatedDiscount: number | undefined = undefined;
+  if (originalPrice && currentPrice && originalPrice > currentPrice && originalPrice > 0 && currentPrice > 0) {
     const rawCalc = ((originalPrice - currentPrice) / originalPrice) * 100;
-    // Desconto só é válido se estiver entre 1% e 95% (evita absurdos como 99% em erros de centavos)
     if (rawCalc >= 1 && rawCalc <= 95) {
       calculatedDiscount = Math.round(rawCalc);
-    } else {
-      calculatedDiscount = undefined;
     }
+  } else if (discountPct && discountPct > 0 && discountPct < 100) {
+    calculatedDiscount = Math.round(discountPct);
   }
+
+  // 3. Gancho Inteligente: Exatamente UM ÚNICO gancho principal no topo da mensagem
+  let hook = options.hookText?.trim();
+  if (!hook) {
+    hook = generateSmartHook(cleanTitle, { discountPct: calculatedDiscount });
+  }
+
+  // Prevenir duplicação se o cleanTitle acidentalmente repetiu o gancho
+  const normalizedHook = hook.replace(/[🔥⚡🚨💥👏💪👟📱⌚💎✨🎉🛒!]/gu, '').trim().toUpperCase();
+  const normalizedTitle = cleanTitle.replace(/[🔥⚡🚨💥👏💪👟📱⌚💎✨🎉🛒!]/gu, '').trim().toUpperCase();
+  if (normalizedHook.length > 5 && (normalizedTitle === normalizedHook || normalizedTitle.includes(normalizedHook))) {
+    cleanTitle = '';
+  }
+
+  message = message.replace('{gancho}', hook);
+  message = message.replace('{titulo}', cleanTitle ? (cleanTitle.startsWith('*') ? cleanTitle : `*${cleanTitle}*`) : '');
 
   // 4. Preço DE (Original)
   // Regra inegociável: SÓ exibe se existir de verdade e for estritamente maior que o preço atual
@@ -117,19 +136,18 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     message = message.replace(/^[^\n]*\{preco_de\}[^\n]*\n?/gm, '');
   }
 
-  // 5. Selo de Desconto
-  if (calculatedDiscount && calculatedDiscount > 0 && calculatedDiscount < 100) {
-    message = message.replace('{desconto}', `(-${Math.round(calculatedDiscount)}% OFF)`);
-  } else {
-    message = message.replace(/\(?\{desconto\}\)?/g, '');
-  }
-
-  // 6. Preço POR (Promocional / Atual)
+  // 5. Preço POR (Promocional / Atual)
   if (currentPrice && currentPrice > 0) {
     const conditionText = currentPriceCondition ? ` ${currentPriceCondition.trim()}` : '';
     const formattedPor = `${formatBRL(currentPrice)}${conditionText}`;
+
+    // Substitui placeholders flexíveis (com ou sem 'Por:', com ou sem 'R$')
+    message = message.replace(/Por:?\s*R\$\s*\{preco_por\}/gi, `Por ${formattedPor}`);
+    message = message.replace(/Por:?\s*\{preco_por\}/gi, `Por ${formattedPor}`);
     message = message.replace(/R\$\s*\{preco_por\}/gi, formattedPor);
     message = message.replace('{preco_por}', formattedPor);
+    message = message.replace(/Por:?\s*R\$\s*\{preco\}/gi, `Por ${formattedPor}`);
+    message = message.replace(/Por:?\s*\{preco\}/gi, `Por ${formattedPor}`);
     message = message.replace(/R\$\s*\{preco\}/gi, formattedPor);
     message = message.replace('{preco}', formattedPor);
   } else {
@@ -137,15 +155,29 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     message = message.replace(/^[^\n]*\{preco\}[^\n]*\n?/gm, '');
   }
 
+  // 6. Selo de Desconto: Formato oficial "34% OFF" (sem sinal negativo '-', sem parênteses extras)
+  if (calculatedDiscount && calculatedDiscount > 0 && calculatedDiscount < 100) {
+    const discountStr = `${Math.round(calculatedDiscount)}% OFF`;
+    message = message.replace(/\(?\{desconto\}\)?/g, discountStr);
+  } else {
+    message = message.replace(/^[^\n]*\(?\{desconto\}\)?[^\n]*\n?/gm, '');
+  }
+
+  // Remove qualquer parênteses duplicados remanescentes ou sinais negativos de desconto
+  message = message.replace(/\(\((-?\d+%?\s*OFF)\)\)/gi, '$1');
+  message = message.replace(/\(-(\d+%\s*OFF)\)/gi, '$1');
+  message = message.replace(/-\s*(\d+%\s*OFF)/gi, '$1');
+
   // 7. Preço Alternativo / Parcelamento ("Ou ...")
   const cleanOu = ouPriceText?.trim();
   if (cleanOu) {
     const formattedOu = cleanOu.toLowerCase().startsWith('ou') ? cleanOu : `Ou ${cleanOu}`;
+    const ouLine = `💳 *${formattedOu}*`;
     if (message.includes('{preco_ou}') || message.includes('{ou}')) {
-      message = message.replace('{preco_ou}', `💳 *${formattedOu}*`);
-      message = message.replace('{ou}', `💳 *${formattedOu}*`);
+      message = message.replace('{preco_ou}', ouLine);
+      message = message.replace('{ou}', ouLine);
     } else {
-      message = message.replace(/(🔥\s*\*Por:[^\n]+\*)/, `$1\n💳 *${formattedOu}*`);
+      message = message.replace(/(🔥\s*\*Por[^\n]+\*)/, `$1\n${ouLine}`);
     }
   } else {
     message = message.replace(/^[^\n]*\{preco_ou\}[^\n]*\n?/gm, '');
@@ -169,11 +201,14 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
   // 9. Link de Afiliado em linha dedicada
   message = message.replace('{link}', affiliateUrl.trim());
 
-  // 10. Assinatura Discreta da Marca
-  message = message.replace('{marca_dagua}', watermarkText.trim());
+  // 10. Assinatura Discreta da Marca (🎯 Radar de Ofertas)
+  let cleanSignature = watermarkText.replace(/—\s*Produtos que valem a pena!/gi, '').trim();
+  if (!cleanSignature) cleanSignature = '🎯 Radar de Ofertas';
+  message = message.replace('{marca_dagua}', cleanSignature);
 
-  // Limpeza final de espaçamentos e parênteses órfãos
+  // Limpeza final de espaçamentos, linhas vazias consecutivas e parênteses órfãos
   message = message.replace(/\(\s*\)/g, '');
+  message = message.replace(/^[ \t]+/gm, ''); // Remove espaços no início de linhas
   message = message.replace(/[ \t]+$/gm, ''); // Remove espaços no final das linhas
   message = message.replace(/\n{3,}/g, '\n\n').trim(); // Máximo de 1 linha em branco entre blocos
 

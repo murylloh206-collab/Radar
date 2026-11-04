@@ -3,111 +3,18 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import { supabase } from '../supabase';
+import { getOfficialWatermarkBadge } from './watermark-vector';
 
 export interface OptimizeImageOptions {
   watermark?: boolean;
+  watermarkHandle?: string;
   productPageUrl?: string;
   store?: string;
   category?: string;
   jpegQuality?: number;
 }
 
-let cachedWatermarkBadge: Buffer | null = null;
 const memoryCache = new Map<string, string>();
-
-/**
- * Constrói ou recupera da memória o selo oficial de marca d'água do Radar de Ofertas.
- * - Formato: 310x48 px com cantos arredondados (rx: 23).
- * - Fundo escuro premium (#090E1A) com transparência de 94%.
- * - Borda sutil amarelo dourado (#F59E0B) com 85% de opacidade.
- * - Símbolo oficial de radar circular à esquerda (36x36 px) reutilizando o logotipo oficial.
- * - Identificador oficial @radar.ofertas.br1 em tipografia moderna de alto contraste.
- * - Posicionado de forma elegante na margem inferior livre, NUNCA sobrepondo o produto.
- */
-async function getWatermarkBadgeBuffer(): Promise<Buffer | null> {
-  if (cachedWatermarkBadge) {
-    return cachedWatermarkBadge;
-  }
-
-  const logoCandidates = [
-    path.join(process.cwd(), 'public', 'radar-logo.jpg'),
-    path.join(process.cwd(), 'public', 'logo.png'),
-    path.join(process.cwd(), 'public', 'icon.png'),
-  ];
-
-  let logoFilePath: string | null = null;
-  for (const candidate of logoCandidates) {
-    if (fs.existsSync(candidate)) {
-      logoFilePath = candidate;
-      break;
-    }
-  }
-
-  try {
-    const width = 310;
-    const height = 48;
-    const iconSize = 36;
-
-    let circularIcon: Buffer | null = null;
-
-    if (logoFilePath) {
-      try {
-        const circleMask = Buffer.from(
-          `<svg width="${iconSize}" height="${iconSize}"><circle cx="${iconSize / 2}" cy="${iconSize / 2}" r="${iconSize / 2}" fill="#fff"/></svg>`
-        );
-
-        circularIcon = await sharp(logoFilePath)
-          .resize(iconSize, iconSize, { fit: 'cover' })
-          .composite([{ input: circleMask, blend: 'dest-in' }])
-          .png()
-          .toBuffer();
-      } catch (err) {
-        console.warn('[Watermark] Aviso ao recortar ícone do logo, utilizando vetor nativo:', err);
-      }
-    }
-
-    // Cria a cápsula estilizada com identidade oficial e fontes padrão compatíveis com Linux / Vercel
-    const vectorRadarIcon = !circularIcon
-      ? `<g transform="translate(8, 6)">
-           <circle cx="18" cy="18" r="17" fill="#090E1A" stroke="#F59E0B" stroke-width="1.5"/>
-           <circle cx="18" cy="18" r="10" fill="none" stroke="#FBBF24" stroke-width="1.2" stroke-opacity="0.7"/>
-           <circle cx="18" cy="18" r="4" fill="#FBBF24"/>
-           <path d="M18 18 L25 11" stroke="#FBBF24" stroke-width="1.5" stroke-linecap="round"/>
-         </g>`
-      : '';
-
-    const svgBadge = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
-      <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="badgeBg" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#090E1A" stop-opacity="0.94"/>
-            <stop offset="100%" stop-color="#141D30" stop-opacity="0.94"/>
-          </linearGradient>
-        </defs>
-        <rect x="1" y="1" width="${width - 2}" height="${height - 2}" rx="23" ry="23" 
-              fill="url(#badgeBg)" stroke="#F59E0B" stroke-width="1.5" stroke-opacity="0.85"/>
-        ${vectorRadarIcon}
-        <text x="52" y="30" font-family="'DejaVu Sans', 'Liberation Sans', Arial, Helvetica, sans-serif" font-size="14.5" font-weight="700" fill="#FFFFFF" letter-spacing="0.3">
-          <tspan fill="#FBBF24">@</tspan>radar.ofertas.br1
-        </text>
-      </svg>
-    `);
-
-    if (circularIcon) {
-      cachedWatermarkBadge = await sharp(svgBadge)
-        .composite([{ input: circularIcon, top: 6, left: 7 }])
-        .png()
-        .toBuffer();
-    } else {
-      cachedWatermarkBadge = await sharp(svgBadge).png().toBuffer();
-    }
-
-    return cachedWatermarkBadge;
-  } catch (error) {
-    console.warn('[Watermark] Falha ao gerar selo da logo Radar de Ofertas:', error);
-    return null;
-  }
-}
 
 /**
  * Converte URLs de CDNs de e-commerce conhecidas para a versão master
@@ -143,77 +50,95 @@ export function getHighResCandidateUrls(originalUrl: string): string[] {
   }
 
   // 3. Amazon: substituir dimensões reduzidas pela versão master SL1500
-  if (originalUrl.includes('amazon') || originalUrl.includes('media-amazon')) {
-    const amzHd = originalUrl.replace(/\._AC_[A-Z0-9_,]+_\./i, '._AC_SL1500_.');
-    if (amzHd !== originalUrl) candidates.push(amzHd);
+  if (originalUrl.includes('amazon') || originalUrl.includes('media-amazon.com')) {
+    const cleanAmazon = originalUrl.replace(/\._[A-Z0-9_,]+_\./i, '._AC_SL1500_.');
+    if (cleanAmazon !== originalUrl) candidates.push(cleanAmazon);
   }
 
-  // 4. Netshoes / Zattini: usar imagem zoom/master
-  if (originalUrl.includes('netshoes.com.br') || originalUrl.includes('zattini.com.br')) {
-    const nsZoom = originalUrl
-      .replace(/\/(?:detalhe|thumb|mini)\//i, '/zoom/')
-      .replace(/\/(?:detalhe|thumb|mini)\./i, '/zoom.');
-    if (nsZoom !== originalUrl) candidates.push(nsZoom);
+  // 4. Netshoes: substituir dimensões por padrão zoom
+  if (originalUrl.includes('netshoes') || originalUrl.includes('ns-static')) {
+    const zoomNetshoes = originalUrl
+      .replace(/\/detalhe\//i, '/zoom/')
+      .replace(/\/thumb\//i, '/zoom/')
+      .replace(/\/400x400\//i, '/zoom/');
+    if (zoomNetshoes !== originalUrl) candidates.push(zoomNetshoes);
   }
 
-  // 5. Magazine Luiza (Magalu)
-  if (originalUrl.includes('magazineluiza.com.br') || originalUrl.includes('magazineluiza.')) {
-    const magaluHd = originalUrl.replace(/\/\d+x\d+\//i, '/original/');
-    if (magaluHd !== originalUrl) candidates.push(magaluHd);
+  // Adicionar URL original como fallback final
+  if (!candidates.includes(originalUrl)) {
+    candidates.push(originalUrl);
   }
 
-  candidates.push(originalUrl);
-  return Array.from(new Set(candidates));
+  return candidates;
 }
 
 /**
- * Tenta extrair a foto oficial original de alta resolução da página do produto (OpenGraph)
- * caso a imagem inicial venha de baixa qualidade ou comprimida pelo WhatsApp.
+ * Tenta raspar a foto master em alta resolução diretamente do HTML da página do produto
  */
 async function fetchHighResFromProductPage(productPageUrl: string): Promise<Buffer | null> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
+    const timer = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(productPageUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9',
       },
       signal: controller.signal,
     });
+
     clearTimeout(timer);
 
     if (!res.ok) return null;
     const html = await res.text();
 
-    const ogMatch =
-      html.match(/<meta property=["']og:image["'] content=["'](.*?)["']/i) ||
-      html.match(/<meta name=["']twitter:image["'] content=["'](.*?)["']/i);
+    const patterns = [
+      /<meta property=["']og:image:secure_url["'] content=["']([^"']+)["']/i,
+      /<meta property=["']og:image["'] content=["']([^"']+)["']/i,
+      /<meta name=["']twitter:image["'] content=["']([^"']+)["']/i,
+      /"image":\s*\[\s*"([^"']+)"/i,
+      /"image":\s*"([^"']+)"/i,
+      /<img[^>]+id=["']landingImage["'][^>]+src=["']([^"']+)["']/i,
+      /<img[^>]+class=["'][^"']*ui-pdp-image[^"']*["'][^>]+src=["']([^"']+)["']/i,
+    ];
 
-    if (ogMatch && ogMatch[1] && ogMatch[1].startsWith('http')) {
-      const extractedUrl = ogMatch[1];
-      const candidates = getHighResCandidateUrls(extractedUrl);
-      for (const cand of candidates) {
-        const buf = await fetchSingleImage(cand);
-        if (buf && buf.byteLength >= 8000) {
-          return buf;
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        let extracted = match[1].replace(/&amp;/g, '&');
+        if (extracted.startsWith('//')) extracted = 'https:' + extracted;
+        if (extracted.startsWith('http')) {
+          const buffer = await fetchSingleImage(extracted);
+          if (buffer) return buffer;
         }
       }
     }
   } catch {}
+
   return null;
 }
 
 /**
- * Baixa um único buffer de imagem com timeout seguro
+ * Efetua o download HTTP resiliente de uma URL de imagem
  */
 async function fetchSingleImage(url: string): Promise<Buffer | null> {
+  if (url.startsWith('file://') || url.startsWith('/') || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    try {
+      const cleanPath = url.replace(/^file:\/\//, '');
+      const filePath = cleanPath.startsWith('/') ? path.join(process.cwd(), 'public', cleanPath) : cleanPath;
+      if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath);
+      }
+    } catch {}
+    return null;
+  }
+
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
+    const timer = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(url, {
       headers: {
@@ -223,9 +148,14 @@ async function fetchSingleImage(url: string): Promise<Buffer | null> {
       },
       signal: controller.signal,
     });
+
     clearTimeout(timer);
 
     if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('text') || contentType.includes('html')) {
+        return null;
+      }
       const arrayBuf = await res.arrayBuffer();
       if (arrayBuf.byteLength >= 4000) {
         return Buffer.from(arrayBuf);
@@ -247,7 +177,6 @@ async function fetchBestImageBuffer(
   for (const candidate of candidates) {
     const buffer = await fetchSingleImage(candidate);
     if (buffer) {
-      // Se a imagem for muito pequena e tivermos a página do produto, tentar obter versão de alta resolução
       if (productPageUrl && buffer.byteLength < 12000) {
         const pageHdBuffer = await fetchHighResFromProductPage(productPageUrl);
         if (pageHdBuffer && pageHdBuffer.byteLength > buffer.byteLength) {
@@ -278,7 +207,6 @@ async function isValidProductImage(buffer: Buffer): Promise<boolean> {
       return false;
     }
     const stats = await image.stats();
-    // Se todos os canais tiverem desvio padrão muito próximo de 0, é uma imagem lisa/em branco
     const isBlank = stats.channels.every((c) => c.stdev < 1.0);
     if (isBlank) {
       return false;
@@ -301,9 +229,9 @@ async function isValidProductImage(buffer: Buffer): Promise<boolean> {
  *   da foto do fornecedor para centralização perfeita do objeto real.
  * - Fundo: branco puro #FFFFFF oficial de catálogo de e-commerce limpo e sem poluição.
  * - Tratamento: interpolação Lanczos3 de alta fidelidade + sharpen adaptativo para textos e bordas nítidas.
- * - Identidade visual: marca d'água oficial do Radar de Ofertas com logotipo e @radar.ofertas.br1
- *   posicionada na margem inferior, sem nunca cobrir o produto.
- * - Fidelidade absoluta: não altera cores reais, marcas, detalhes ou variantes do anúncio.
+ * - Identidade visual: nova marca d'água oficial do Radar de Ofertas:
+ *   [LOGO OFICIAL] | @radar.ofertas.br1
+ *   100% vetorial, sem dependência de fontes do OS, compacta, elegante e posicionada na margem livre inferior.
  * - Formato: JPEG de alta qualidade (qualidade configurável 88-94%, padrão 92), baseline e chroma 4:4:4.
  */
 export async function optimizeProductImageForWhatsApp(
@@ -311,39 +239,41 @@ export async function optimizeProductImageForWhatsApp(
   userId: string = '00000000-0000-0000-0000-000000000001',
   options: OptimizeImageOptions = { watermark: true }
 ): Promise<string | undefined> {
-  if (!imageUrl || !imageUrl.startsWith('http')) {
-    return imageUrl;
+  if (!imageUrl || (!imageUrl.startsWith('http') && !imageUrl.startsWith('/') && !imageUrl.startsWith('file://') && !/^[a-zA-Z]:[\\\/]/.test(imageUrl))) {
+    return undefined;
   }
 
-  // Prevenir reprocessamento de imagem já otimizada
-  if (imageUrl.includes('clean-products') || imageUrl.includes('_opt1080')) {
+  // Prevenir reprocessamento de imagem já otimizada na versão v4 atual
+  if (imageUrl.includes('clean-products') && imageUrl.includes('_v4')) {
     return imageUrl;
   }
 
   const applyWatermark = options.watermark !== false;
-  const cacheKey = `${imageUrl}_${applyWatermark ? 'wm' : 'nowm'}_1080`;
+  const handle = options.watermarkHandle || '@radar.ofertas.br1';
+  const cacheKey = `${imageUrl}_${applyWatermark ? 'wm' : 'nowm'}_${handle}_1080_v4`;
   if (memoryCache.has(cacheKey)) {
     return memoryCache.get(cacheKey);
   }
 
-  const timeoutPromise = new Promise<string>((resolve) => {
-    setTimeout(() => resolve(imageUrl), 8000);
+  const timeoutPromise = new Promise<undefined>((resolve) => {
+    setTimeout(() => resolve(undefined), 12000);
   });
 
-  const processPromise = (async (): Promise<string> => {
+  const processPromise = (async (): Promise<string | undefined> => {
     try {
       const inputBuffer = await fetchBestImageBuffer(imageUrl, options.productPageUrl);
       if (!inputBuffer) {
-        return imageUrl;
+        console.warn(`[ImageOptimizer] Imagem indisponível para download: ${imageUrl}`);
+        return undefined;
       }
 
       const valid = await isValidProductImage(inputBuffer);
       if (!valid) {
-        return imageUrl;
+        console.warn(`[ImageOptimizer] Imagem corrompida ou vazia rejeitada: ${imageUrl}`);
+        return undefined;
       }
 
       const targetSize = 1080;
-      // Área útil segura do produto: 840x840 px (ocupa ~78% da tela, garantindo respiro anti-corte no WhatsApp)
       const maxSafeInner = 840;
 
       // 1. Tentar auto-trim suave para remover margens brancas desiguais pré-existentes da foto do fabricante
@@ -382,22 +312,20 @@ export async function optimizeProductImageForWhatsApp(
         },
       ];
 
-      // 4. Marca d'água oficial Radar de Ofertas (@radar.ofertas.br1)
+      // 4. Nova Marca d'água oficial Radar de Ofertas ([LOGO] | @radar.ofertas.br1)
       if (applyWatermark) {
-        const watermarkBadge = await getWatermarkBadgeBuffer();
-        if (watermarkBadge) {
-          const badgeMeta = await sharp(watermarkBadge).metadata();
-          const bW = badgeMeta.width || 310;
-          const bH = badgeMeta.height || 48;
+        const badgeResult = await getOfficialWatermarkBadge({
+          handle,
+          targetImageWidth: targetSize,
+          targetImageHeight: targetSize,
+        });
 
-          // Posicionado na margem inferior direita com folga elegante (1008px no topo)
-          // Como o produto está restrito a no máximo 840px de altura (entre Y=120 e Y=960),
-          // o selo fica 100% na margem livre inferior, NUNCA sobrepondo o produto.
-          const badgeTop = targetSize - bH - 24;
-          const badgeLeft = targetSize - bW - 28;
+        if (badgeResult?.buffer) {
+          const badgeTop = targetSize - badgeResult.height - badgeResult.marginBottom;
+          const badgeLeft = targetSize - badgeResult.width - badgeResult.marginRight;
 
           compositeLayers.push({
-            input: watermarkBadge,
+            input: badgeResult.buffer,
             top: badgeTop,
             left: badgeLeft,
           });
@@ -427,7 +355,7 @@ export async function optimizeProductImageForWhatsApp(
       // 6. Upload para o Supabase Storage ou gravação local resiliente
       const hash = crypto
         .createHash('sha256')
-        .update(imageUrl + (applyWatermark ? '_wm' : '') + '_v2')
+        .update(imageUrl + (applyWatermark ? `_wm_${handle}` : '') + '_v4')
         .digest('hex')
         .slice(0, 20);
 
@@ -458,12 +386,13 @@ export async function optimizeProductImageForWhatsApp(
       const localFilePath = path.join(localDir, `${hash}.jpg`);
       fs.writeFileSync(localFilePath, squareBuffer);
 
-      const localPublicUrl = `/generated-media/${userId}/${hash}.jpg`;
+      const host = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
+      const localPublicUrl = host ? `${host.replace(/\/+$/, '')}/generated-media/${userId}/${hash}.jpg` : `/generated-media/${userId}/${hash}.jpg`;
       memoryCache.set(cacheKey, localPublicUrl);
       return localPublicUrl;
     } catch (err) {
-      console.warn('[ImageOptimizer] Falha ao otimizar imagem, mantendo original:', err);
-      return imageUrl;
+      console.warn('[ImageOptimizer] Falha ao otimizar imagem:', err);
+      return undefined;
     }
   })();
 
