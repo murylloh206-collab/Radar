@@ -204,18 +204,18 @@ export default function StoriesPage() {
       {/* Alerta de Feedback */}
       {feedback && (
         <div
-          className={`p-4 rounded-xl border flex items-center gap-2.5 text-xs font-semibold ${
+          className={`p-4 rounded-xl border flex items-start gap-2.5 text-xs font-semibold ${
             feedback.type === 'success'
               ? 'bg-[#20C997]/15 border-[#20C997]/40 text-[#20C997]'
               : 'bg-[#F87171]/15 border-[#F87171]/40 text-[#F87171]'
           }`}
         >
           {feedback.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
           ) : (
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           )}
-          <span>{feedback.message}</span>
+          <span className="whitespace-pre-line leading-relaxed">{feedback.message}</span>
         </div>
       )}
 

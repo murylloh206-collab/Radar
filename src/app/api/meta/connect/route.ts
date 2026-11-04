@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { accessToken, pageId, instagramAccountId } = body;
+    const { accessToken, pageId, instagramAccountId, appId, appSecret } = body;
 
     if (!accessToken || typeof accessToken !== 'string') {
       return NextResponse.json(
@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
       accessToken,
       pageId,
       instagramAccountId,
+      appId,
+      appSecret,
     });
 
     if (!result.ok) {

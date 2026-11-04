@@ -352,3 +352,4 @@ export function generateSmartHook(title: string, options?: { discountPct?: numbe
 
   return selectedHook;
 }
+

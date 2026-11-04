@@ -73,13 +73,35 @@ export async function connectMetaAccount(userId: string, input: {
   accessToken: string;
   pageId?: string;
   instagramAccountId?: string;
+  appId?: string;
+  appSecret?: string;
 }): Promise<{ ok: boolean; data?: MetaIntegrationData; error?: string }> {
-  const token = input.accessToken.trim();
+  let token = input.accessToken.trim();
   if (!token) {
     return { ok: false, error: 'Token de acesso da Meta não fornecido.' };
   }
 
   try {
+    // 0. Se o usuário forneceu App ID e App Secret, tentar estender o token automaticamente
+    // para um token de longa duração (60 dias) via fb_exchange_token
+    if (input.appId && input.appSecret) {
+      try {
+        const exchangeUrl = new URL(`${META_GRAPH_BASE}/oauth/access_token`);
+        exchangeUrl.searchParams.set('grant_type', 'fb_exchange_token');
+        exchangeUrl.searchParams.set('client_id', input.appId.trim());
+        exchangeUrl.searchParams.set('client_secret', input.appSecret.trim());
+        exchangeUrl.searchParams.set('fb_exchange_token', token);
+
+        const exchangeRes = await fetch(exchangeUrl.toString());
+        const exchangeJson = await exchangeRes.json();
+        if (exchangeJson.access_token) {
+          token = exchangeJson.access_token;
+        }
+      } catch (err) {
+        console.warn('[Meta] Aviso ao tentar estender token com App Secret:', err);
+      }
+    }
+
     // 1. Se o usuário forneceu diretamente o Instagram Account ID, testar diretamente
     if (input.instagramAccountId) {
       const igRes = await fetch(
@@ -406,7 +428,15 @@ export async function publishFeedPostToFacebook(
     const json = await res.json();
 
     if (json.error) {
-      return { ok: false, error: `Erro da Meta ao publicar no Facebook: ${json.error.message}` };
+      const msg = json.error.message || 'Falha ao postar no Facebook';
+      const isExpired = msg.includes('Session has expired') || 
+                        msg.includes('Error validating access token') || 
+                        json.error.code === 190;
+      const finalError = isExpired
+        ? `O Token da Meta expirou. Tokens do Graph API Explorer expiram em 1 a 2 horas. Gere um Token Permanente (Sem Expiração) em Conexões > Redes Sociais.`
+        : `Erro da Meta ao publicar no Facebook: ${msg}`;
+
+      return { ok: false, error: finalError };
     }
 
     return {
@@ -470,9 +500,17 @@ async function publishToInstagramMedia(
     const createJson = await createRes.json();
 
     if (createJson.error) {
+      const msg = createJson.error.message || 'Falha no container de mídia';
+      const isExpired = msg.includes('Session has expired') || 
+                        msg.includes('Error validating access token') || 
+                        createJson.error.code === 190;
+      const finalError = isExpired
+        ? `O Token de Acesso da Meta expirou. Tokens temporários do Graph API Explorer expiram em 1 a 2 horas. Para automação ininterrupta, gere um Token Permanente (Sem Expiração) via Usuário do Sistema ou Token Debugger e atualize em Conexões > Redes Sociais.`
+        : `Erro da Meta ao preparar a publicação: ${msg}`;
+
       return {
         ok: false,
-        error: `Erro da Meta ao preparar a publicação: ${createJson.error.message || 'Falha no container de mídia'}`,
+        error: finalError,
       };
     }
 
@@ -495,10 +533,18 @@ async function publishToInstagramMedia(
     const publishJson = await publishRes.json();
 
     if (publishJson.error) {
+      const msg = publishJson.error.message || 'Falha na publicação';
+      const isExpired = msg.includes('Session has expired') || 
+                        msg.includes('Error validating access token') || 
+                        publishJson.error.code === 190;
+      const finalError = isExpired
+        ? `O Token de Acesso da Meta expirou durante a publicação. Atualize com um Token Permanente em Conexões > Redes Sociais.`
+        : `Erro da Meta ao publicar: ${msg}`;
+
       return {
         ok: false,
         creationId,
-        error: `Erro da Meta ao publicar: ${publishJson.error.message || 'Falha na publicação'}`,
+        error: finalError,
       };
     }
 

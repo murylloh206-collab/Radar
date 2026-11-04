@@ -23,6 +23,9 @@ export default function MetaConnectionPanel() {
   const [tokenInput, setTokenInput] = useState('');
   const [pageIdInput, setPageIdInput] = useState('');
   const [igIdInput, setIgIdInput] = useState('');
+  const [appIdInput, setAppIdInput] = useState('');
+  const [appSecretInput, setAppSecretInput] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -64,6 +67,8 @@ export default function MetaConnectionPanel() {
           accessToken: tokenInput.trim(),
           pageId: pageIdInput.trim() || undefined,
           instagramAccountId: igIdInput.trim() || undefined,
+          appId: appIdInput.trim() || undefined,
+          appSecret: appSecretInput.trim() || undefined,
         }),
       });
 
@@ -138,37 +143,94 @@ export default function MetaConnectionPanel() {
 
       {/* Tutorial Passo a Passo */}
       {showTutorial && (
-        <div className="rounded-2xl bg-[#0D1B31] border border-[#1CCAF2]/40 p-5 space-y-3.5 text-xs text-[#8EADC7]">
-          <h3 className="text-sm font-bold text-[#F8FBFF] flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#1CCAF2]" />
-            Passo a Passo para Conectar em 3 Minutos:
-          </h3>
-          <ol className="list-decimal list-inside space-y-2 text-[#F8FBFF]/90">
-            <li>
-              Acesse o{' '}
-              <a
-                href="https://developers.facebook.com/tools/explorer/"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#1CCAF2] underline font-bold"
-              >
-                Meta Graph API Explorer <ExternalLink className="w-3 h-3 inline" />
-              </a>
-              .
-            </li>
-            <li>
-              No campo <strong>User or Page</strong>, selecione a sua <strong>Página do Facebook</strong> vinculada ao seu Instagram Comercial (recomendado) ou selecione seu usuário.
-            </li>
-            <li>
-              Se selecionar seu usuário, clique em <strong>Add a Permission</strong> e adicione obrigatoriamente:
-              <span className="block mt-1 font-mono text-[11px] text-[#20C997] bg-[#061225] p-2 rounded-lg border border-[#18334D]">
-                pages_show_list, instagram_basic, instagram_content_publish, pages_read_engagement
-              </span>
-            </li>
-            <li>
-              Clique em <strong>Generate Access Token</strong>, aprove o acesso das suas páginas, copie o token gerado e cole abaixo.
-            </li>
-          </ol>
+        <div className="rounded-2xl bg-[#0D1B31] border border-[#1CCAF2]/40 p-5 space-y-4 text-xs text-[#8EADC7]">
+          <div className="flex items-center justify-between border-b border-[#18334D] pb-3">
+            <h3 className="text-sm font-bold text-[#F8FBFF] flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#1CCAF2]" />
+              Como gerar um Token Permanente (que nunca expira):
+            </h3>
+            <span className="text-[10px] uppercase font-black text-[#F59E0B] bg-[#F59E0B]/15 px-2 py-0.5 rounded-full border border-[#F59E0B]/30">
+              Evite Tokens Temporários de 1h
+            </span>
+          </div>
+
+          {/* Alerta de Token Curto */}
+          <div className="p-3 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/30 text-[#F59E0B] text-xs leading-relaxed">
+            <strong>⚠️ Atenção:</strong> O Meta Graph API Explorer por padrão gera tokens de usuário que <strong>expiram em 1 ou 2 horas</strong> (causando o erro <em>Session has expired</em>). Para automações 24/7 sem interrupções, utilize o <strong>Método 1 (Usuário do Sistema)</strong> abaixo.
+          </div>
+
+          {/* Método 1 */}
+          <div className="space-y-2 rounded-xl bg-[#061225] p-4 border border-[#18334D]">
+            <h4 className="font-extrabold text-[#20C997] text-xs flex items-center gap-1.5">
+              <span>Opção 1 (Recomendada):</span> Token Permanente via Usuário do Sistema (Sem Expiração)
+            </h4>
+            <ol className="list-decimal list-inside space-y-1.5 text-[#F8FBFF]/90">
+              <li>
+                Acesse o{' '}
+                <a
+                  href="https://business.facebook.com/settings/system-users"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#1CCAF2] underline font-bold"
+                >
+                  Meta Business Suite &gt; Usuários do Sistema <ExternalLink className="w-3 h-3 inline" />
+                </a>.
+              </li>
+              <li>
+                Clique em <strong>Adicionar</strong>, crie um usuário com função de <strong>Administrador</strong> (ex: "Radar Bot").
+              </li>
+              <li>
+                Clique em <strong>Atribuir Ativos</strong>: marque sua <strong>Página do Facebook</strong> e seu <strong>Instagram Comercial</strong> com permissões totais de publicação e clique em Salvar.
+              </li>
+              <li>
+                Clique em <strong>Gerar Novo Token</strong>, selecione seu aplicativo e, no campo <em>Validade do token</em>, escolha <strong>Sem expiração (Never expire)</strong>.
+              </li>
+              <li>
+                Marque as permissões obrigatórias:
+                <span className="block mt-1 font-mono text-[11px] text-[#20C997] bg-[#090E1A] p-2 rounded-lg border border-[#18334D]">
+                  pages_show_list, instagram_basic, instagram_content_publish, pages_read_engagement, pages_manage_posts
+                </span>
+              </li>
+              <li>Copie o token gerado e cole no formulário abaixo. Esse token <strong>nunca expira</strong>.</li>
+            </ol>
+          </div>
+
+          {/* Método 2 */}
+          <div className="space-y-2 rounded-xl bg-[#061225] p-4 border border-[#18334D]">
+            <h4 className="font-extrabold text-[#1CCAF2] text-xs flex items-center gap-1.5">
+              <span>Opção 2:</span> Estender Token via Token Debugger da Meta (60 dias a Permanente)
+            </h4>
+            <ol className="list-decimal list-inside space-y-1.5 text-[#F8FBFF]/90">
+              <li>
+                Gere um token no{' '}
+                <a
+                  href="https://developers.facebook.com/tools/explorer/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#1CCAF2] underline font-bold"
+                >
+                  Graph API Explorer <ExternalLink className="w-3 h-3 inline" />
+                </a>
+                . No campo <strong>User or Page</strong>, selecione diretamente a sua <strong>Página</strong> (e não o Usuário).
+              </li>
+              <li>
+                Abra o{' '}
+                <a
+                  href="https://developers.facebook.com/tools/debug/accesstoken/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#1CCAF2] underline font-bold"
+                >
+                  Depurador de Tokens da Meta <ExternalLink className="w-3 h-3 inline" />
+                </a>
+                , cole o token e clique em <strong>Depurar</strong>.
+              </li>
+              <li>
+                Role a página até o final e clique no botão <strong>"Estender token de acesso"</strong> (Extend Access Token).
+              </li>
+              <li>Copie o novo token de longa duração gerado e cole abaixo.</li>
+            </ol>
+          </div>
         </div>
       )}
 
@@ -322,6 +384,49 @@ export default function MetaConnectionPanel() {
                 className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-4 py-2 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
               />
             </div>
+          </div>
+
+          {/* Opções Avançadas (Opcional - Renovação Automática) */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-[11px] font-semibold text-[#1CCAF2] hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <span>{showAdvanced ? '− Ocultar' : '+ Exibir'} Opções Avançadas (App Secret para renovação automática)</span>
+            </button>
+
+            {showAdvanced && (
+              <div className="mt-2.5 p-3.5 rounded-xl bg-[#061225] border border-[#18334D] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-semibold text-[#8EADC7] block mb-1">
+                    Meta App ID (Opcional):
+                  </label>
+                  <input
+                    type="text"
+                    value={appIdInput}
+                    onChange={(e) => setAppIdInput(e.target.value)}
+                    placeholder="Ex: 123456789012345"
+                    className="w-full bg-[#090E1A] border border-[#18334D] rounded-lg px-3 py-1.5 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-[#8EADC7] block mb-1">
+                    Meta App Secret (Opcional):
+                  </label>
+                  <input
+                    type="password"
+                    value={appSecretInput}
+                    onChange={(e) => setAppSecretInput(e.target.value)}
+                    placeholder="Chave secreta do seu aplicativo Meta"
+                    className="w-full bg-[#090E1A] border border-[#18334D] rounded-lg px-3 py-1.5 text-xs font-mono text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
+                  />
+                </div>
+                <div className="sm:col-span-2 text-[10px] text-[#8EADC7]">
+                  * Se preenchidos, o sistema tentará automaticamente estender o token para 60 dias via API.
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">

@@ -42,3 +42,4 @@ BEGIN
     CREATE POLICY "Permitir registrar cliques públicos" ON public.click_events FOR INSERT WITH CHECK (true);
     CREATE POLICY "Permitir leitura de cliques públicos" ON public.click_events FOR SELECT USING (true);
 END $$;
+
