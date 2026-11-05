@@ -1,9 +1,12 @@
 /**
- * Gerador inteligente de ganchos de abertura para o Radar de Ofertas.
+ * Gerador inteligente de aberturas e ganchos para o Radar de Ofertas.
  * 
- * Produz chamadas comerciais atrativas, contextuais e variadas por categoria,
- * com exatamente 1 único gancho por oferta, sem termos como 'achadinhos' ou 'achado',
- * e sem promessas falsas de escassez.
+ * Filosofia de comunicação (alinhada às diretrizes de qualidade do Radar de Ofertas):
+ * - 75% mensagens diretas e profissionais (MODELO A): foco no produto e na oportunidade ("OFERTA ESPECIAL EM [CATEGORIA]!").
+ * - 25% mensagens com gancho comercial seletivo (MODELO B): reservado para produtos de grande destaque ou alto desconto (>= 20-30%).
+ * - Exatamente 1 único gancho por mensagem (nunca ganchos duplicados).
+ * - Termos proibidos eliminados 100%: "achado", "achados", "achadinho", "achadinhos", "apenas".
+ * - Sem piadas forçadas ou promessas de escassez artificial.
  */
 
 export type ProductHookCategory =
@@ -74,6 +77,7 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /nike revolution/i,
       /adidas duramo/i,
       /sapato/i,
+      /cal[cç]ado/i,
     ],
   },
   {
@@ -135,6 +139,8 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /sauvage/i,
       /one million/i,
       /invictus/i,
+      /lattafa/i,
+      /azzaro/i,
     ],
   },
   {
@@ -150,6 +156,8 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /alicate/i,
       /martele/i,
       /lavadora de alta press[aã]o/i,
+      /wap/i,
+      /black tools/i,
     ],
   },
   {
@@ -168,6 +176,7 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /lava e seca/i,
       /smart tv/i,
       /televis[aã]o/i,
+      /tv\s+\d+/i,
     ],
   },
   {
@@ -183,6 +192,7 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /meia/i,
       /vestido/i,
       /dry fit/i,
+      /jeans/i,
     ],
   },
   {
@@ -195,6 +205,9 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /bateria\s+(?:heliar|moura)/i,
       /som automotivo/i,
       /câmera de ré/i,
+      /compressor.*carro/i,
+      /snow foam/i,
+      /lavadora.*carro/i,
     ],
   },
   {
@@ -229,100 +242,144 @@ const CATEGORY_MAP: CategoryKeywords[] = [
 ];
 
 /**
- * Banco de ganchos profissionais e comerciais organizados por categoria.
- * Não utiliza termos como 'achado' ou 'achadinhos'. Mantém leitura direta e limpa.
+ * MODELO A (75% das mensagens): Chamada direta, limpa e profissional por categoria
  */
-const HOOK_LIBRARY: Record<ProductHookCategory, string[]> = {
+const MODEL_A_DIRECT_HEADLINES: Record<ProductHookCategory, string[]> = {
   caixa_de_som: [
-    '🔥 CAIXA DE SOM COM UM EXCELENTE DESCONTO!',
-    'CAIXA DE SOM COM PREÇO QUE MERECE ATENÇÃO! 🔥',
-    'ÓTIMA OPORTUNIDADE PRA QUEM CURTE SOM DE QUALIDADE! 🔊',
-    'POTÊNCIA E QUALIDADE DE SOM COM UM ÓTIMO PREÇO! 🎶',
-    'ESSE MODELO BAIXOU O VALOR E VALE CONFERIR! 🔊',
+    'OFERTA ESPECIAL EM CAIXA DE SOM! 🔊',
+    'OFERTA ESPECIAL EM ÁUDIO! 🔊',
+    'DESTAQUE EM CAIXA DE SOM! 🎶',
   ],
   suplementos: [
-    'CREATINA COM DESCONTO ESPECIAL! 💪',
-    'PREÇO BOM PRA QUEM NÃO ABRE MÃO DA CREATINA! 💪',
-    'OPORTUNIDADE CERTA PRA COMPLETAR SEU KIT DE TREINO! 💪',
-    'ESSA PROMOÇÃO DE SUPLEMENTO MERECE SUA ATENÇÃO! 🔥',
-    'EXCELENTE CUSTO-BENEFÍCIO PRA QUEM TREINA PESADO! 🏋️',
+    'OFERTA ESPECIAL EM SUPLEMENTOS! 💪',
+    'DESTAQUE EM SUPLEMENTOS! 🏋️',
+    'OPORTUNIDADE EM SUPLEMENTAÇÃO! 💪',
   ],
   tenis: [
-    'ESSE TÊNIS ENTROU EM PROMOÇÃO! 👟',
-    'PRA QUEM TAVA DE OLHO NESSE TÊNIS, VALE CONFERIR! 👟',
-    'BOA OPORTUNIDADE PRA RENOVAR O CALÇADO NO PREÇO CERTO! 🔥',
-    'ESSE MODELO COBROU UM VALOR QUE CHAMA ATENÇÃO! 👟',
-    'CONFORTO E QUALIDADE COM UM DESCONTO QUE VALE A PENA! 🏃',
+    'OFERTA ESPECIAL EM TÊNIS! 👟',
+    'OFERTA ESPECIAL EM CALÇADOS! 👟',
+    'DESTAQUE EM TÊNIS! 👟',
   ],
   smartphones: [
-    'ÓTIMA OPORTUNIDADE PRA TROCAR DE CELULAR! 📱',
-    'BOA CHANCE PRA QUEM QUERIA TROCAR DE SMARTPHONE! 📱',
-    'ESSE PREÇO NO CELULAR MERECE UMA OLHADA ATENTA! 🔥',
-    'UM VALOR BEM MAIS ACESSÍVEL PRA ESSE APARELHO HOJE! 📲',
-    'OPORTUNIDADE INTERESSANTE PRA QUEM BUSCA TECNOLOGIA! 🚀',
+    'OFERTA ESPECIAL EM SMARTPHONES! 📱',
+    'DESTAQUE EM CELULARES! 📱',
+    'OPORTUNIDADE EM SMARTPHONES! 📲',
   ],
   games: [
-    'DE OLHO NO SETUP? ESSA PROMOÇÃO VALE CONFERIR! 🎮',
-    'EXCELENTE ESCOLHA PRA QUEM CURTE JOGAR COM QUALIDADE! 🕹️',
-    'ESSE ACESSÓRIO BAIXOU O PREÇO E VALE APROVEITAR! 🔥',
-    'DESCONTO INTERESSANTE PRA COMPLETAR SEU CANTINHO GAMER! 🎮',
+    'OFERTA ESPECIAL EM GAMES! 🎮',
+    'DESTAQUE GAMER DO DIA! 🕹️',
   ],
   relogios: [
-    'ESSE RELÓGIO FICOU COM UM VALOR DIFERENCIADO HOJE! ⌚',
-    'DETALHES QUE FAZEM DIFERENÇA COM UM ÓTIMO PREÇO! ✨',
-    'OPORTUNIDADE ELEGANTE PRA QUEM CURTE UM BOM RELÓGIO! ⌚',
-    'COMBINAÇÃO DE ESTILO E ECONOMIA QUE VALE A PENA! 🔥',
+    'OFERTA ESPECIAL EM RELÓGIOS! ⌚',
+    'DESTAQUE EM SMARTWATCHES! ⌚',
   ],
   perfumes: [
-    'SEU PERFUME FAVORITO APARECEU COM UM DESCONTO FORTE! ✨',
-    'EXCELENTE CHANCE PRA RENOVAR SUA FRAGRÂNCIA PREFERIDA! 💎',
-    'VALE MUITO A PENA CONFERIR ESSE PREÇO HOJE! 🌟',
-    'CHEIROSO E PAGANDO MENOS: ESSA VALE O CLIQUE! 🔥',
+    'OFERTA ESPECIAL EM PERFUMES! ✨',
+    'DESTAQUE EM PERFUMARIA! 💎',
+    'OPORTUNIDADE EM FRAGRÂNCIAS! ✨',
   ],
   ferramentas: [
-    'OPORTUNIDADE CERTA PRA QUEM PRECISA DE FERRAMENTA BOA! 🛠️',
-    'QUALIDADE PRA TRABALHAR COM O PREÇO LÁ EMBAIXO! ⚡',
-    'ESSE EQUIPAMENTO APARECEU COM UM VALOR QUE VALE APROVEITAR! 🔧',
-    'PRA EQUIPAR A OFICINA OU CASA PAGANDO BEM MENOS! 🔨',
+    'OFERTA ESPECIAL EM FERRAMENTAS! 🛠️',
+    'DESTAQUE EM FERRAMENTAS! 🔧',
   ],
   eletrodomesticos: [
-    'PRATICIDADE PRA CASA COM UM PREÇO QUE VALE A PENA! 🏠',
-    'BOA OPORTUNIDADE PRA GARANTIR ESSE ELETRO HOJE! 🔥',
-    'ESSE ITEM FACILITA SUA ROTINA E FICOU MAIS BARATO! 💡',
-    'DESCONTO INTERESSANTE PRA EQUIPAR SUA COZINHA OU CASA! ✨',
+    'OFERTA ESPECIAL EM ELETRODOMÉSTICOS! 🏠',
+    'DESTAQUE EM ELETROPORTÁTEIS! 💡',
   ],
   roupas: [
-    'BOA OPORTUNIDADE PRA RENOVAR O GUARDA-ROUPA! 👕',
-    'PEÇA CONFORTÁVEL COM UM VALOR MUITO ACESSÍVEL HOJE! ✨',
-    'ROUPA DE QUALIDADE PRA RENOVAR O VISUAL PAGANDO MENOS! 🔥',
-    'PREÇO INTERESSANTE PRA GARANTIR MAIS UMA PEÇA CORINGA! 👔',
+    'OFERTA ESPECIAL EM MODA! 👕',
+    'DESTAQUE EM VESTUÁRIO! 👔',
   ],
   automotivo: [
-    'CUIDAR DO CARRO PAGANDO MENOS: VALE CONFERIR ESSA! 🚗',
-    'OPORTUNIDADE PRA GARANTIR ESSE ITEM AUTOMOTIVO HOJE! 🔧',
-    'DESCONTO ÚTIL PRA MANUTENÇÃO DO SEU VEÍCULO! 🚙',
+    'OFERTA ESPECIAL EM AUTOMOTIVO! 🚗',
+    'DESTAQUE PARA SEU VEÍCULO! 🔧',
   ],
   beleza: [
-    'SEUS CUIDADOS DIÁRIOS COM UM PREÇO BEM MAIS EM CONTA! 💅',
-    'BOA CHANCE PRA GARANTIR ESSE PRODUTO DE CUIDADO PESSOAL! ✨',
-    'CUIDAR DE VOCÊ PAGANDO MENOS É SEMPRE UMA BOA! 🧴',
+    'OFERTA ESPECIAL EM CUIDADOS PESSOAIS! 🧴',
+    'DESTAQUE EM BELEZA! ✨',
   ],
   eletronicos: [
-    'ESSE PREÇO NO FONE MERECE ATENÇÃO! 🔥',
-    'UM DESCONTO INTERESSANTE PRA QUEM CURTE TECNOLOGIA! 🎧',
-    'BOA OPORTUNIDADE PRA QUEM PRECISA DE UM ELETRÔNICO NOVO! ⚡',
-    'QUALIDADE DE ÁUDIO E TECNOLOGIA COM PREÇO ACESSÍVEL! 📱',
+    'OFERTA ESPECIAL EM ELETRÔNICOS! ⚡',
+    'DESTAQUE EM TECNOLOGIA! 🎧',
   ],
   geral: [
-    'OFERTA INTERESSANTE QUE VALE SUA ATENÇÃO HOJE! 🔥',
-    'PREÇO DIFERENCIADO PRA VOCÊ APROVEITAR ESSA OFERTA! ✨',
-    'BOA OPORTUNIDADE DE COMPRA PRA VOCÊ CONFERIR! 🛒',
-    'ESSE PRODUTO APARECEU COM UM PREÇO QUE VALE A PENA! 💡',
+    'OFERTA ESPECIAL DO DIA! 🎯',
+    'DESTAQUE SELECIONADO! 🎯',
+    'OPORTUNIDADE DO DIA! ⚡',
   ],
 };
 
-let lastUsedIndex = -1;
+/**
+ * MODELO B (25% das mensagens): Gancho comercial seletivo para produtos com destaque
+ * ou desconto relevante, sempre sem termos proibidos e sem piadas forçadas.
+ */
+const MODEL_B_CREATIVE_HOOKS: Record<ProductHookCategory, string[]> = {
+  caixa_de_som: [
+    'Potência e qualidade de som com excelente desconto! 🔊',
+    'Ótima oportunidade para quem busca som de alta qualidade! 🎶',
+    'Caixa de som com condição diferenciada hoje! 🔥',
+  ],
+  suplementos: [
+    'Excelente oportunidade para seu estoque de treino! 💪',
+    'Preço diferenciado para quem não abre mão da suplementação! 🏋️',
+    'Ótimo custo-benefício para completar sua rotina de treinos! 💪',
+  ],
+  tenis: [
+    'Conforto e qualidade com preço reduzido hoje! 👟',
+    'Excelente oportunidade para renovar o calçado! 🏃',
+    'Modelo de destaque com ótimo desconto promocional! 👟',
+  ],
+  smartphones: [
+    'Tecnologia de ponta com condição especial de compra! 📱',
+    'Boa oportunidade para quem busca atualizar o smartphone! 📲',
+    'Preço diferenciado para este aparelho hoje! 🚀',
+  ],
+  games: [
+    'Excelente oportunidade para completar seu setup gamer! 🎮',
+    'Item de destaque com valor diferenciado hoje! 🕹️',
+  ],
+  relogios: [
+    'Estilo e funcionalidade com ótimo desconto! ⌚',
+    'Modelo diferenciado com preço especial hoje! ✨',
+  ],
+  perfumes: [
+    'Fragrância marcante com preço reduzido hoje! ✨',
+    'Excelente oportunidade para garantir sua fragrância preferida! 💎',
+    'Perfumaria com desconto especial para conferir! 🌟',
+  ],
+  ferramentas: [
+    'Equipamento de qualidade com preço bem reduzido! 🛠️',
+    'Excelente custo-benefício para sua oficina ou casa! 🔧',
+  ],
+  eletrodomesticos: [
+    'Praticidade para sua casa com excelente economia! 🏠',
+    'Item de destaque com desconto que vale a pena! 💡',
+  ],
+  roupas: [
+    'Peça de qualidade com ótimo desconto promocional! 👕',
+    'Conforto e estilo com valor muito acessível hoje! ✨',
+  ],
+  automotivo: [
+    'Cuidado e manutenção do veículo pagando menos hoje! 🚗',
+    'Item automotivo essencial com condição especial! 🔧',
+  ],
+  beleza: [
+    'Cuidados pessoais diários com ótimo desconto! 💅',
+    'Produto de qualidade com excelente custo-benefício! 🧴',
+  ],
+  eletronicos: [
+    'Tecnologia prática para sua rotina com preço reduzido! 🎧',
+    'Excelente oportunidade em eletrônicos hoje! ⚡',
+  ],
+  geral: [
+    'Preço diferenciado nesta oportunidade selecionada! 💡',
+    'Excelente condição de compra para você conferir! 🛒',
+    'Produto com desconto especial que vale a pena hoje! 🔥',
+  ],
+};
+
 let lastUsedCategory: ProductHookCategory = 'geral';
+let lastUsedIndex = -1;
 
 /**
  * Detecta a categoria do produto a partir do título do anúncio
@@ -343,43 +400,50 @@ export function detectProductCategory(title: string): ProductHookCategory {
 }
 
 /**
- * Gera um gancho profissional com rotação controlada para nunca repetir
- * a mesma frase consecutiva, adaptado ao contexto do produto.
- * 
- * Regras:
- * - Apenas um gancho.
- * - Curto e direto.
- * - Relacionado ao produto.
- * - Sem termos 'achado' ou 'achadinhos'.
+ * Gera a abertura da mensagem seguindo a proporção exata:
+ * - 75% MODELO A (Direta e profissional)
+ * - 25% MODELO B (Gancho comercial seletivo para ofertas de destaque)
  */
-export function generateSmartHook(title: string, options?: { discountPct?: number }): string {
+export function generateSmartHook(
+  title: string,
+  options?: { discountPct?: number; forceModel?: 'A' | 'B' }
+): string {
   const category = detectProductCategory(title);
-  const hooks = HOOK_LIBRARY[category] || HOOK_LIBRARY.geral;
 
-  let nextIdx = 0;
-  if (category === lastUsedCategory && hooks.length > 1) {
-    nextIdx = (lastUsedIndex + 1) % hooks.length;
-  } else {
-    let hash = 0;
-    for (let i = 0; i < title.length; i++) {
-      hash = (hash << 5) - hash + title.charCodeAt(i);
-      hash |= 0;
-    }
-    nextIdx = Math.abs(hash) % hooks.length;
-    if (nextIdx === lastUsedIndex && hooks.length > 1) {
-      nextIdx = (nextIdx + 1) % hooks.length;
-    }
+  // Hash determinístico baseado no título para distribuição consistente
+  let hash = 0;
+  for (let i = 0; i < (title || '').length; i++) {
+    hash = (hash << 5) - hash + title.charCodeAt(i);
+    hash |= 0;
+  }
+  const positiveHash = Math.abs(hash);
+
+  // Proporção 75% Modelo A / 25% Modelo B (com preferência de B se desconto for >= 30%)
+  const hasSubstantialDiscount = typeof options?.discountPct === 'number' && options.discountPct >= 30;
+  const isEligibleForModelB = (positiveHash % 100) < 25 || (hasSubstantialDiscount && (positiveHash % 100) < 40);
+
+  const useModelB = options?.forceModel === 'B' || (options?.forceModel !== 'A' && isEligibleForModelB);
+
+  const bank = useModelB
+    ? (MODEL_B_CREATIVE_HOOKS[category] || MODEL_B_CREATIVE_HOOKS.geral)
+    : (MODEL_A_DIRECT_HEADLINES[category] || MODEL_A_DIRECT_HEADLINES.geral);
+
+  let nextIdx = positiveHash % bank.length;
+  if (category === lastUsedCategory && bank.length > 1 && nextIdx === lastUsedIndex) {
+    nextIdx = (nextIdx + 1) % bank.length;
   }
 
-  lastUsedIndex = nextIdx;
   lastUsedCategory = category;
+  lastUsedIndex = nextIdx;
 
-  let selectedHook = hooks[nextIdx];
+  let chosen = bank[nextIdx];
 
-  // Se houver um desconto alto confirmado (>= 50%), podemos usar uma abertura especial legítima
-  if (options?.discountPct && options.discountPct >= 50 && Math.random() > 0.6) {
-    return `DESCONTO DE ${Math.round(options.discountPct)}% QUE REALMENTE VALE A PENA! 🔥`;
-  }
+  // Sanitização de segurança estrita: NUNCA permitir termos proibidos
+  chosen = chosen
+    .replace(/\b(achadinhos?|achados?)\b/gi, 'ofertas')
+    .replace(/\bapenas\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 
-  return selectedHook;
+  return chosen;
 }

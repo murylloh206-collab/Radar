@@ -378,18 +378,30 @@ export async function optimizeProductImageForWhatsApp(
         }
       }
 
-      // Fallback local caso o Supabase Storage não esteja acessível
-      const localDir = path.join(process.cwd(), 'public', 'generated-media', userId);
-      if (!fs.existsSync(localDir)) {
-        fs.mkdirSync(localDir, { recursive: true });
-      }
-      const localFilePath = path.join(localDir, `${hash}.jpg`);
-      fs.writeFileSync(localFilePath, squareBuffer);
+      // Fallback 1: Gravação local caso o Supabase Storage não esteja acessível (em Node local ou servidor persistente)
+      try {
+        const localDir = path.join(process.cwd(), 'public', 'generated-media', userId);
+        if (!fs.existsSync(localDir)) {
+          fs.mkdirSync(localDir, { recursive: true });
+        }
+        const localFilePath = path.join(localDir, `${hash}.jpg`);
+        fs.writeFileSync(localFilePath, squareBuffer);
 
-      const host = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
-      const localPublicUrl = host ? `${host.replace(/\/+$/, '')}/generated-media/${userId}/${hash}.jpg` : `/generated-media/${userId}/${hash}.jpg`;
-      memoryCache.set(cacheKey, localPublicUrl);
-      return localPublicUrl;
+        const host = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
+        if (host && host.startsWith('http')) {
+          const localPublicUrl = `${host.replace(/\/+$/, '')}/generated-media/${userId}/${hash}.jpg`;
+          memoryCache.set(cacheKey, localPublicUrl);
+          return localPublicUrl;
+        }
+      } catch (fsErr) {
+        // Em ambientes serverless read-only (ex: Vercel), fs.writeFileSync falhará com EROFS.
+        // Nesses casos, utilizamos a Data URL Base64 inline aceita nativamente pela Evolution API!
+      }
+
+      // Fallback 2: Data URL Base64 inline aceita nativamente pela Evolution API
+      const base64DataUrl = `data:image/jpeg;base64,${squareBuffer.toString('base64')}`;
+      memoryCache.set(cacheKey, base64DataUrl);
+      return base64DataUrl;
     } catch (err) {
       console.warn('[ImageOptimizer] Falha ao otimizar imagem:', err);
       return undefined;

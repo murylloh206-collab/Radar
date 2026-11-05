@@ -185,33 +185,63 @@ function parseBRLNumber(rawNum: string): number {
   return parseFloat(cleaned) || 0;
 }
 
+export function extractTitleFromProductUrl(urlStr: string): string | undefined {
+  try {
+    const url = new URL(urlStr);
+    const pathname = decodeURIComponent(url.pathname);
+    const parts = pathname.split('/').filter(p => p && p !== 'p' && p !== 'dp' && p !== 'gp' && p !== 'product' && !/^MLB\d+/i.test(p) && !/^B0[A-Z0-9]+/i.test(p));
+    const candidate = parts.find(p => p.includes('-') && p.length >= 8);
+    if (!candidate) return undefined;
+    const clean = candidate
+      .replace(/-[A-Z0-9]{3,}-[0-9]+$/i, '')
+      .replace(/-p$/i, '')
+      .replace(/[-_+]+/g, ' ')
+      .trim();
+    if (clean.length < 4) return undefined;
+    return clean
+      .split(' ')
+      .filter(w => w.length > 0)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  } catch {
+    return undefined;
+  }
+}
+
 export function isPromotionalHookLine(line: string): boolean {
   const clean = line.trim();
   if (!clean || clean.length < 4) return true;
   const lower = clean.toLowerCase();
 
-  // Termina com exclamação ou emoji promocional comum
-  if (/[!🔥🚨✨⚡👏💥😱👇👉]$/u.test(clean)) return true;
+  // Termina com exclamação, interrogação ou emoji promocional comum
+  if (/[!?🔥🚨✨⚡👏💥😱👇👉💡🏃💪👟📱⌚💎🎉🛒]$/u.test(clean)) return true;
 
   // Frases de abertura ou slogans de marketing comuns em grupos de ofertas
   const hookPrefixes = [
-    'quando a', 'um desconto', 'quem curte', 'olha esse', 'olha essa',
+    'quando a', 'um desconto', 'quem curte', 'olha esse', 'olha essa', 'olha só',
     'corre que', 'super oferta', 'oportunidade', 'promoção', 'oferta',
-    'preço que', 'cheiroso e', 'até a', 'qual dos', 'esse é o', 'essa é a',
-    'bora aproveitar', 'não perca', 'achado', 'achadinho', 'imperdível',
+    'preço que', 'cheiroso e', 'até a', 'qual dos', 'esse é o', 'essa é a', 'esse já é',
+    'bora aproveitar', 'bora', 'não perca', 'achado', 'achadinho', 'imperdível',
     'apenas hoje', 'atenção', 'alerta de', 'baixou o preço', 'caiu o preço',
     '100ml de', '50ml de', 'até o nome', 'de r$', 'por r$', 'de:', 'por:',
+    'chega de', 'pra quem', 'para quem', 'aquele', 'aquela', 'aqueles', 'aquelas',
+    'mais um', 'mais uma', 'seu carro', 'sua casa', 'tava faltando', 'estava faltando',
+    'se liga', 'já pensou', 'já imaginou', 'não deixe', 'não fique', 'quem quer',
+    'quem precisa', 'precisando de', 'o básico', 'o modelo', 'o frasco', 'embalagem',
+    'espuma pra', 'prepare-se', 'confira', 'achados', 'achadinhos', 'microfibra e praticidade',
+    'crisp bar da',
   ];
   if (hookPrefixes.some((prefix) => lower.startsWith(prefix))) return true;
 
-  // Linhas em CAIXA ALTA contendo termos comerciais
+  // Linhas em CAIXA ALTA contendo termos comerciais ou ganchos
   const lettersOnly = clean.replace(/[^a-zA-ZÀ-ÿ]/g, '');
   const isAllCaps = lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
   if (isAllCaps) {
     const commercialWords = [
       'DESCONTO', 'OFERTA', 'PREÇO', 'PROMOÇÃO', 'ECONOMIA', 'FESTA',
       'OPORTUNIDADE', 'ROTINA', 'QUALIDADE', 'ATENÇÃO', 'SUPER', 'ESPECIAL',
-      'IMPERDÍVEL', 'TECNOLOGIA', 'CELULAR', 'COMPRA', 'LIMPEZA',
+      'IMPERDÍVEL', 'TECNOLOGIA', 'CELULAR', 'COMPRA', 'LIMPEZA', 'ACHADO',
+      'ACHADINHO', 'ACHADOS', 'SAPATEIRA', 'GUERRA', 'ESTILO', 'SWOOSH',
     ];
     if (commercialWords.some((word) => clean.toUpperCase().includes(word))) {
       return true;
@@ -692,15 +722,23 @@ export async function processIncomingMessage(
   }
   const parsedFromWhatsApp = extractOfferDetailsFromWhatsAppText(rawText, conversionResult.store);
 
-  const isGenericStoreTitle =
-    !productData.title ||
-    productData.title.toLowerCase().startsWith('produto ') ||
-    productData.title.toLowerCase().startsWith('oferta ') ||
-    productData.title.toLowerCase() === 'oferta exclusiva' ||
-    productData.title.length < 5;
+  const isGenericStoreTitle = (t?: string) =>
+    !t ||
+    t.toLowerCase().startsWith('produto ') ||
+    t.toLowerCase().startsWith('oferta ') ||
+    t.toLowerCase() === 'oferta exclusiva' ||
+    isPromotionalHookLine(t) ||
+    t.length < 5;
 
-  if (isGenericStoreTitle && parsedFromWhatsApp.title) {
-    productData.title = parsedFromWhatsApp.title;
+  if (isGenericStoreTitle(productData.title)) {
+    if (parsedFromWhatsApp.title && !isGenericStoreTitle(parsedFromWhatsApp.title)) {
+      productData.title = parsedFromWhatsApp.title;
+    } else {
+      const fromUrl = extractTitleFromProductUrl(conversionResult.cleanUrl);
+      if (fromUrl && !isGenericStoreTitle(fromUrl)) {
+        productData.title = fromUrl;
+      }
+    }
   }
 
   if (parsedFromWhatsApp.currentPrice && parsedFromWhatsApp.currentPrice > 0) {
@@ -906,11 +944,16 @@ export async function processIncomingMessage(
       );
     }
 
-    // Regra inegociável de qualidade: Toda publicação que requer imagem DEVE ter fotografia pronta e válida
-    // Se a foto não puder ser baixada ou processada, NUNCA enviar somente texto silenciosamente.
+    // Regra de qualidade: Toda publicação que requer imagem DEVE ter fotografia pronta e válida.
+    // Se a otimização com marca d'água falhar (por exemplo, oscilação de rede externa ou bucket temporariamente inacessível),
+    // utiliza a melhor foto oficial da loja como contingência de alta resolução para que o envio automático não seja interrompido.
     if (!finalMediaUrl) {
-      requiresManualReviewDueToImage = true;
-      imageReviewReason = 'Fotografia do produto indisponível ou falha no processamento da imagem com marca d’água. Publicação sem imagem bloqueada para proteção de qualidade.';
+      if (bestOfficialPhoto && (bestOfficialPhoto.startsWith('http://') || bestOfficialPhoto.startsWith('https://'))) {
+        finalMediaUrl = bestOfficialPhoto;
+      } else {
+        requiresManualReviewDueToImage = true;
+        imageReviewReason = 'Fotografia do produto indisponível. Publicação sem imagem bloqueada para proteção de qualidade.';
+      }
     }
   }
 

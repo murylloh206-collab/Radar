@@ -34,13 +34,20 @@ export function detectStoreFromUrl(urlStr: string): StoreName | null {
     if (host.includes('mercadolivre.com') || host.includes('mercadolivre.com.br') || host.includes('meli.la') || host.includes('produto.mercadolivre.com.br')) {
       return 'mercadolivre';
     }
-    if (host.includes('shopee.com.br') || host.includes('shope.ee') || host.includes('s.shopee.com.br')) {
+    if (host.includes('shopee.com.br') || host.includes('shope.ee') || host.includes('s.shopee.com.br') || host.includes('s.shopee.com') || host.includes('shopee.com')) {
       return 'shopee';
     }
     if (host.includes('netshoes.com.br') || host.includes('zattini.com.br') || host.includes('linksynergy.com')) {
       return 'netshoes';
     }
-    if (host.includes('amazon.com.br') || host.includes('amazon.com') || host.includes('amzn.to') || host.includes('a.co')) {
+    if (
+      host.includes('amazon.com.br') ||
+      host.includes('amazon.com') ||
+      host.includes('amzn.to') ||
+      host.includes('a.co') ||
+      host.includes('link.amazon') ||
+      host.includes('amzlinks.in')
+    ) {
       return 'amazon';
     }
     if (host.includes('magazineluiza.com.br') || host.includes('magalu.me') || host.includes('mglu.io')) {
@@ -54,8 +61,8 @@ export function detectStoreFromUrl(urlStr: string): StoreName | null {
 
 export async function resolveUrlSafely(
   inputUrl: string,
-  maxRedirects = 5,
-  timeoutMs = 5000
+  maxRedirects = 6,
+  timeoutMs = 6000
 ): Promise<ResolveResult> {
   let currentUrl = inputUrl.trim();
   const redirectChain: string[] = [currentUrl];
@@ -102,22 +109,48 @@ export async function resolveUrlSafely(
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const hostLower = parsedUrl.hostname.toLowerCase();
       const isShortenerDomain =
-        parsedUrl.hostname.toLowerCase().includes('meli.la') ||
-        parsedUrl.hostname.toLowerCase().includes('s.shopee.com.br') ||
-        parsedUrl.hostname.toLowerCase().includes('shope.ee') ||
-        parsedUrl.hostname.toLowerCase().includes('amzn.to') ||
-        parsedUrl.hostname.toLowerCase().includes('magalu.me');
+        hostLower.includes('meli.la') ||
+        hostLower.includes('s.shopee.com') ||
+        hostLower.includes('shope.ee') ||
+        hostLower.includes('amzn.to') ||
+        hostLower.includes('a.co') ||
+        hostLower.includes('link.amazon') ||
+        hostLower.includes('amzlinks.in') ||
+        hostLower.includes('tr.ee') ||
+        hostLower.includes('linktr.ee') ||
+        hostLower.includes('bit.ly') ||
+        hostLower.includes('tinyurl.com') ||
+        hostLower.includes('is.gd') ||
+        hostLower.includes('t.co') ||
+        hostLower.includes('cutt.ly') ||
+        hostLower.includes('magalu.me');
 
-      const res = await fetch(currentUrl, {
+      let res = await fetch(currentUrl, {
         method: isShortenerDomain ? 'GET' : 'HEAD',
         redirect: 'manual',
         signal: controller.signal,
         headers: {
           'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       });
+
+      // Se HEAD falhou com 405 (Method Not Allowed) ou 403, tenta novamente com GET
+      if (!isShortenerDomain && (res.status === 405 || res.status === 403 || res.status === 400)) {
+        res = await fetch(currentUrl, {
+          method: 'GET',
+          redirect: 'manual',
+          signal: controller.signal,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+        });
+      }
 
       clearTimeout(timer);
 
@@ -133,6 +166,19 @@ export async function resolveUrlSafely(
           currentUrl = nextUrl;
           redirectChain.push(currentUrl);
           continue;
+        }
+      }
+
+      // Desempacota parâmetro murl se for Rakuten Deeplink durante os passos
+      if (parsedUrl.hostname.includes('linksynergy.com')) {
+        const murl = parsedUrl.searchParams.get('murl');
+        if (murl) {
+          const decoded = decodeURIComponent(murl);
+          if (decoded.startsWith('http') && !redirectChain.includes(decoded)) {
+            currentUrl = decoded;
+            redirectChain.push(currentUrl);
+            continue;
+          }
         }
       }
 

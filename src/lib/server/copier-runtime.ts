@@ -187,10 +187,16 @@ async function sendEntry(row: StoredJob) {
       body: JSON.stringify(media ? { number: job.targetJid, mediatype: job.mediaType === 'video' ? 'video' : 'image', media: job.mediaUrl, caption: job.messageText } : { number: job.targetJid, text: job.messageText }),
       signal: AbortSignal.timeout(20000), cache: 'no-store',
     });
-  } catch {
-    return updateJob(row, { status: 'falha', runtime_delivery: 'uncertain', error_details: 'Envio sem resposta conclusiva. Confira o gateway antes de repetir.' });
+  } catch (netErr: unknown) {
+    const netMsg = netErr instanceof Error ? netErr.message : String(netErr);
+    return updateJob(row, { status: 'falha', runtime_delivery: 'uncertain', error_details: `Envio sem resposta conclusiva do gateway (${netMsg}). Confira o gateway antes de repetir.` });
   }
-  if (!response.ok) return updateJob(row, { status: 'falha', runtime_delivery: response.status >= 500 ? 'uncertain' : 'rejected', error_details: `Gateway retornou HTTP ${response.status}. Não houve repetição automática.` });
+  if (!response.ok) {
+    let errBody = '';
+    try { errBody = await response.text(); } catch {}
+    const briefErr = errBody ? `: ${errBody.slice(0, 120)}` : '';
+    return updateJob(row, { status: 'falha', runtime_delivery: response.status >= 500 ? 'uncertain' : 'rejected', error_details: `Gateway retornou HTTP ${response.status}${briefErr}. Não houve repetição automática.` });
+  }
   let provider: { key?: { id?: string } };
   try { provider = await response.json(); }
   catch { return updateJob(row, { status: 'falha', runtime_delivery: 'uncertain', error_details: 'Resposta do envio sem confirmação legível.' }); }
@@ -244,36 +250,56 @@ export async function runDurableCopierCycle() {
   let processed = 0; let dispatched = 0;
   try {
     await copierHeartbeat();
+
+    // 1ª Rodada: Despacha publicações que já estavam agendadas
     for (let count = 0; count < 3; count++) {
       const claims = checked(await database().rpc('copier_claim_job'), 'Reserva de publicação') as StoredJob[];
       if (!claims.length) break;
       try { await sendEntry(claims[0]); dispatched++; }
       catch (error) {
+        const errorMsg = error instanceof CopierRuntimeError ? error.message : (error instanceof Error ? error.message : 'Falha ao validar a publicação. Consulte o diagnóstico.');
         await updateJob(claims[0], { status: 'falha', runtime_delivery: claims[0].sendStarted ? 'uncertain' : 'blocked',
-          error_details: claims[0].sendStarted ? 'Não foi possível concluir o registro do envio. Reconciliar no gateway antes de repetir.' :
-            error instanceof CopierRuntimeError ? error.message : 'Falha ao validar a publicação. Consulte o diagnóstico.' });
+          error_details: claims[0].sendStarted ? 'Não foi possível concluir o registro do envio. Reconciliar no gateway antes de repetir.' : errorMsg });
       }
     }
     await configurePendingWebhook();
+
+    // 2ª Rodada: Processa eventos da caixa de entrada recebidos pelo Webhook
     const batchStarted = performance.now();
     for (let count = 0; count < 12 && performance.now() - batchStarted < 8000; count++) {
-    const entries = checked(await database().rpc('copier_claim_inbox'), 'Reserva de evento') as InboxEntry[];
-    if (!entries.length) break;
-    {
-      const entry = entries[0];
-      try {
-        await copierHeartbeat();
-        await processEntry(entry);
-        processed++;
-      }
-      catch (error) {
-        checked(await database().from('copier_inbox').update({ status: entry.attempts >= 3 ? 'failed' : 'pending',
-          available_at: new Date(Date.now() + 30000).toISOString(), lease_until: null,
-          last_error: error instanceof CopierRuntimeError ? error.message : 'Falha de processamento. Consulte configurações de afiliados e gateway.' })
-          .eq('id', entry.id).eq('lease_token', entry.lease_token), 'Registro da falha do evento');
+      const entries = checked(await database().rpc('copier_claim_inbox'), 'Reserva de evento') as InboxEntry[];
+      if (!entries.length) break;
+      {
+        const entry = entries[0];
+        try {
+          await copierHeartbeat();
+          await processEntry(entry);
+          processed++;
+        }
+        catch (error) {
+          checked(await database().from('copier_inbox').update({ status: entry.attempts >= 3 ? 'failed' : 'pending',
+            available_at: new Date(Date.now() + 30000).toISOString(), lease_until: null,
+            last_error: error instanceof CopierRuntimeError ? error.message : 'Falha de processamento. Consulte configurações de afiliados e gateway.' })
+            .eq('id', entry.id).eq('lease_token', entry.lease_token), 'Registro da falha do evento');
+        }
       }
     }
+
+    // 3ª Rodada (AUTO-DISPATCH IMEDIATO): Se foram gerados novos jobs pelo processamento do inbox,
+    // despacha imediatamente sem deixar a oferta presa aguardando próximo ciclo de cron
+    if (processed > 0) {
+      for (let count = 0; count < 3; count++) {
+        const claims = checked(await database().rpc('copier_claim_job'), 'Reserva de publicação') as StoredJob[];
+        if (!claims.length) break;
+        try { await sendEntry(claims[0]); dispatched++; }
+        catch (error) {
+          const errorMsg = error instanceof CopierRuntimeError ? error.message : (error instanceof Error ? error.message : 'Falha ao validar a publicação. Consulte o diagnóstico.');
+          await updateJob(claims[0], { status: 'falha', runtime_delivery: claims[0].sendStarted ? 'uncertain' : 'blocked',
+            error_details: claims[0].sendStarted ? 'Não foi possível concluir o registro do envio. Reconciliar no gateway antes de repetir.' : errorMsg });
+        }
+      }
     }
+
     return { processed, dispatched };
   } finally { running = false; }
 }
