@@ -147,6 +147,7 @@ export async function getProductPriceHistory(
 export interface RealDealAuditResult {
   hasEnoughHistory: boolean;
   recordsCount: number;
+  historyCount30d: number;
   currentPrice: number;
   claimedOriginalPrice?: number;
   minPrice30d: number | null;
@@ -154,10 +155,17 @@ export interface RealDealAuditResult {
   avgPrice30d: number | null;
   realDiscountVsAvgPct: number | null;
   isLowestIn30Days: boolean;
+  isLowestIn30d: boolean;
+  isBelowAverage30d: boolean;
   isInflatedOriginalPrice: boolean;
+  isRealDeal: boolean;
   badgeLabel: string | null;
   warningLabel: string | null;
+  inflationReason: string | null;
+  summaryText: string;
 }
+
+export const recordPriceHistory = recordOfferPriceHistory;
 
 /**
  * Avalia o "Selo de Promoção Real" (Plus / Ultimate) com base na tabela `price_history` (30 dias)
@@ -174,6 +182,7 @@ export async function evaluateRealDealBadge(params: {
     return {
       hasEnoughHistory: false,
       recordsCount: 0,
+      historyCount30d: 0,
       currentPrice: currentPrice || 0,
       claimedOriginalPrice,
       minPrice30d: null,
@@ -181,9 +190,14 @@ export async function evaluateRealDealBadge(params: {
       avgPrice30d: null,
       realDiscountVsAvgPct: null,
       isLowestIn30Days: false,
+      isLowestIn30d: false,
+      isBelowAverage30d: false,
       isInflatedOriginalPrice: false,
+      isRealDeal: false,
       badgeLabel: null,
       warningLabel: null,
+      inflationReason: null,
+      summaryText: 'Informe a URL do produto e o preço atual para auditar o histórico de 30 dias.',
     };
   }
 
@@ -194,6 +208,7 @@ export async function evaluateRealDealBadge(params: {
     return {
       hasEnoughHistory: false,
       recordsCount: history.length,
+      historyCount30d: history.length,
       currentPrice,
       claimedOriginalPrice,
       minPrice30d: history[0]?.price ?? null,
@@ -201,9 +216,14 @@ export async function evaluateRealDealBadge(params: {
       avgPrice30d: history[0]?.price ?? null,
       realDiscountVsAvgPct: null,
       isLowestIn30Days: false,
+      isLowestIn30d: false,
+      isBelowAverage30d: false,
       isInflatedOriginalPrice: false,
+      isRealDeal: false,
       badgeLabel: null,
       warningLabel: null,
+      inflationReason: null,
+      summaryText: `Sem histórico suficiente (${history.length}/2 coletas nos últimos 30 dias). Nenhum selo exibido.`,
     };
   }
 
@@ -220,6 +240,7 @@ export async function evaluateRealDealBadge(params: {
   // Só é "Menor preço dos últimos 30 dias" se o preço atual for <= mínimo de 30 dias E menor que o maior/média histórica
   const isLowestIn30Days =
     currentPrice <= minPrice30d && maxPrice30d > currentPrice && currentPrice <= avgPrice30d * 0.98;
+  const isBelowAverage30d = currentPrice <= avgPrice30d * 0.95;
 
   // Detector de preço "De" inflado: se a loja afirma "De R$ X", mas nos últimos 30 dias o produto nunca custou perto disso (> 15% acima do máximo real observado)
   const isInflatedOriginalPrice = Boolean(
@@ -229,19 +250,27 @@ export async function evaluateRealDealBadge(params: {
       claimedOriginalPrice > maxPrice30d * 1.15
   );
 
-  let badgeLabel: string | null = null;
-  if (isLowestIn30Days) {
-    badgeLabel = 'Menor preço dos últimos 30 dias';
-  }
-
   let warningLabel: string | null = null;
   if (isInflatedOriginalPrice && claimedOriginalPrice) {
     warningLabel = `Preço "De" inflado: a loja informa R$ ${claimedOriginalPrice.toFixed(2).replace('.', ',')}, mas o maior preço real em 30 dias foi R$ ${maxPrice30d.toFixed(2).replace('.', ',')}.`;
   }
 
+  // Se o preço "De" estiver inflado, bloqueamos o selo
+  const isRealDeal = !isInflatedOriginalPrice && (isLowestIn30Days || isBelowAverage30d);
+
+  let badgeLabel: string | null = null;
+  if (!isInflatedOriginalPrice && isLowestIn30Days) {
+    badgeLabel = 'Menor preço dos últimos 30 dias';
+  } else if (!isInflatedOriginalPrice && isBelowAverage30d) {
+    badgeLabel = `Promoção Real (${realDiscountVsAvgPct}% abaixo da média 30d)`;
+  }
+
+  const summaryText = `Histórico 30d (${history.length} coletas): Mín R$ ${minPrice30d.toFixed(2).replace('.', ',')} · Média R$ ${avgPrice30d.toFixed(2).replace('.', ',')} · Máx R$ ${maxPrice30d.toFixed(2).replace('.', ',')}.`;
+
   return {
     hasEnoughHistory: true,
     recordsCount: history.length,
+    historyCount30d: history.length,
     currentPrice,
     claimedOriginalPrice,
     minPrice30d,
@@ -249,9 +278,14 @@ export async function evaluateRealDealBadge(params: {
     avgPrice30d,
     realDiscountVsAvgPct,
     isLowestIn30Days,
+    isLowestIn30d: isLowestIn30Days,
+    isBelowAverage30d,
     isInflatedOriginalPrice,
+    isRealDeal,
     badgeLabel,
     warningLabel,
+    inflationReason: warningLabel,
+    summaryText,
   };
 }
 

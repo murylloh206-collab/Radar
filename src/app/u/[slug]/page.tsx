@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowRight, ShoppingBag, ExternalLink, Sparkles } from 'lucide-react';
-import { loadPublicStorefrontConfig } from '@/app/api/public-page/route';
+import { loadPublicStorefrontConfig } from '@/lib/server/public-storefront';
 import { getDatabase, readDatabase } from '@/lib/server/storage';
 import { ADMIN_UUID } from '@/lib/server/auth';
 import { evaluateRealDealBadge } from '@/lib/server/price-history';
