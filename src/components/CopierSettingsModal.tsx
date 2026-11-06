@@ -22,8 +22,10 @@ import {
   FileText,
   Sparkles,
 } from 'lucide-react';
+import Link from 'next/link';
 import { CopySource } from '@/lib/types';
 import { buildWhatsAppMessage, DEFAULT_TEMPLATE } from '@/lib/server/message-builder';
+import { usePlan } from '@/components/PlanProvider';
 import './copier-settings-modal.css';
 
 export const BUILTIN_TEMPLATES: Record<string, { id: string; name: string; templateText: string; description: string }> = {
@@ -36,7 +38,7 @@ export const BUILTIN_TEMPLATES: Record<string, { id: string; name: string; templ
 *{titulo}*
 
 {preco_de}
-🔥 *Por apenas {preco_por}* ({desconto})
+🔥 *Por {preco_por}* ({desconto})
 {preco_ou}
 {cupom}
 
@@ -144,6 +146,8 @@ export default function CopierSettingsModal({
   onPauseRule,
 }: CopierSettingsModalProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { hasFeature } = usePlan();
+  const canCustomizeWatermark = hasFeature('watermark_custom');
 
   // Determinar template inicial baseado no texto salvo ou nome
   const resolveInitialTemplateId = () => {
@@ -766,8 +770,8 @@ export default function CopierSettingsModal({
 
             {/* Controle da Marca d'Água com Logo Oficial */}
             {imageMode !== 'none' && (
-              <div style={{ marginTop: 14 }}>
-                <div className="csm-watermark-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#0D1B31', border: '1px solid #18334D', borderRadius: 12 }}>
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="csm-watermark-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#0D1B31', border: '1px solid #18334D', borderRadius: 12, gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <img
                       src="/radar-logo.jpg"
@@ -775,23 +779,51 @@ export default function CopierSettingsModal({
                       style={{ width: 38, height: 38, borderRadius: 10, border: '1.5px solid #1CCAF2', objectFit: 'cover' }}
                     />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>
-                        Marca d&apos;água com logo oficial
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Marca d&apos;água na foto do produto
+                        {!canCustomizeWatermark && (
+                          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.35)' }}>
+                            🔒 Padrão (@radar.ofertas.br1) no Impulse
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                        Aplica a logo oficial Radar de Ofertas de forma discreta e elegante no canto da foto.
+                        {canCustomizeWatermark
+                          ? 'Aplica sua marca personalizada configurada em Conexões → Marca d’Água & Envio Seguro.'
+                          : 'No plano Impulse é aplicada a marca oficial @radar.ofertas.br1. Faça upgrade para o Plus para usar seu logo, @ e posição livre.'}
                       </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`csm-segmented-btn ${watermarkEnabled ? 'csm-seg-active' : ''}`}
-                    onClick={() => !isRuleActive && setWatermarkEnabled(!watermarkEnabled)}
-                    disabled={isRuleActive}
-                    style={{ padding: '8px 14px', fontSize: 12, height: 36, whiteSpace: 'nowrap' }}
-                  >
-                    {watermarkEnabled ? 'Ativa na imagem' : 'Sem marca'}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {canCustomizeWatermark ? (
+                      <>
+                        <button
+                          type="button"
+                          className={`csm-segmented-btn ${watermarkEnabled ? 'csm-seg-active' : ''}`}
+                          onClick={() => !isRuleActive && setWatermarkEnabled(!watermarkEnabled)}
+                          disabled={isRuleActive}
+                          style={{ padding: '8px 14px', fontSize: 12, height: 36, whiteSpace: 'nowrap' }}
+                        >
+                          {watermarkEnabled ? 'Ativa na imagem' : 'Sem marca'}
+                        </button>
+                        <Link
+                          href="/conexoes?aba=marca"
+                          className="csm-btn csm-btn-quiet"
+                          style={{ padding: '7px 12px', fontSize: 12, textDecoration: 'none' }}
+                        >
+                          Personalizar marca ↗
+                        </Link>
+                      </>
+                    ) : (
+                      <Link
+                        href="/conexoes?aba=marca"
+                        className="csm-btn csm-btn-quiet"
+                        style={{ padding: '7px 12px', fontSize: 12, textDecoration: 'none', color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.4)' }}
+                      >
+                        🔒 Desbloquear no Plus
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
