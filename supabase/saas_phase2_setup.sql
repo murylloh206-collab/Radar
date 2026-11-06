@@ -69,3 +69,4 @@ BEGIN
     CREATE POLICY "Acesso telegram_connections" ON public.telegram_connections FOR ALL USING (true);
     CREATE POLICY "Leitura publica storefronts" ON public.public_storefronts FOR ALL USING (true);
 END $$;
+

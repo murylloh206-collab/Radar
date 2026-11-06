@@ -309,3 +309,4 @@ export async function sendOfferToTelegram(params: {
     return { ok: false, error: `Erro ao enviar oferta ao Telegram: ${msg}` };
   }
 }
+

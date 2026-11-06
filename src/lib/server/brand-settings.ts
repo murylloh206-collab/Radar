@@ -281,3 +281,4 @@ export async function resolveEffectiveWatermarkConfig(userIdInput?: string): Pro
     scale: settings.watermarkScale,
   };
 }
+
