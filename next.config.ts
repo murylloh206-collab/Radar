@@ -63,6 +63,18 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/@:slug',
+        destination: '/u/:slug',
+      },
+      {
+        source: '/%40:slug',
+        destination: '/u/:slug',
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -2,6 +2,8 @@ import { PublicationJob } from '../types';
 import { readDatabase, writeDatabase, atomicReserveJob, savePublicationJob, getActiveEvolutionConfig, recoverStaleJobs, getWhatsAppConnection } from './storage';
 import { processAutomationCampaigns } from './automation-engine';
 import { validateJobForDispatch } from './job-validator';
+import { getDailyOfferQuotaStatus } from './plan-guard';
+import { getBrandSettings } from './brand-settings';
 
 export interface DispatchResult {
   jobId: string;
@@ -201,7 +203,18 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
       }
     }
 
-    // 3. Checar limite diário de envios
+    // 3. Checar limite diário de envios (plano SaaS + configuração do painel)
+    const planQuota = await getDailyOfferQuotaStatus(db.settings.userId);
+    if (planQuota.limitReached) {
+      return {
+        timestamp: now.toISOString(),
+        processedCount: 0,
+        results: [],
+        automationJobsCreated: automationReport?.newJobsCreated || 0,
+        skippedReason: `Limite diário do plano (${planQuota.dailyLimit} ofertas/dia) atingido (${planQuota.postedToday} enviadas hoje). Faça upgrade para enviar mais ofertas.`,
+      };
+    }
+
     const todayDateStr = now.toISOString().split('T')[0];
     const sentTodayCount = db.jobs.filter(
       (j) => j.status === 'enviado' && j.sentAt && j.sentAt.startsWith(todayDateStr)
@@ -215,6 +228,27 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
         automationJobsCreated: automationReport?.newJobsCreated || 0,
         skippedReason: `Limite diário de ${db.settings.maxDailyMessages} mensagens atingido (${sentTodayCount} enviadas hoje).`,
       };
+    }
+
+    // 3.1 Envio Seguro no WhatsApp: limite por hora e intervalo entre mensagens
+    const brandPrefs = await getBrandSettings(db.settings.userId);
+    if (brandPrefs.safeDispatchEnabled) {
+      const oneHourAgoMs = now.getTime() - 60 * 60 * 1000;
+      const sentLastHour = db.jobs.filter((j) => {
+        if (j.status !== 'enviado' || !j.sentAt) return false;
+        const t = new Date(j.sentAt).getTime();
+        return !isNaN(t) && t >= oneHourAgoMs;
+      });
+
+      if (sentLastHour.length >= brandPrefs.safeDispatchHourlyLimit) {
+        return {
+          timestamp: now.toISOString(),
+          processedCount: 0,
+          results: [],
+          automationJobsCreated: automationReport?.newJobsCreated || 0,
+          skippedReason: `Envio Seguro ativo: limite de ${brandPrefs.safeDispatchHourlyLimit} mensagens/hora atingido (${sentLastHour.length} na última hora). Aguardando janela segura.`,
+        };
+      }
     }
 
     // 4. Localizar jobs prontos para envio (status = 'agendado' e scheduledFor <= now)

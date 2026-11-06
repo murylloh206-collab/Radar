@@ -1,7 +1,16 @@
 import type { Metadata, Viewport } from 'next';
+import { Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { WhatsAppWorkspaceProvider } from '@/components/WhatsAppWorkspaceProvider';
+import { PlanProvider } from '@/components/PlanProvider';
 import { AppShell } from '@/components/AppShell';
+
+const playfairDisplay = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['600', '700', '800'],
+  variable: '--font-serif-pricing',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Radar de Ofertas — Painel de Afiliados',
@@ -26,9 +35,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={playfairDisplay.variable}>
       <body className="antialiased">
-        <WhatsAppWorkspaceProvider><AppShell>{children}</AppShell></WhatsAppWorkspaceProvider>
+        <PlanProvider>
+          <WhatsAppWorkspaceProvider>
+            <AppShell>{children}</AppShell>
+          </WhatsAppWorkspaceProvider>
+        </PlanProvider>
       </body>
     </html>
   );

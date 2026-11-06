@@ -4,10 +4,17 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { supabase } from '../supabase';
 import { getOfficialWatermarkBadge } from './watermark-vector';
+import { resolveEffectiveWatermarkConfig, type WatermarkPosition } from './brand-settings';
 
 export interface OptimizeImageOptions {
   watermark?: boolean;
   watermarkHandle?: string;
+  watermarkLogoUrl?: string | null;
+  watermarkPosition?: WatermarkPosition;
+  watermarkCustomX?: number;
+  watermarkCustomY?: number;
+  watermarkOpacity?: number;
+  watermarkScale?: number;
   productPageUrl?: string;
   store?: string;
   category?: string;
@@ -248,9 +255,38 @@ export async function optimizeProductImageForWhatsApp(
     return imageUrl;
   }
 
-  const applyWatermark = options.watermark !== false;
-  const handle = options.watermarkHandle || '@radar.ofertas.br1';
-  const cacheKey = `${imageUrl}_${applyWatermark ? 'wm' : 'nowm'}_${handle}_1080_v4`;
+  // Resolver configurações de marca d'água respeitando o plano no servidor (Impulse = sempre marca padrão)
+  const effectiveWm = await resolveEffectiveWatermarkConfig(userId);
+  const applyWatermark = effectiveWm.isCustomizable
+    ? (options.watermark !== undefined ? options.watermark : effectiveWm.enabled)
+    : true; // No Impulse, a marca padrão nunca pode ser desativada
+
+  const handle = effectiveWm.isCustomizable
+    ? (options.watermarkHandle || effectiveWm.handle || '@radar.ofertas.br1')
+    : '@radar.ofertas.br1';
+  const customLogoUrl = effectiveWm.isCustomizable
+    ? (options.watermarkLogoUrl !== undefined ? options.watermarkLogoUrl : effectiveWm.logoUrl)
+    : null;
+  const position = effectiveWm.isCustomizable
+    ? (options.watermarkPosition || effectiveWm.position)
+    : 'bottom-right';
+  const customX = effectiveWm.isCustomizable
+    ? (options.watermarkCustomX ?? effectiveWm.customX)
+    : 82;
+  const customY = effectiveWm.isCustomizable
+    ? (options.watermarkCustomY ?? effectiveWm.customY)
+    : 90;
+  const opacity = effectiveWm.isCustomizable
+    ? (options.watermarkOpacity ?? effectiveWm.opacity)
+    : 95;
+  const scale = effectiveWm.isCustomizable
+    ? (options.watermarkScale ?? effectiveWm.scale)
+    : 100;
+
+  const wmSignature = applyWatermark
+    ? `wm_${handle}_${customLogoUrl ? customLogoUrl.slice(-16) : 'def'}_${position}_${customX}_${customY}_${opacity}_${scale}`
+    : 'nowm';
+  const cacheKey = `${imageUrl}_${wmSignature}_1080_v5`;
   if (memoryCache.has(cacheKey)) {
     return memoryCache.get(cacheKey);
   }
@@ -312,22 +348,25 @@ export async function optimizeProductImageForWhatsApp(
         },
       ];
 
-      // 4. Nova Marca d'água oficial Radar de Ofertas ([LOGO] | @radar.ofertas.br1)
+      // 4. Marca d'água oficial ou personalizada (respeitando plano do usuário)
       if (applyWatermark) {
         const badgeResult = await getOfficialWatermarkBadge({
           handle,
+          customLogoUrl,
+          position,
+          customX,
+          customY,
+          opacity,
+          scale,
           targetImageWidth: targetSize,
           targetImageHeight: targetSize,
         });
 
         if (badgeResult?.buffer) {
-          const badgeTop = targetSize - badgeResult.height - badgeResult.marginBottom;
-          const badgeLeft = targetSize - badgeResult.width - badgeResult.marginRight;
-
           compositeLayers.push({
             input: badgeResult.buffer,
-            top: badgeTop,
-            left: badgeLeft,
+            top: badgeResult.top,
+            left: badgeResult.left,
           });
         }
       }
@@ -355,7 +394,7 @@ export async function optimizeProductImageForWhatsApp(
       // 6. Upload para o Supabase Storage ou gravação local resiliente
       const hash = crypto
         .createHash('sha256')
-        .update(imageUrl + (applyWatermark ? `_wm_${handle}` : '') + '_v4')
+        .update(imageUrl + wmSignature + '_v5')
         .digest('hex')
         .slice(0, 20);
 

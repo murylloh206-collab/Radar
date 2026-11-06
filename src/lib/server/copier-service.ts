@@ -26,6 +26,9 @@ import { fetchProductRealData } from './product-fetcher';
 import { processRadarArt, selectBestProductPhoto } from './radar-art-engine';
 import { optimizeProductImageForWhatsApp } from './product-image-optimizer';
 import { runWorkerCycle } from './worker-engine';
+import { getDailyOfferQuotaStatus } from './plan-guard';
+import { recordOfferPriceHistory } from './price-history';
+import { getBrandSettings } from './brand-settings';
 
 export interface EvolutionWebhookPayload {
   event?: string;
@@ -776,6 +779,21 @@ export async function processIncomingMessage(
   };
   await saveProductToCatalog(catalogProduct);
 
+  // Salvar histórico de preço real da oferta coletada imediatamente (regra obrigatória Fase 1)
+  if (!isSimulation && productData.currentPrice && productData.currentPrice > 0) {
+    await recordOfferPriceHistory({
+      userId: authorizedSource.userId,
+      productExternalId: productData.externalId || conversionResult.cleanUrl,
+      productTitle: productData.title,
+      productUrl: conversionResult.cleanUrl,
+      store: conversionResult.store,
+      price: productData.currentPrice,
+      originalPrice: productData.originalPrice,
+    }).catch((err) => {
+      console.warn('[PriceHistory] Aviso ao registrar histórico na coleta:', err);
+    });
+  }
+
   // 5. Avaliar qualidade da oferta com dados reais
   const storeRule = db.rules.find((r) => r.storeName === conversionResult.store) || {
     id: ensureValidUuid(),
@@ -930,14 +948,19 @@ export async function processIncomingMessage(
   } else {
     finalMediaType = 'image';
     if (bestOfficialPhoto) {
-      // Formata a fotografia oficial no tamanho quadrado perfeito (1:1, 1080x1080) com enquadramento adaptativo 'contain', fundo limpo e marca d'água oficial
-      const applyWatermark = authorizedSource.brandWatermarkEnabled !== false;
+      // Formata a fotografia oficial no tamanho quadrado perfeito (1:1, 1080x1080) com enquadramento adaptativo 'contain', fundo limpo e marca d'água do plano
+      const customSourceHandle =
+        authorizedSource.brandWatermarkHandle &&
+        authorizedSource.brandWatermarkHandle !== '@radar.ofertas.br1'
+          ? authorizedSource.brandWatermarkHandle
+          : undefined;
+
       finalMediaUrl = await optimizeProductImageForWhatsApp(
         bestOfficialPhoto,
         authorizedSource.userId,
         {
-          watermark: applyWatermark,
-          watermarkHandle: authorizedSource.brandWatermarkHandle || '@radar.ofertas.br1',
+          watermark: authorizedSource.brandWatermarkEnabled,
+          watermarkHandle: customSourceHandle,
           productPageUrl: conversionResult.cleanUrl,
           store: conversionResult.store,
         }
@@ -975,19 +998,30 @@ export async function processIncomingMessage(
 
   const createdJobIds: string[] = [];
 
+  // Verificar limite diário do plano no servidor antes de agendar envio automático
+  const dailyQuota = await getDailyOfferQuotaStatus(authorizedSource.userId);
+  const planQuotaReached = dailyQuota.limitReached;
+  const planQuotaReason = planQuotaReached
+    ? `Limite diário do plano (${dailyQuota.dailyLimit} ofertas/dia) atingido (${dailyQuota.postedToday} postadas hoje). Faça upgrade em /planos para continuar enviando hoje.`
+    : undefined;
+
   // Regra de Envio Automático:
   // Só agenda automaticamente se o modo da origem for 'automatico', não houver palavras bloqueadas,
-  // a fotografia obrigatória estiver pronta e válida, e o link de afiliado tiver sido confirmado.
+  // a fotografia obrigatória estiver pronta e válida, o link de afiliado tiver sido confirmado, e o plano tiver saldo diário.
   const isAutomaticAllowed =
     authorizedSource.operationMode === 'automatico' &&
     !hasBlockedKeyword &&
     !requiresManualReviewDueToImage &&
+    !planQuotaReached &&
     Boolean(conversionResult.success && conversionResult.affiliateUrl && conversionResult.verificationStatus === 'verificado' && conversionResult.isAutoDispatchAllowed);
 
-  const delaySeconds =
+  const brandPrefs = await getBrandSettings(authorizedSource.userId);
+  const safeMinDelay = brandPrefs.safeDispatchEnabled ? brandPrefs.safeDispatchDelaySec : 0;
+  const sourceDelay =
     typeof authorizedSource.customDelaySeconds === 'number' && authorizedSource.customDelaySeconds >= 0
       ? authorizedSource.customDelaySeconds
       : 60;
+  const delaySeconds = Math.max(sourceDelay, safeMinDelay);
 
   const isImmediateDispatchMode = !isTestIsolationActive() && isAutomaticAllowed;
 
@@ -1038,7 +1072,7 @@ export async function processIncomingMessage(
       affiliateUrl: conversionResult.affiliateUrl,
       originalUrl: primaryUrl,
       status: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? 'agendado' : 'aguardando_aprovacao',
-      errorDetails: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? undefined : (imageReviewReason || unverifiedReason),
+      errorDetails: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? undefined : (planQuotaReason || imageReviewReason || unverifiedReason),
       scheduledFor: scheduledTime,
       attempts: 0,
       maxAttempts: 3,

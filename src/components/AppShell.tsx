@@ -20,8 +20,12 @@ import {
   LogOut,
   Sliders,
   Check,
+  Sparkles,
+  FlaskConical,
 } from 'lucide-react';
 import { useWhatsAppWorkspace } from '@/components/WhatsAppWorkspaceProvider';
+import { usePlan } from '@/components/PlanProvider';
+import { PlanId } from '@/lib/plans-config';
 import { BrandLogo } from '@/components/BrandLogo';
 
 interface AppShellProps {
@@ -31,6 +35,7 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const sharedWhatsApp = useWhatsAppWorkspace();
+  const { isDevMode, subscription, planDefinition, quota, setTestPlan } = usePlan();
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -102,6 +107,7 @@ export function AppShell({ children }: AppShellProps) {
     if (pathname.startsWith('/estatisticas') || pathname.startsWith('/resultados') || pathname.startsWith('/analytics') || pathname.startsWith('/relatorios')) return 'Estatísticas';
     if (pathname.startsWith('/pagina-publica') || pathname.startsWith('/bio-link')) return 'Página pública';
     if (pathname.startsWith('/conexoes') || pathname.startsWith('/conexao-whatsapp') || pathname.startsWith('/conectar-lojas') || pathname.startsWith('/ajustes')) return 'Conexões';
+    if (pathname.startsWith('/planos')) return 'Planos e Assinatura';
     return 'Início';
   };
 
@@ -242,6 +248,31 @@ export function AppShell({ children }: AppShellProps) {
             </span>
             Conexões
           </Link>
+
+          <Link
+            href="/planos"
+            className={isCurrent('/planos') ? 'rdv3-active' : ''}
+            aria-current={isCurrent('/planos') ? 'page' : undefined}
+          >
+            <span className="nav-icon">
+              <Sparkles className="w-3.5 h-3.5 text-[#818cf8]" />
+            </span>
+            Planos
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: 10,
+                padding: '2px 6px',
+                borderRadius: 999,
+                background: 'rgba(99, 102, 241, 0.2)',
+                border: '1px solid rgba(99, 102, 241, 0.35)',
+                color: '#c7d2fe',
+                fontWeight: 600,
+              }}
+            >
+              {planDefinition.name}
+            </span>
+          </Link>
         </nav>
 
         {/* Rodapé inferior esquerdo da lateral: Perfil e menu de conta */}
@@ -327,16 +358,103 @@ export function AppShell({ children }: AppShellProps) {
 
       {/* Conteúdo principal */}
       <main className="rdv3-content">
-        <div className="rdv3-top">
+        <div className="rdv3-top" style={{ flexWrap: 'wrap', gap: 10 }}>
           <span className="rdv3-crumb">
             Radar de Ofertas / <span className="rp-location">{pageTitle}</span>
           </span>
-          <span
-            className={waConnected ? 'rdv3-connected' : 'rdv3-connected rdv3-disconnected'}
-            title={waConnected ? `Conectado via ${waPhone || 'WhatsApp'}` : 'WhatsApp desconectado'}
-          >
-            {waStatusLabel}
-          </span>
+
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginLeft: 'auto' }}>
+            {/* Contador diário de ofertas do plano */}
+            <Link
+              href="/planos"
+              title="Limite diário de ofertas postadas no seu plano atual"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 10px',
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 600,
+                textDecoration: 'none',
+                background: quota.limitReached
+                  ? 'rgba(239, 68, 68, 0.16)'
+                  : 'rgba(99, 102, 241, 0.14)',
+                border: quota.limitReached
+                  ? '1px solid rgba(239, 68, 68, 0.45)'
+                  : '1px solid rgba(99, 102, 241, 0.32)',
+                color: quota.limitReached ? '#fca5a5' : '#e0e7ff',
+              }}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Plano {planDefinition.name}:</span>
+              <strong>
+                {quota.dailyLimit === null
+                  ? `${quota.postedToday} hoje (Ilimitado)`
+                  : `${quota.postedToday}/${quota.dailyLimit} ofertas hoje`}
+              </strong>
+              {quota.limitReached && (
+                <span style={{ textDecoration: 'underline', marginLeft: 4 }}>Fazer upgrade</span>
+              )}
+            </Link>
+
+            {/* Seletor "Plano de teste" — VISÍVEL E FUNCIONAL EXCLUSIVAMENTE EM DESENVOLVIMENTO (NODE_ENV !== 'production') */}
+            {isDevMode && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  background: 'rgba(245, 158, 11, 0.14)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  fontSize: 11,
+                  color: '#fde68a',
+                }}
+                title="Visível apenas em ambiente de desenvolvimento (NODE_ENV !== production)"
+              >
+                <FlaskConical className="w-3.5 h-3.5 text-amber-400" />
+                <span style={{ fontWeight: 600 }}>Plano de teste (DEV):</span>
+                {(['impulse', 'plus', 'ultimate'] as PlanId[]).map((pid) => {
+                  const active = subscription.plano === pid;
+                  return (
+                    <button
+                      key={pid}
+                      type="button"
+                      onClick={async () => {
+                        const ok = await setTestPlan(pid, subscription.ciclo);
+                        if (ok) {
+                          setFeedback(`Plano de teste alterado para ${pid.toUpperCase()} (Modo Dev)`);
+                          setTimeout(() => setFeedback(null), 3000);
+                        }
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        border: active ? '1px solid #fbbf24' : '1px solid transparent',
+                        background: active ? '#f59e0b' : 'rgba(0,0,0,0.25)',
+                        color: active ? '#090d16' : '#fef3c7',
+                        fontWeight: active ? 700 : 500,
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {pid}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <span
+              className={waConnected ? 'rdv3-connected' : 'rdv3-connected rdv3-disconnected'}
+              title={waConnected ? `Conectado via ${waPhone || 'WhatsApp'}` : 'WhatsApp desconectado'}
+            >
+              {waStatusLabel}
+            </span>
+          </div>
         </div>
 
         {/* Feedback toast global se ativo */}

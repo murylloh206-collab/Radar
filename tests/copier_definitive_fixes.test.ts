@@ -5,7 +5,7 @@ import { validateJobForDispatch } from '../src/lib/server/job-validator';
 import { isPromotionalHookLine } from '../src/lib/server/copier-service';
 import { generateSmartHook, detectProductCategory } from '../src/lib/server/hook-generator';
 import { buildWhatsAppMessage } from '../src/lib/server/message-builder';
-import type { DatabaseSchema, PublicationJob } from '../src/types';
+import type { PublicationJob } from '../src/lib/types';
 
 test('1. MARCA D\'ÁGUA VETORIAL: Imune a ausência de fontes no SO, sem tofu/quadrado amarelo', async () => {
   // Teste de extração vetorial de caracteres
@@ -15,7 +15,7 @@ test('1. MARCA D\'ÁGUA VETORIAL: Imune a ausência de fontes no SO, sem tofu/qu
   assert.ok(!pathData.includes('<text'), 'Path data não deve conter tags HTML/SVG');
 
   // Teste de geração do badge completo
-  const badge = await getOfficialWatermarkBadge({ targetWidth: 320 });
+  const badge = await getOfficialWatermarkBadge();
   assert.ok(badge, 'Badge deve ser retornado');
   assert.ok(Buffer.isBuffer(badge.buffer), 'Badge buffer deve ser um Buffer válido');
   assert.ok(badge.buffer.length > 500, 'Badge buffer deve conter bytes reais de PNG');
@@ -24,7 +24,7 @@ test('1. MARCA D\'ÁGUA VETORIAL: Imune a ausência de fontes no SO, sem tofu/qu
 });
 
 test('2. SEGURANÇA DE IMAGEM: NUNCA despachar oferta sem fotografia quando o fluxo exige imagem', () => {
-  const mockDb: DatabaseSchema = {
+  const mockDb: any = {
     groups: [
       {
         id: 'grp-1',
@@ -53,13 +53,19 @@ test('2. SEGURANÇA DE IMAGEM: NUNCA despachar oferta sem fotografia quando o fl
   // Cenário: Job configurado como 'image', mas mediaUrl ausente/vazia
   const invalidJob: PublicationJob = {
     id: 'job-sem-imagem-123',
+    userId: '00000000-0000-0000-0000-000000000001',
+    originType: 'copiador',
     targetJid: '120363000@g.us',
     messageText: '🔥 Oferta imperdível da Caixa de Som Bluetooth JBL Partybox!',
     mediaUrl: '',
     mediaType: 'image',
     affiliateUrl: 'https://www.amazon.com.br/dp/B08X?tag=radar-20',
-    status: 'pronto',
+    status: 'agendado',
+    scheduledFor: new Date().toISOString(),
+    attempts: 0,
+    maxAttempts: 3,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     isDemo: false,
   };
 

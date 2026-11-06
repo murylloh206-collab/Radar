@@ -131,6 +131,12 @@ export async function getOfficialRadarCircularIcon(size: number = 34): Promise<B
 
 export interface WatermarkBadgeOptions {
   handle?: string;
+  customLogoUrl?: string | null;
+  opacity?: number; // 10..100
+  scale?: number; // 50..160 (%)
+  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'center' | 'custom';
+  customX?: number; // 0..100 (%)
+  customY?: number; // 0..100 (%)
   targetImageWidth?: number;
   targetImageHeight?: number;
 }
@@ -141,37 +147,159 @@ export interface WatermarkBadgeResult {
   height: number;
   marginRight: number;
   marginBottom: number;
+  top: number;
+  left: number;
+}
+
+async function resolveCustomCircularLogo(logoUrl: string | null | undefined, size: number = 34): Promise<Buffer | null> {
+  if (!logoUrl || !logoUrl.trim()) return null;
+  try {
+    let rawBuf: Buffer | null = null;
+    if (logoUrl.startsWith('data:image/')) {
+      const base64Part = logoUrl.split(',')[1];
+      if (base64Part) rawBuf = Buffer.from(base64Part, 'base64');
+    } else if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+      const res = await fetch(logoUrl, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        rawBuf = Buffer.from(await res.arrayBuffer());
+      }
+    } else {
+      const localPath = logoUrl.startsWith('/')
+        ? path.join(process.cwd(), 'public', logoUrl)
+        : logoUrl;
+      if (fs.existsSync(localPath)) {
+        rawBuf = fs.readFileSync(localPath);
+      }
+    }
+
+    if (!rawBuf) return null;
+
+    const circleMask = Buffer.from(
+      `<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#fff"/></svg>`
+    );
+
+    return await sharp(rawBuf)
+      .resize(size, size, { fit: 'cover' })
+      .composite([{ input: circleMask, blend: 'dest-in' }])
+      .png()
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+export function computeWatermarkCoordinates(params: {
+  badgeW: number;
+  badgeH: number;
+  canvasW: number;
+  canvasH: number;
+  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'center' | 'custom';
+  customX?: number;
+  customY?: number;
+}): { top: number; left: number } {
+  const { badgeW, badgeH, canvasW, canvasH, position = 'bottom-right', customX = 82, customY = 90 } = params;
+  const marginX = 28;
+  const marginY = 24;
+
+  let left = canvasW - badgeW - marginX;
+  let top = canvasH - badgeH - marginY;
+
+  if (position === 'bottom-left') {
+    left = marginX;
+    top = canvasH - badgeH - marginY;
+  } else if (position === 'top-right') {
+    left = canvasW - badgeW - marginX;
+    top = marginY;
+  } else if (position === 'top-left') {
+    left = marginX;
+    top = marginY;
+  } else if (position === 'center') {
+    left = Math.round((canvasW - badgeW) / 2);
+    top = Math.round((canvasH - badgeH) / 2);
+  } else if (position === 'custom') {
+    const centerX = Math.round((Math.max(0, Math.min(100, customX)) / 100) * canvasW);
+    const centerY = Math.round((Math.max(0, Math.min(100, customY)) / 100) * canvasH);
+    left = Math.max(8, Math.min(canvasW - badgeW - 8, Math.round(centerX - badgeW / 2)));
+    top = Math.max(8, Math.min(canvasH - badgeH - 8, Math.round(centerY - badgeH / 2)));
+  }
+
+  return {
+    top: Math.max(0, Math.min(canvasH - badgeH, top)),
+    left: Math.max(0, Math.min(canvasW - badgeW, left)),
+  };
+}
+
+async function applyScaleAndOpacity(
+  baseBuffer: Buffer,
+  scalePct: number,
+  opacityPct: number
+): Promise<{ buffer: Buffer; width: number; height: number }> {
+  const meta = await sharp(baseBuffer).metadata();
+  const baseW = meta.width || 280;
+  const baseH = meta.height || 59;
+
+  const clampedScale = Math.max(50, Math.min(160, scalePct || 100)) / 100;
+  const clampedOpacity = Math.max(10, Math.min(100, opacityPct || 95)) / 100;
+
+  const finalW = Math.max(80, Math.round(baseW * clampedScale));
+  const finalH = Math.max(24, Math.round(baseH * clampedScale));
+
+  let pipeline = sharp(baseBuffer).resize(finalW, finalH, { fit: 'contain' }).ensureAlpha();
+
+  if (clampedOpacity < 0.99) {
+    const alphaMask = Buffer.from(
+      `<svg width="${finalW}" height="${finalH}"><rect width="${finalW}" height="${finalH}" fill="rgba(255,255,255,${clampedOpacity.toFixed(2)})"/></svg>`
+    );
+    pipeline = pipeline.composite([{ input: alphaMask, blend: 'dest-in' }]);
+  }
+
+  const outBuf = await pipeline.png({ compressionLevel: 9 }).toBuffer();
+  return { buffer: outBuf, width: finalW, height: finalH };
 }
 
 /**
- * Obtém ou constrói a marca d'água oficial do Radar de Ofertas:
- * 
- * ESTRATÉGIA PRINCIPAL:
- * - Carrega diretamente o asset PNG pré-renderizado permanente (public/watermark-radar-official.png).
- * - O identificador @radar.ofertas.br1 já faz parte dos pixels nativos da imagem PNG com transparência.
- * - Zero dependência de fontes do sistema operacional e zero conversão dinâmica de texto em tempo de envio.
- * - Redimensiona proporcionalmente para o tamanho ideal da imagem do produto (260px - 280px em 1080x1080).
+ * Obtém ou constrói a marca d'água oficial ou personalizada do Radar de Ofertas:
+ * - Quando for a marca padrão (@radar.ofertas.br1 sem logo customizada), utiliza o asset PNG pré-renderizado oficial.
+ * - Quando for personalizada (Plus / Ultimate), renderiza a logo do cliente + @ do cliente em caminhos vetoriais puros (<path>) sem depender de fontes do SO, aplicando tamanho, opacidade e posição escolhidos.
  */
 export async function getOfficialWatermarkBadge(options: WatermarkBadgeOptions = {}): Promise<WatermarkBadgeResult> {
   const rawHandle = options.handle?.trim() || '@radar.ofertas.br1';
   const handle = rawHandle.startsWith('@') ? rawHandle : `@${rawHandle}`;
   const targetImageW = options.targetImageWidth || 1080;
-  const isDefaultHandle = handle === '@radar.ofertas.br1';
-  const cacheKey = `badge_${handle}_w${targetImageW}_v4`;
+  const targetImageH = options.targetImageHeight || 1080;
+  const scale = typeof options.scale === 'number' ? options.scale : 100;
+  const opacity = typeof options.opacity === 'number' ? options.opacity : 95;
+  const hasCustomLogo = Boolean(options.customLogoUrl && options.customLogoUrl.trim());
+  const isDefaultHandle = handle === '@radar.ofertas.br1' && !hasCustomLogo;
+  const logoKey = hasCustomLogo ? options.customLogoUrl!.slice(-32) : 'default';
+  const cacheKey = `badge_${handle}_${logoKey}_s${scale}_o${opacity}_w${targetImageW}_v5`;
 
   if (watermarkBadgeCache.has(cacheKey)) {
     const cachedBuf = watermarkBadgeCache.get(cacheKey)!;
     const meta = await sharp(cachedBuf).metadata();
+    const bw = meta.width || 280;
+    const bh = meta.height || 59;
+    const coords = computeWatermarkCoordinates({
+      badgeW: bw,
+      badgeH: bh,
+      canvasW: targetImageW,
+      canvasH: targetImageH,
+      position: options.position,
+      customX: options.customX,
+      customY: options.customY,
+    });
     return {
       buffer: cachedBuf,
-      width: meta.width || 280,
-      height: meta.height || 59,
+      width: bw,
+      height: bh,
       marginRight: 28,
       marginBottom: 24,
+      top: coords.top,
+      left: coords.left,
     };
   }
 
-  // 1. Tentar carregar o asset PNG permanente pré-renderizado se for o identificador padrão
+  // 1. Tentar carregar o asset PNG permanente pré-renderizado se for o identificador padrão sem logo customizada
   if (isDefaultHandle) {
     for (const candidate of PERMANENT_PNG_CANDIDATES) {
       if (fs.existsSync(candidate)) {
@@ -179,23 +307,35 @@ export async function getOfficialWatermarkBadge(options: WatermarkBadgeOptions =
           const preRenderedBuf = fs.readFileSync(candidate);
           const meta = await sharp(preRenderedBuf).metadata();
           if (meta.width && meta.height) {
-            // Proporção ideal de ~26% da largura da imagem de destino (280px para 1080px)
             const targetW = Math.round(targetImageW * 0.26);
             const targetH = Math.round((meta.height / meta.width) * targetW);
 
-            const resizedBuffer = await sharp(preRenderedBuf)
+            const baseResized = await sharp(preRenderedBuf)
               .resize(targetW, targetH, { fit: 'contain' })
-              .png({ compressionLevel: 9 })
+              .png()
               .toBuffer();
 
-            watermarkBadgeCache.set(cacheKey, resizedBuffer);
+            const transformed = await applyScaleAndOpacity(baseResized, scale, opacity);
+            watermarkBadgeCache.set(cacheKey, transformed.buffer);
+
+            const coords = computeWatermarkCoordinates({
+              badgeW: transformed.width,
+              badgeH: transformed.height,
+              canvasW: targetImageW,
+              canvasH: targetImageH,
+              position: options.position,
+              customX: options.customX,
+              customY: options.customY,
+            });
 
             return {
-              buffer: resizedBuffer,
-              width: targetW,
-              height: targetH,
+              buffer: transformed.buffer,
+              width: transformed.width,
+              height: transformed.height,
               marginRight: 28,
               marginBottom: 24,
+              top: coords.top,
+              left: coords.left,
             };
           }
         } catch (err) {
@@ -205,7 +345,7 @@ export async function getOfficialWatermarkBadge(options: WatermarkBadgeOptions =
     }
   }
 
-  // 2. Fallback de contingência: Geração vetorial sob medida usando caminhos seguros (sem NaN)
+  // 2. Geração vetorial sob medida usando caminhos seguros (<path> via opentype.js, sem NaN e sem depender de fontes do SO)
   const fontSize = 17.5;
   const badgeH = 46;
   const iconSize = 34;
@@ -222,7 +362,9 @@ export async function getOfficialWatermarkBadge(options: WatermarkBadgeOptions =
   const { pathData, width: textWidth } = convertHandleToVectorPath(handle, textX, textY, fontSize);
   const badgeW = Math.round(padLeft + iconSize + gapIconSep + sepW + gapSepText + textWidth + padRight);
 
-  const circularIcon = await getOfficialRadarCircularIcon(iconSize);
+  const circularIcon =
+    (await resolveCustomCircularLogo(options.customLogoUrl, iconSize)) ||
+    (await getOfficialRadarCircularIcon(iconSize));
 
   const fallbackIconSvg = !circularIcon
     ? `<g transform="translate(${padLeft}, ${Math.round((badgeH - iconSize) / 2)})">
@@ -253,9 +395,9 @@ export async function getOfficialWatermarkBadge(options: WatermarkBadgeOptions =
     </svg>
   `);
 
-  let finalBadgeBuffer: Buffer;
+  let rawBadgeBuffer: Buffer;
   if (circularIcon) {
-    finalBadgeBuffer = await sharp(svgBadge)
+    rawBadgeBuffer = await sharp(svgBadge)
       .composite([
         {
           input: circularIcon,
@@ -266,16 +408,29 @@ export async function getOfficialWatermarkBadge(options: WatermarkBadgeOptions =
       .png()
       .toBuffer();
   } else {
-    finalBadgeBuffer = await sharp(svgBadge).png().toBuffer();
+    rawBadgeBuffer = await sharp(svgBadge).png().toBuffer();
   }
 
-  watermarkBadgeCache.set(cacheKey, finalBadgeBuffer);
+  const transformed = await applyScaleAndOpacity(rawBadgeBuffer, scale, opacity);
+  watermarkBadgeCache.set(cacheKey, transformed.buffer);
+
+  const coords = computeWatermarkCoordinates({
+    badgeW: transformed.width,
+    badgeH: transformed.height,
+    canvasW: targetImageW,
+    canvasH: targetImageH,
+    position: options.position,
+    customX: options.customX,
+    customY: options.customY,
+  });
 
   return {
-    buffer: finalBadgeBuffer,
-    width: badgeW,
-    height: badgeH,
+    buffer: transformed.buffer,
+    width: transformed.width,
+    height: transformed.height,
     marginRight: 28,
     marginBottom: 24,
+    top: coords.top,
+    left: coords.left,
   };
 }

@@ -4,6 +4,8 @@ import React, { Suspense, useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { WhatsAppGroup } from '@/lib/types';
+import { AiCaptionGenerator } from '@/components/AiCaptionGenerator';
+import { PlanGateCard } from '@/components/PlanGateCard';
 
 type LinkStatus = 'ausente' | 'convertendo' | 'erro' | 'gerado' | 'confirmado';
 
@@ -18,18 +20,18 @@ const DEFAULT_TEMPLATES: TemplateItem[] = [
   {
     key: 'Oferta essencial',
     name: 'Oferta essencial',
-    body: 'Um achado para o seu dia ✨\n*{titulo}*\nPor *{preco_por}*\n{link}',
+    body: 'Oferta verificada em destaque ✨\n*{titulo}*\n🔥 Por *{preco_por}*\n{link}',
     isDefault: true,
   },
   {
     key: 'Oferta com cupom',
     name: 'Oferta com cupom',
-    body: '🔥 SUPER ACHADO COM CUPOM!\n\n*{titulo}*\nDe: ~R$ {preco_de}~\nPor apenas: *{preco_por}*\nCupom: *{cupom}*\n\nCompre com segurança no link verificado:\n{link}',
+    body: '🔥 OFERTA COM CUPOM ATIVO!\n\n*{titulo}*\nDe: ~R$ {preco_de}~\n🔥 Por *{preco_por}*\n🎟️ Cupom: *{cupom}*\n\n🛒 Compre pelo link oficial:\n{link}',
   },
   {
     key: 'Texto curto',
     name: 'Texto curto',
-    body: '*{titulo}* por *{preco_por}*\n{link}',
+    body: '*{titulo}*\n🔥 Por *{preco_por}*\n{link}',
   },
 ];
 
@@ -39,13 +41,14 @@ function CriarConteudoContent() {
   const initialTabParam = searchParams.get('aba');
 
   const parseTab = (val: string | null) => {
+    if (val === 'ia' || val === 'legenda-ia') return 'ia';
     if (val === 'mensagem' || val === 'mensagem-livre') return 'mensagem';
     if (val === 'story') return 'story';
     if (val === 'templates') return 'templates';
     return 'oferta';
   };
 
-  const [activeTab, setActiveTab] = useState<'oferta' | 'mensagem' | 'story' | 'templates'>(() =>
+  const [activeTab, setActiveTab] = useState<'oferta' | 'ia' | 'mensagem' | 'story' | 'templates'>(() =>
     parseTab(initialTabParam)
   );
 
@@ -70,14 +73,14 @@ function CriarConteudoContent() {
 
   // Aba 2: Mensagem livre
   const [freeMessage, setFreeMessage] = useState(
-    'Bom dia! ✨ Separamos novos achados para vocês hoje. Fiquem atentos às próximas ofertas.'
+    'Bom dia! ✨ Separamos novas oportunidades com desconto para vocês hoje. Fiquem atentos às próximas ofertas.'
   );
   const [freeImageUrl, setFreeImageUrl] = useState('');
   const [selectedDestGroup, setSelectedDestGroup] = useState('');
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
 
   // Aba 3: Story
-  const [storyTitle, setStoryTitle] = useState('Um achado para ouvir melhor');
+  const [storyTitle, setStoryTitle] = useState('Oferta especial com desconto verificado');
   const [storyPrice, setStoryPrice] = useState('149,90');
   const [storyCoupon, setStoryCoupon] = useState('RADAR10');
   const [storyStyle, setStoryStyle] = useState('Editorial · Grafite');
@@ -414,9 +417,16 @@ function CriarConteudoContent() {
     }
   };
 
-  const handleSelectTab = (tab: 'oferta' | 'mensagem' | 'story' | 'templates') => {
+  const handleSelectTab = (tab: 'oferta' | 'ia' | 'mensagem' | 'story' | 'templates') => {
     setActiveTab(tab);
-    const mapped = tab === 'oferta' ? 'oferta-link' : tab === 'mensagem' ? 'mensagem-livre' : tab;
+    const mapped =
+      tab === 'oferta'
+        ? 'oferta-link'
+        : tab === 'ia'
+        ? 'legenda-ia'
+        : tab === 'mensagem'
+        ? 'mensagem-livre'
+        : tab;
     router.replace(`/criar-conteudo?aba=${mapped}`, { scroll: false });
   };
 
@@ -463,6 +473,14 @@ function CriarConteudoContent() {
           <button
             role="tab"
             type="button"
+            aria-selected={activeTab === 'ia'}
+            onClick={() => handleSelectTab('ia')}
+          >
+            ✨ Legenda com IA
+          </button>
+          <button
+            role="tab"
+            type="button"
             aria-selected={activeTab === 'mensagem'}
             onClick={() => handleSelectTab('mensagem')}
           >
@@ -485,6 +503,18 @@ function CriarConteudoContent() {
             Templates
           </button>
         </div>
+
+        {/* Painel IA: Gerador de legenda com IA */}
+        {activeTab === 'ia' && (
+          <div data-panel="ia" role="tabpanel">
+            <AiCaptionGenerator
+              initialTitle={offerTitle}
+              initialPrice={offerPrice}
+              initialCoupon={offerCoupon}
+              initialAffiliateUrl={affiliateLink || productUrl}
+            />
+          </div>
+        )}
 
         {/* Painel 1: Oferta por link */}
         {activeTab === 'oferta' && (
@@ -734,7 +764,13 @@ function CriarConteudoContent() {
         {/* Painel 3: Story */}
         {activeTab === 'story' && (
           <div data-panel="story" role="tabpanel">
-            <div className="rp-split">
+            <PlanGateCard
+              feature="story_image_cards"
+              requiredPlan="plus"
+              title="Gerador de Cards 9:16 para Stories e Status"
+              description="Crie artes verticais prontas para postar nos Stories do Instagram e no Status do WhatsApp com preço, cupom e sua identidade visual. Recurso incluído nos planos Plus e Ultimate."
+            >
+              <div className="rp-split">
               <div className="rp-panel">
                 <h2>Arte vertical</h2>
                 <p className="rp-sub">Formato 9:16 para compartilhar no Status ou nos Stories.</p>
@@ -807,6 +843,7 @@ function CriarConteudoContent() {
                 </div>
               </div>
             </div>
+            </PlanGateCard>
           </div>
         )}
 

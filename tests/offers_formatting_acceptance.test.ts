@@ -1,4 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+const expect = (actual: any) => ({
+  toContain: (sub: string) => assert.ok(String(actual).includes(sub), `Expected "${actual}" to contain "${sub}"`),
+  toBe: (val: any) => assert.strictEqual(actual, val),
+  toMatch: (re: RegExp) => assert.match(String(actual), re),
+  not: {
+    toContain: (sub: string) => assert.ok(!String(actual).includes(sub), `Expected "${actual}" not to contain "${sub}"`),
+  },
+});
 import { buildWhatsAppMessage, DEFAULT_TEMPLATE } from '../src/lib/server/message-builder';
 import { generateSmartHook, detectProductCategory } from '../src/lib/server/hook-generator';
 import { isPromotionalHookLine, extractTitleFromProductUrl } from '../src/lib/server/copier-service';
@@ -151,3 +161,4 @@ describe('Correção Definitiva do Sistema de Ofertas e Formatação', () => {
     expect(detectStoreFromUrl('https://shope.ee/123')).toBe('shopee');
   });
 });
+

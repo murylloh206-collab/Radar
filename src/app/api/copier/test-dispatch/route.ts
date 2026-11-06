@@ -11,6 +11,8 @@ import { convertToAffiliateLink } from '@/lib/server/affiliate-converter';
 import { getStoreCredentialsMapWithSecrets } from '@/lib/server/credentials-vault';
 import { getSessionFromRequest } from '@/lib/server/auth';
 import { buildWhatsAppMessage } from '@/lib/server/message-builder';
+import { getDailyOfferQuotaStatus } from '@/lib/server/plan-guard';
+import { recordOfferPriceHistory } from '@/lib/server/price-history';
 import { PublicationJob, StoreCredential, StoreName } from '@/lib/types';
 
 export async function POST(req: NextRequest) {
@@ -142,6 +144,19 @@ export async function POST(req: NextRequest) {
     // 5. Converter link de afiliado (incluindo segredos descriptografados do cofre)
     const credentialsMap = await getStoreCredentialsMapWithSecrets(session.userId, db.stores);
     const convResult = await convertToAffiliateLink(realProduct.rawUrl, credentialsMap);
+
+    // Registrar histórico de preço da oferta processada
+    if (realProduct.currentPrice > 0) {
+      await recordOfferPriceHistory({
+        userId: session.userId,
+        productExternalId: convResult.cleanUrl || realProduct.rawUrl,
+        productTitle: realProduct.title,
+        productUrl: convResult.cleanUrl || realProduct.rawUrl,
+        store: convResult.store || 'mercadolivre',
+        price: realProduct.currentPrice,
+        originalPrice: realProduct.originalPrice,
+      }).catch(() => {});
+    }
     
     // NENHUMA OFERTA PODE SER PUBLICADA COM O LINK ORIGINAL DE ORIGEM
     if (!convResult.affiliateUrl || convResult.verificationStatus === 'rejeitado') {
@@ -224,6 +239,18 @@ export async function POST(req: NextRequest) {
           requiresConfirmation: true,
         },
         { status: 400 }
+      );
+    }
+
+    const quota = await getDailyOfferQuotaStatus(session.userId);
+    if (quota.limitReached) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: 'PLAN_LIMIT_REACHED',
+          error: `Limite diário do seu plano (${quota.dailyLimit} ofertas/dia) atingido (${quota.postedToday} enviadas hoje). Faça upgrade em /planos para continuar enviando hoje.`,
+        },
+        { status: 403 }
       );
     }
 

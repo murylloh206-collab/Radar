@@ -7,6 +7,8 @@ import WhatsAppGroupsPanel from '@/components/WhatsAppGroupsPanel';
 import { SafeVaultStatus } from '@/lib/server/credentials-vault';
 import { BrandLogo } from '@/components/BrandLogo';
 import MetaConnectionPanel from '@/components/MetaConnectionPanel';
+import WatermarkAndSafeDispatchPanel from '@/components/WatermarkAndSafeDispatchPanel';
+import ChannelsConnectionPanel from '@/components/ChannelsConnectionPanel';
 
 interface StoreConfigForm {
   appId: string;
@@ -24,11 +26,12 @@ function ConexoesContent() {
 
   const parseTab = (val: string | null) => {
     if (val === 'lojas') return 'lojas';
-    if (val === 'redes') return 'redes';
+    if (val === 'redes' || val === 'telegram') return 'redes';
+    if (val === 'marca' || val === 'watermark') return 'marca';
     return 'whatsapp';
   };
 
-  const [activeTab, setActiveTab] = useState<'whatsapp' | 'lojas' | 'redes'>(() =>
+  const [activeTab, setActiveTab] = useState<'whatsapp' | 'lojas' | 'marca' | 'redes'>(() =>
     parseTab(initialTabParam)
   );
 
@@ -303,7 +306,7 @@ function ConexoesContent() {
     }
   };
 
-  const handleSelectTab = (tab: 'whatsapp' | 'lojas' | 'redes') => {
+  const handleSelectTab = (tab: 'whatsapp' | 'lojas' | 'marca' | 'redes') => {
     setActiveTab(tab);
     router.replace(`/conexoes?aba=${tab}`, { scroll: false });
   };
@@ -404,12 +407,27 @@ function ConexoesContent() {
           <button
             role="tab"
             type="button"
+            aria-selected={activeTab === 'marca'}
+            onClick={() => handleSelectTab('marca')}
+          >
+            Marca d&apos;água &amp; Envio Seguro
+          </button>
+          <button
+            role="tab"
+            type="button"
             aria-selected={activeTab === 'redes'}
             onClick={() => handleSelectTab('redes')}
           >
-            Redes sociais (Meta)
+            Telegram &amp; Redes sociais
           </button>
         </div>
+
+        {/* Aba Marca d'água personalizável e Envio Seguro */}
+        {activeTab === 'marca' && (
+          <div data-panel="marca" role="tabpanel">
+            <WatermarkAndSafeDispatchPanel />
+          </div>
+        )}
 
         {/* Dados e fotografias consultados na conta real do WhatsApp. */}
         {activeTab === 'whatsapp' && (
@@ -671,9 +689,10 @@ function ConexoesContent() {
           </div>
         )}
 
-        {/* Aba 3: Redes sociais (Meta - Instagram Stories e Facebook) */}
+        {/* Aba 3: Telegram Bot API + Redes sociais (Instagram Em breve) */}
         {activeTab === 'redes' && (
-          <div data-panel="redes" role="tabpanel" className="mt-4">
+          <div data-panel="redes" role="tabpanel" className="mt-4 space-y-6">
+            <ChannelsConnectionPanel />
             <MetaConnectionPanel />
           </div>
         )}

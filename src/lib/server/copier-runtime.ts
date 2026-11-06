@@ -10,6 +10,7 @@ import { getStoreCredentialsMapWithSecrets } from './credentials-vault';
 import { withCopierDatabase } from './copier-runtime-context';
 import { processIncomingMessage, type EvolutionWebhookPayload } from './copier-service';
 import { validateJobForDispatch } from './job-validator';
+import { getDailyOfferQuotaStatus } from './plan-guard';
 
 type InboxEntry = { id: string; user_id: string; connection_id: string; payload: EvolutionWebhookPayload; lease_token: string; attempts: number };
 type StoredJob = { id: string; user_id: string; connection_id: string; runtime_token: string; runtime_verified_url: string | null; runtime_payload: PublicationJob; scheduled_for: string; attempts: number; max_attempts: number; sendStarted?: boolean };
@@ -173,6 +174,15 @@ async function sendEntry(row: StoredJob) {
   }
   const validation = validateJobForDispatch(job, initial);
   if (!validation.valid) return updateJob(row, { status: 'falha', error_details: validation.error });
+  const quota = await getDailyOfferQuotaStatus(row.user_id);
+  if (quota.limitReached) {
+    return updateJob(row, {
+      status: 'aguardando_aprovacao',
+      locked_at: null,
+      runtime_delivery: 'blocked',
+      error_details: `Limite diário do plano (${quota.dailyLimit} ofertas/dia) atingido (${quota.postedToday} postadas hoje). Faça upgrade em /planos para continuar enviando hoje.`,
+    });
+  }
   const ready = checked(await database().rpc('copier_begin_send', { p_id: row.id, p_token: row.runtime_token }), 'Confirmação de envio');
   if (!ready) throw new CopierRuntimeError('Publicação cancelada ou conexão removida antes do envio.');
   row.sendStarted = true;

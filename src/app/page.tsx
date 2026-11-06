@@ -13,6 +13,7 @@ import {
   Check,
 } from 'lucide-react';
 import { BrandLogo, OverlappingStoreLogos } from '@/components/BrandLogo';
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 
 export default function HomePage() {
   const [slide, setSlide] = useState<number>(0);
@@ -139,6 +140,9 @@ export default function HomePage() {
           </button>
         </div>
       </section>
+
+      {/* Onboarding guiado em 4 passos para novos usuários */}
+      <OnboardingChecklist />
 
       {/* Acesso rápido às ferramentas principais */}
       <section aria-labelledby="quick-title">

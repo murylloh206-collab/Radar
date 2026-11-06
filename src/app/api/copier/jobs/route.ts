@@ -4,6 +4,7 @@ import { readDatabase, writeDatabase, ensureValidUuid, savePublicationJob, getDa
 import { getSessionFromRequest } from '@/lib/server/auth';
 import { validateJobForDispatch } from '@/lib/server/job-validator';
 import { runWorkerCycle } from '@/lib/server/worker-engine';
+import { getDailyOfferQuotaStatus } from '@/lib/server/plan-guard';
 
 export async function GET(req: NextRequest) {
   try {
@@ -82,6 +83,18 @@ export async function POST(req: NextRequest) {
 
       // Validação rigorosa no servidor antes de agendar qualquer trabalho criado diretamente via API
       if (newJob.status === 'agendado') {
+        const quota = await getDailyOfferQuotaStatus(newJob.userId);
+        if (quota.limitReached) {
+          return NextResponse.json(
+            {
+              ok: false,
+              code: 'PLAN_LIMIT_REACHED',
+              error: `Limite diário do seu plano (${quota.dailyLimit} ofertas/dia) atingido (${quota.postedToday} enviadas hoje). Faça upgrade em /planos para enviar mais ofertas.`,
+            },
+            { status: 403 }
+          );
+        }
+
         const validation = validateJobForDispatch(newJob, db);
         if (!validation.valid) {
           return NextResponse.json(
@@ -107,6 +120,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'approve' || action === 'send_now') {
+      const quota = await getDailyOfferQuotaStatus(job.userId || session.userId);
+      if (quota.limitReached) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: 'PLAN_LIMIT_REACHED',
+            error: `Limite diário do seu plano (${quota.dailyLimit} ofertas/dia) atingido (${quota.postedToday} enviadas hoje). Faça upgrade em /planos para aprovar e disparar mais ofertas hoje.`,
+          },
+          { status: 403 }
+        );
+      }
+
       // REGRA ESTRITA: Validação no servidor antes de aprovar ou agendar para envio imediato.
       // Um trabalho antigo, de demonstração ou com link original NÃO PODE ser aprovado.
       const validation = validateJobForDispatch(job, db);
