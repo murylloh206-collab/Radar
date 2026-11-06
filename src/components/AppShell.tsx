@@ -35,7 +35,8 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const sharedWhatsApp = useWhatsAppWorkspace();
-  const { isDevMode, subscription, planDefinition, quota, setTestPlan } = usePlan();
+  const { isDevMode, subscription, planDefinition, quota, setTestPlan, hasFeature } = usePlan();
+  const canUsePanelBranding = hasFeature('panel_branding');
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -44,6 +45,11 @@ export function AppShell({ children }: AppShellProps) {
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showStoresDialog, setShowStoresDialog] = useState(false);
+
+  // Branding personalizado do painel (Plus e Ultimate)
+  const [customPanelName, setCustomPanelName] = useState<string>('Radar de Ofertas');
+  const [customPanelLogoUrl, setCustomPanelLogoUrl] = useState<string | null>(null);
+  const [customAccentColor, setCustomAccentColor] = useState<string>('#1CCAF2');
 
   // Informações de autenticação e conexão reais
   const [userName, setUserName] = useState('Muryllo Henrique');
@@ -62,7 +68,7 @@ export function AppShell({ children }: AppShellProps) {
     return () => window.removeEventListener('open-stores-dialog', handleOpenStores);
   }, []);
 
-  // Carrega sessão do usuário e status real do WhatsApp
+  // Carrega sessão do usuário e configurações de marca do painel
   useEffect(() => {
     fetch('/api/auth/session')
       .then((r) => r.json())
@@ -73,6 +79,22 @@ export function AppShell({ children }: AppShellProps) {
       })
       .catch(() => {});
 
+    const fetchBranding = () => {
+      fetch('/api/brand-settings')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.ok && data.settings) {
+            setCustomPanelName(data.settings.panelName || 'Radar de Ofertas');
+            setCustomPanelLogoUrl(data.settings.panelLogoUrl || null);
+            setCustomAccentColor(data.settings.accentColor || '#1CCAF2');
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchBranding();
+    window.addEventListener('brand-settings-updated', fetchBranding);
+    return () => window.removeEventListener('brand-settings-updated', fetchBranding);
   }, []);
 
   useEffect(() => {
@@ -145,14 +167,40 @@ export function AppShell({ children }: AppShellProps) {
           Fechar ✕
         </button>
 
-        {/* Marca Radar de Ofertas */}
+        {/* Marca do Painel (Personalizável no Plus e Ultimate) */}
         <Link href="/" className="rdv3-brand">
-          <span className="rdv3-brand-mark" aria-hidden="true">
-            ◎
-          </span>
+          {canUsePanelBranding && customPanelLogoUrl ? (
+            <img
+              src={customPanelLogoUrl}
+              alt={customPanelName}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 9,
+                objectFit: 'cover',
+                border: `1.5px solid ${customAccentColor}`,
+              }}
+            />
+          ) : (
+            <span
+              className="rdv3-brand-mark"
+              aria-hidden="true"
+              style={canUsePanelBranding ? { color: customAccentColor, borderColor: customAccentColor } : undefined}
+            >
+              ◎
+            </span>
+          )}
           <span>
-            <strong>RADAR</strong>
-            <small>DE OFERTAS</small>
+            <strong style={canUsePanelBranding ? { color: '#f8fbff' } : undefined}>
+              {canUsePanelBranding && customPanelName
+                ? customPanelName.split(' ')[0].toUpperCase()
+                : 'RADAR'}
+            </strong>
+            <small>
+              {canUsePanelBranding && customPanelName
+                ? customPanelName.split(' ').slice(1).join(' ').toUpperCase() || 'PAINEL PRO'
+                : 'DE OFERTAS'}
+            </small>
           </span>
         </Link>
 
@@ -346,12 +394,34 @@ export function AppShell({ children }: AppShellProps) {
           ☰ Menu
         </button>
         <div className="rdv3-brand">
-          <span className="rdv3-brand-mark" aria-hidden="true">
-            ◎
-          </span>
+          {canUsePanelBranding && customPanelLogoUrl ? (
+            <img
+              src={customPanelLogoUrl}
+              alt={customPanelName}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 7,
+                objectFit: 'cover',
+                border: `1.5px solid ${customAccentColor}`,
+              }}
+            />
+          ) : (
+            <span className="rdv3-brand-mark" aria-hidden="true">
+              ◎
+            </span>
+          )}
           <span>
-            <strong>RADAR</strong>
-            <small>DE OFERTAS</small>
+            <strong>
+              {canUsePanelBranding && customPanelName
+                ? customPanelName.split(' ')[0].toUpperCase()
+                : 'RADAR'}
+            </strong>
+            <small>
+              {canUsePanelBranding && customPanelName
+                ? customPanelName.split(' ').slice(1).join(' ').toUpperCase() || 'PAINEL'
+                : 'DE OFERTAS'}
+            </small>
           </span>
         </div>
       </header>

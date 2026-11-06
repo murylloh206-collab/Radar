@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PublicationJob, WhatsAppGroup, ListCampaign } from '@/lib/types';
+import { PlanGateCard } from '@/components/PlanGateCard';
 
 function EnviosContent() {
   const router = useRouter();
@@ -32,6 +33,7 @@ function EnviosContent() {
   const [campaigns, setCampaigns] = useState<ListCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [queueFilter, setQueueFilter] = useState<'all' | 'agendada' | 'enviada' | 'falhou'>('all');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'sent' | 'failed'>('all');
   const [searchHistory, setSearchHistory] = useState('');
   const [storeHistoryFilter, setStoreHistoryFilter] = useState<'all' | 'mercadolivre' | 'shopee' | 'amazon' | 'netshoes'>('all');
@@ -126,6 +128,16 @@ function EnviosContent() {
   const scheduledJobs = useMemo(() => {
     return jobs.filter((j) => j.status === 'agendado');
   }, [jobs]);
+
+  // Fila completa de agendamentos com status (agendada, enviada, falhou)
+  const queueJobs = useMemo(() => {
+    return jobs.filter((j) => {
+      if (queueFilter === 'agendada') return j.status === 'agendado';
+      if (queueFilter === 'enviada') return j.status === 'enviado';
+      if (queueFilter === 'falhou') return j.status === 'falha' || j.status === 'quarentena';
+      return j.status === 'agendado' || j.status === 'enviado' || j.status === 'falha' || j.status === 'quarentena';
+    });
+  }, [jobs, queueFilter]);
 
   const detectJobStore = (j: PublicationJob): 'mercadolivre' | 'shopee' | 'amazon' | 'netshoes' | 'magalu' | 'outro' => {
     const raw = `${j.affiliateUrl || ''} ${j.cleanUrl || ''} ${j.originalUrl || ''} ${j.messageText || ''}`.toLowerCase();
@@ -503,82 +515,161 @@ function EnviosContent() {
           </div>
         )}
 
-        {/* Aba 2: Agenda */}
+        {/* Aba 2: Agenda e Fila */}
         {activeTab === 'agenda' && (
           <div data-panel="agenda" role="tabpanel">
-            <div className="rp-panel">
-              <div className="rp-row">
-                <div>
-                  <h2>Próximas publicações</h2>
-                  <p className="rp-sub">Horário de Brasília · publicações confirmadas no servidor</p>
-                </div>
-                <button
-                  className="rp-btn"
-                  type="button"
-                  onClick={() => setShowScheduleDialog(true)}
-                >
-                  Agendar mensagem
-                </button>
-              </div>
-
-              <div className="rp-list">
-                {loading ? (
-                  <p className="rp-sub" style={{ padding: '24px 0', textAlign: 'center' }}>
-                    Consultando agendamentos...
-                  </p>
-                ) : scheduledJobs.length === 0 ? (
-                  <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
-                    <p className="rp-sub">Nenhuma publicação agendada no momento.</p>
+            <PlanGateCard
+              feature="post_scheduling"
+              requiredPlan="plus"
+              title="Agendamento de Postagens com Fila e Status"
+              description="Programe ofertas para horários estratégicos com fila automática, Envio Seguro no WhatsApp e acompanhamento em tempo real (Agendada, Enviada, Falhou). Recurso exclusivo dos planos Plus e Ultimate."
+            >
+              <div className="rp-panel">
+                <div className="rp-row" style={{ flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <h2>Fila de Agendamento e Status</h2>
+                    <p className="rp-sub">
+                      Horário de Brasília · Envio Seguro ativo (respeita intervalo entre mensagens e limite por hora)
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Link href="/conexoes?aba=marca" className="rp-btn rp-quiet" style={{ fontSize: 12 }}>
+                      🛡️ Configurar Envio Seguro
+                    </Link>
                     <button
                       className="rp-btn rp-primary"
                       type="button"
-                      style={{ marginTop: 12 }}
                       onClick={() => setShowScheduleDialog(true)}
                     >
-                      Agendar agora
+                      + Agendar postagem
                     </button>
                   </div>
-                ) : (
-                  scheduledJobs.map((j) => (
-                    <div key={j.id} className="rp-list-item">
-                      {j.mediaUrl && (
-                        <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
-                          <img
-                            src={j.mediaUrl}
-                            alt={j.targetName || 'Foto do produto'}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                        </div>
-                      )}
-                      <span className="rp-tag">
-                        {j.scheduledFor
-                          ? new Date(j.scheduledFor).toLocaleString('pt-BR', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
-                          : 'Programado'}
-                      </span>
-                      <div className="rp-list-copy">
-                        <strong>{j.targetName || 'Oferta'}</strong>
-                        <p>{j.messageText.slice(0, 70)}...</p>
-                      </div>
+                </div>
+
+                {/* Filtros de status da fila: Todos, Agendada, Enviada, Falhou */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14, marginBottom: 14 }}>
+                  {[
+                    { key: 'all', label: `Todas na fila (${jobs.filter((j) => ['agendado', 'enviado', 'falha', 'quarentena'].includes(j.status)).length})` },
+                    { key: 'agendada', label: `⏳ Agendada (${jobs.filter((j) => j.status === 'agendado').length})` },
+                    { key: 'enviada', label: `✅ Enviada (${jobs.filter((j) => j.status === 'enviado').length})` },
+                    { key: 'falhou', label: `⚠️ Falhou (${jobs.filter((j) => j.status === 'falha' || j.status === 'quarentena').length})` },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setQueueFilter(tab.key as any)}
+                      style={{
+                        background: queueFilter === tab.key ? '#1CCAF2' : '#0B1728',
+                        color: queueFilter === tab.key ? '#040C1A' : '#8EADC7',
+                        border: queueFilter === tab.key ? '1px solid #1CCAF2' : '1px solid #1C2E46',
+                        borderRadius: 999,
+                        padding: '5px 14px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="rp-list">
+                  {loading ? (
+                    <p className="rp-sub" style={{ padding: '24px 0', textAlign: 'center' }}>
+                      Consultando fila de agendamentos...
+                    </p>
+                  ) : queueJobs.length === 0 ? (
+                    <div className="rp-panel rp-empty rp-section" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                      <p className="rp-sub">Nenhuma postagem encontrada neste filtro da fila.</p>
                       <button
-                        className="rp-btn rp-quiet"
+                        className="rp-btn rp-primary"
                         type="button"
-                        onClick={() => handleCancelJob(j.id)}
+                        style={{ marginTop: 12 }}
+                        onClick={() => setShowScheduleDialog(true)}
                       >
-                        Cancelar
+                        Agendar agora
                       </button>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    queueJobs.map((j) => {
+                      const statusBadge =
+                        j.status === 'agendado'
+                          ? { label: '⏳ Agendada', cls: 'rp-warn' }
+                          : j.status === 'enviado'
+                          ? { label: '✅ Enviada', cls: 'rp-good' }
+                          : { label: '⚠️ Falhou', cls: 'rp-bad' };
+                      return (
+                        <div key={j.id} className="rp-list-item" style={{ flexWrap: 'wrap', gap: 10 }}>
+                          {j.mediaUrl && (
+                            <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
+                              <img
+                                src={j.mediaUrl}
+                                alt={j.targetName || 'Foto do produto'}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
+                          <span className={`rp-tag ${statusBadge.cls}`}>{statusBadge.label}</span>
+                          <span className="rp-tag">
+                            {j.scheduledFor
+                              ? new Date(j.scheduledFor).toLocaleString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : 'Programado'}
+                          </span>
+                          <div className="rp-list-copy">
+                            <strong>{j.targetName || 'Oferta'}</strong>
+                            <p>{j.messageText.slice(0, 80)}...</p>
+                            {j.errorDetails && (
+                              <small style={{ color: '#FCA5A5', display: 'block', marginTop: 2 }}>
+                                Motivo: {j.errorDetails}
+                              </small>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {j.status === 'agendado' && (
+                              <>
+                                <button
+                                  className="rp-btn rp-primary"
+                                  type="button"
+                                  onClick={() => handleApprove(j.id)}
+                                >
+                                  Disparar agora
+                                </button>
+                                <button
+                                  className="rp-btn rp-quiet"
+                                  type="button"
+                                  onClick={() => handleCancelJob(j.id)}
+                                >
+                                  Cancelar
+                                </button>
+                              </>
+                            )}
+                            {(j.status === 'falha' || j.status === 'quarentena') && (
+                              <button
+                                className="rp-btn rp-primary"
+                                type="button"
+                                disabled={retryingJobId === j.id}
+                                onClick={() => handleRetryJob(j.id)}
+                              >
+                                {retryingJobId === j.id ? 'Reenviando...' : 'Tentar novamente'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
+            </PlanGateCard>
           </div>
         )}
 
@@ -1043,146 +1134,184 @@ function EnviosContent() {
         )}
       </div>
 
-      {/* Diálogo de Agendamento */}
+      {/* Diálogo de Agendamento (fecha ao clicar fora) */}
       {showScheduleDialog && (
-        <dialog
-          className="rp-dialog"
-          open
-          style={{ display: 'block', position: 'fixed', inset: 0, margin: 'auto', zIndex: 100 }}
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !scheduling) setShowScheduleDialog(false);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 8, 19, 0.75)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
         >
-          <div className="rp-row">
-            <h2>Agendar publicação</h2>
-            <button
-              className="rp-btn"
-              type="button"
-              onClick={() => setShowScheduleDialog(false)}
-            >
-              ×
-            </button>
-          </div>
+          <dialog
+            className="rp-dialog"
+            open
+            style={{ display: 'block', position: 'relative', margin: 0, maxWidth: 520, width: '100%' }}
+          >
+            <div className="rp-row">
+              <h2>Agendar publicação</h2>
+              <button
+                className="rp-btn"
+                type="button"
+                onClick={() => setShowScheduleDialog(false)}
+              >
+                ×
+              </button>
+            </div>
 
-          <label className="rp-field">
-            Destino
-            <select
-              value={scheduleDest}
-              onChange={(e) => setScheduleDest(e.target.value)}
-            >
-              {groups.map((g) => (
-                <option key={g.groupJid} value={g.groupJid}>
-                  {g.name}
-                </option>
-              ))}
-              {groups.length === 0 && (
-                <option value="" disabled>
-                  Nenhum grupo sincronizado
-                </option>
-              )}
-            </select>
-          </label>
+            <label className="rp-field">
+              Destino
+              <select
+                value={scheduleDest}
+                onChange={(e) => setScheduleDest(e.target.value)}
+              >
+                {groups.map((g) => (
+                  <option key={g.groupJid} value={g.groupJid}>
+                    {g.name}
+                  </option>
+                ))}
+                {groups.length === 0 && (
+                  <option value="" disabled>
+                    Nenhum grupo sincronizado
+                  </option>
+                )}
+              </select>
+            </label>
 
-          <label className="rp-field">
-            Mensagem
-            <textarea
-              rows={3}
-              value={scheduleText}
-              placeholder="Digite ou revise o texto da mensagem a enviar..."
-              onChange={(e) => setScheduleText(e.target.value)}
-            />
-          </label>
+            <label className="rp-field">
+              Mensagem
+              <textarea
+                rows={3}
+                value={scheduleText}
+                placeholder="Digite ou revise o texto da mensagem a enviar..."
+                onChange={(e) => setScheduleText(e.target.value)}
+              />
+            </label>
 
-          <label className="rp-field">
-            Data e horário
-            <input
-              type="datetime-local"
-              value={scheduleDateTime}
-              onChange={(e) => setScheduleDateTime(e.target.value)}
-            />
-          </label>
+            <label className="rp-field">
+              Data e horário
+              <input
+                type="datetime-local"
+                value={scheduleDateTime}
+                onChange={(e) => setScheduleDateTime(e.target.value)}
+              />
+            </label>
 
-          <p className="rp-sub rp-section">
-            Horário de Brasília. O link e a permissão do destino são conferidos antes do envio.
-          </p>
+            <p className="rp-sub rp-section">
+              Horário de Brasília. O link e a permissão do destino são conferidos antes do envio.
+            </p>
 
-          <div className="rp-footer">
-            <button
-              className="rp-btn rp-primary"
-              type="button"
-              disabled={scheduling}
-              onClick={handleConfirmSchedule}
-            >
-              {scheduling ? 'Salvando no servidor...' : 'Confirmar agendamento'}
-            </button>
-          </div>
-        </dialog>
+            <div className="rp-footer">
+              <button
+                className="rp-btn rp-primary"
+                type="button"
+                disabled={scheduling}
+                onClick={handleConfirmSchedule}
+              >
+                {scheduling ? 'Salvando no servidor...' : 'Confirmar agendamento'}
+              </button>
+            </div>
+          </dialog>
+        </div>
       )}
 
-      {/* Diálogo de Campanha */}
+      {/* Diálogo de Campanha (fecha ao clicar fora) */}
       {showCampaignDialog && (
-        <dialog
-          className="rp-dialog"
-          open
-          style={{ display: 'block', position: 'fixed', inset: 0, margin: 'auto', zIndex: 100 }}
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !savingCampaign) setShowCampaignDialog(false);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 8, 19, 0.75)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
         >
-          <div className="rp-row">
-            <h2>Campanha de ofertas</h2>
-            <button
-              className="rp-btn"
-              type="button"
-              onClick={() => setShowCampaignDialog(false)}
-            >
-              ×
-            </button>
-          </div>
+          <dialog
+            className="rp-dialog"
+            open
+            style={{ display: 'block', position: 'relative', margin: 0, maxWidth: 520, width: '100%' }}
+          >
+            <div className="rp-row">
+              <h2>Campanha de ofertas</h2>
+              <button
+                className="rp-btn"
+                type="button"
+                onClick={() => setShowCampaignDialog(false)}
+              >
+                ×
+              </button>
+            </div>
 
-          <label className="rp-field">
-            Nome da campanha
-            <input
-              value={campaignName}
-              placeholder="Ex: Achadinhos de Casa & Decoração"
-              onChange={(e) => setCampaignName(e.target.value)}
-            />
-          </label>
+            <label className="rp-field">
+              Nome da campanha
+              <input
+                value={campaignName}
+                placeholder="Ex: Achadinhos de Casa & Decoração"
+                onChange={(e) => setCampaignName(e.target.value)}
+              />
+            </label>
 
-          <label className="rp-field">
-            Destino
-            <select
-              value={campaignDest}
-              onChange={(e) => setCampaignDest(e.target.value)}
-            >
-              {groups.map((g) => (
-                <option key={g.groupJid} value={g.groupJid}>
-                  {g.name}
-                </option>
-              ))}
-              {groups.length === 0 && (
-                <option value="" disabled>
-                  Nenhum grupo sincronizado
-                </option>
-              )}
-            </select>
-          </label>
+            <label className="rp-field">
+              Destino
+              <select
+                value={campaignDest}
+                onChange={(e) => setCampaignDest(e.target.value)}
+              >
+                {groups.map((g) => (
+                  <option key={g.groupJid} value={g.groupJid}>
+                    {g.name}
+                  </option>
+                ))}
+                {groups.length === 0 && (
+                  <option value="" disabled>
+                    Nenhum grupo sincronizado
+                  </option>
+                )}
+              </select>
+            </label>
 
-          <label className="rp-field">
-            Intervalo entre publicações (minutos)
-            <input
-              type="number"
-              value={campaignInterval}
-              min="1"
-              onChange={(e) => setCampaignInterval(e.target.value)}
-            />
-          </label>
+            <label className="rp-field">
+              Intervalo entre publicações (minutos)
+              <input
+                type="number"
+                value={campaignInterval}
+                min="1"
+                onChange={(e) => setCampaignInterval(e.target.value)}
+              />
+            </label>
 
-          <div className="rp-footer">
-            <button
-              className="rp-btn rp-primary"
-              type="button"
-              disabled={savingCampaign}
-              onClick={handleConfirmCampaign}
-            >
-              {savingCampaign ? 'Salvando no servidor...' : 'Salvar campanha'}
-            </button>
-          </div>
-        </dialog>
+            <div className="rp-footer">
+              <button
+                className="rp-btn rp-primary"
+                type="button"
+                disabled={savingCampaign}
+                onClick={handleConfirmCampaign}
+              >
+                {savingCampaign ? 'Salvando no servidor...' : 'Salvar campanha'}
+              </button>
+            </div>
+          </dialog>
+        </div>
       )}
 
       {/* Modal de Inspeção da Mensagem Publicada */}

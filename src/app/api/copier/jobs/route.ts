@@ -4,7 +4,7 @@ import { readDatabase, writeDatabase, ensureValidUuid, savePublicationJob, getDa
 import { getSessionFromRequest } from '@/lib/server/auth';
 import { validateJobForDispatch } from '@/lib/server/job-validator';
 import { runWorkerCycle } from '@/lib/server/worker-engine';
-import { getDailyOfferQuotaStatus } from '@/lib/server/plan-guard';
+import { getDailyOfferQuotaStatus, checkPlanFeatureAccess } from '@/lib/server/plan-guard';
 
 export async function GET(req: NextRequest) {
   try {
@@ -83,6 +83,26 @@ export async function POST(req: NextRequest) {
 
       // Validação rigorosa no servidor antes de agendar qualquer trabalho criado diretamente via API
       if (newJob.status === 'agendado') {
+        const scheduledMs = new Date(newJob.scheduledFor).getTime();
+        const isFutureSchedule = Number.isFinite(scheduledMs) && scheduledMs > Date.now() + 2 * 60 * 1000;
+
+        if (isFutureSchedule) {
+          const scheduleAccess = await checkPlanFeatureAccess('post_scheduling', newJob.userId);
+          if (!scheduleAccess.allowed) {
+            return NextResponse.json(
+              {
+                ok: false,
+                code: 'FEATURE_LOCKED',
+                requiredPlan: scheduleAccess.requiredPlan,
+                error:
+                  scheduleAccess.error ||
+                  'O agendamento programado de postagens está disponível a partir do plano Plus.',
+              },
+              { status: 403 }
+            );
+          }
+        }
+
         const quota = await getDailyOfferQuotaStatus(newJob.userId);
         if (quota.limitReached) {
           return NextResponse.json(
