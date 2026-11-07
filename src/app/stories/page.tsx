@@ -16,8 +16,8 @@ import {
 } from 'lucide-react';
 import { InstagramIcon } from '@/components/SocialIcons';
 import { Logo } from '@/components/Logo';
-import { CopiedOfferHistoryItem } from '@/app/api/copier/history/route';
-import { MetaIntegrationData } from '@/lib/server/meta-graph-service';
+import type { CopiedOfferHistoryItem } from '@/app/api/copier/history/route';
+import type { MetaIntegrationData } from '@/lib/offer-format';
 
 export default function StoriesPage() {
   const [historyItems, setHistoryItems] = useState<CopiedOfferHistoryItem[]>([]);

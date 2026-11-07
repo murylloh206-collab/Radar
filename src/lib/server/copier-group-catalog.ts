@@ -1,3 +1,4 @@
+import 'server-only';
 import type { UserSession } from '@/lib/server/auth';
 import type { WhatsAppConnection, WhatsAppGroup } from '@/lib/types';
 import { readDatabase, isValidGatewayUrl, normalizeWhatsAppPhone, compareWhatsAppIds } from '@/lib/server/storage';

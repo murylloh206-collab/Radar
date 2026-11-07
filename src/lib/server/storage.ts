@@ -1,3 +1,4 @@
+import 'server-only';
 import { runtimeDatabase, replaceRuntimeDatabase } from './copier-runtime-context';
 import fs from 'fs';
 import path from 'path';

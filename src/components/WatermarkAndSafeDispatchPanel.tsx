@@ -12,7 +12,7 @@ import {
   Sliders,
 } from 'lucide-react';
 import { usePlan } from '@/components/PlanProvider';
-import type { WatermarkPosition } from '@/lib/server/brand-settings';
+import type { WatermarkPosition } from '@/lib/offer-format';
 
 const POSITION_OPTIONS: Array<{ id: WatermarkPosition; label: string }> = [
   { id: 'bottom-right', label: 'Canto inferior direito' },

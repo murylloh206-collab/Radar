@@ -1,9 +1,12 @@
 import React from 'react';
+import { headers } from 'next/headers';
 import { ArrowRight, ShoppingBag, ExternalLink, Sparkles } from 'lucide-react';
 import { loadPublicStorefrontConfig } from '@/lib/server/public-storefront';
 import { getDatabase, readDatabase } from '@/lib/server/storage';
 import { ADMIN_UUID } from '@/lib/server/auth';
 import { evaluateRealDealBadge } from '@/lib/server/price-history';
+import { appendChannelSrcParam } from '@/lib/server/click-tracker';
+import { checkPublicRouteRateLimit } from '@/lib/server/rate-limiter';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,14 +14,25 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-function buildTrackedRedirectHref(destinationUrl: string, fallbackId?: string): string {
+function buildTrackedRedirectHref(
+  destinationUrl: string,
+  fallbackId?: string,
+  meta?: { title?: string; store?: string }
+): string {
   if (!destinationUrl) return '#';
-  if (destinationUrl.startsWith('/r/')) return destinationUrl;
+  if (destinationUrl.startsWith('/r/')) {
+    return appendChannelSrcParam(destinationUrl, 'vitrine');
+  }
   try {
     const encoded = Buffer.from(destinationUrl.trim(), 'utf8').toString('base64url');
-    return `/r/${encoded}`;
+    const qs = new URLSearchParams({ src: 'vitrine' });
+    if (meta?.title) qs.set('title', meta.title.slice(0, 100));
+    if (meta?.store) qs.set('store', meta.store);
+    return `/r/${encoded}?${qs.toString()}`;
   } catch {
-    return fallbackId ? `/r/${fallbackId.slice(0, 8)}` : destinationUrl;
+    return fallbackId
+      ? `/r/${fallbackId.slice(0, 8)}?src=vitrine`
+      : appendChannelSrcParam(destinationUrl, 'vitrine');
   }
 }
 
@@ -30,6 +44,22 @@ function formatBRL(val: number): string {
 }
 
 export default async function PublicBioLinkPage({ params }: Props) {
+  const hdrs = await headers();
+  const dummyReq = new Request('http://localhost/u', { headers: hdrs });
+  const rateLimit = checkPublicRouteRateLimit(dummyReq, 'storefront', 60);
+  if (!rateLimit.allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#04060d] text-white p-6 text-center">
+        <div className="max-w-md rounded-2xl border border-white/15 bg-[#0a1022] p-6">
+          <h1 className="text-lg font-bold">Muitas requisições simultâneas</h1>
+          <p className="text-xs text-slate-300 mt-2">
+            Aguarde {rateLimit.resetInSeconds} segundos e atualize a página.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const { slug: rawSlug } = await params;
   const cleanSlug = decodeURIComponent(rawSlug || '').replace(/^@+/, '').toLowerCase();
 
@@ -57,7 +87,10 @@ export default async function PublicBioLinkPage({ params }: Props) {
       });
       return {
         ...offer,
-        trackedHref: buildTrackedRedirectHref(offer.affiliateUrl, offer.id),
+        trackedHref: buildTrackedRedirectHref(offer.affiliateUrl, offer.id, {
+          title: offer.title,
+          store: offer.storeName,
+        }),
         realDealBadge: audit.badgeLabel,
       };
     })

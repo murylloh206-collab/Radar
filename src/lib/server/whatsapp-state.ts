@@ -1,3 +1,4 @@
+import 'server-only';
 import type { WhatsAppConnection } from '@/lib/types';
 import { supabase, isSupabaseConfigured, isTestIsolationActive } from '@/lib/supabase';
 import { getActiveEvolutionConfig, readDatabase, writeDatabase } from './storage';

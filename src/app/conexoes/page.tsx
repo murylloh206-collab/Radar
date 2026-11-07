@@ -4,11 +4,12 @@ import React, { Suspense, useEffect, useState, useMemo, useCallback } from 'reac
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StoreName } from '@/lib/types';
 import WhatsAppGroupsPanel from '@/components/WhatsAppGroupsPanel';
-import { SafeVaultStatus } from '@/lib/server/credentials-vault';
+import type { SafeVaultStatus } from '@/lib/offer-format';
 import { BrandLogo } from '@/components/BrandLogo';
 import MetaConnectionPanel from '@/components/MetaConnectionPanel';
 import WatermarkAndSafeDispatchPanel from '@/components/WatermarkAndSafeDispatchPanel';
 import ChannelsConnectionPanel from '@/components/ChannelsConnectionPanel';
+import { UltimateIntelligenceHub } from '@/components/UltimateIntelligenceHub';
 
 interface StoreConfigForm {
   appId: string;
@@ -689,11 +690,12 @@ function ConexoesContent() {
           </div>
         )}
 
-        {/* Aba 3: Telegram Bot API + Redes sociais (Instagram Em breve) */}
+        {/* Aba 3: Telegram Bot API + Redes sociais (Instagram Em breve) + Equipe e Segundo Plano */}
         {activeTab === 'redes' && (
           <div data-panel="redes" role="tabpanel" className="mt-4 space-y-6">
             <ChannelsConnectionPanel />
             <MetaConnectionPanel />
+            <UltimateIntelligenceHub mode="operations" />
           </div>
         )}
       </div>

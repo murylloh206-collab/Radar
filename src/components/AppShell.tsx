@@ -716,31 +716,36 @@ export function AppShell({ children }: AppShellProps) {
 
           <div className="rp-stack rp-section" style={{ fontSize: 12, lineHeight: 1.6, color: '#c6ccce' }}>
             <p>
-              <strong>1. Início:</strong> Visão geral rápida com carrossel de novidades, atalhos para as principais operações e lojas parceiras.
+              <strong>Planos SaaS (Impulse, Plus e Ultimate):</strong>
+              <br />• <strong>Impulse:</strong> Até 30 ofertas/dia, copiador de grupos, marca d&apos;água padrão, envio seguro e métricas básicas do WhatsApp.
+              <br />• <strong>Plus (7 dias grátis):</strong> Ofertas ilimitadas, marca d&apos;água personalizável, legendas com IA, cards Feed/Story, selo de promoção real, vitrine <code>/@slug</code>, Telegram e métricas da plataforma.
+              <br />• <strong>Ultimate:</strong> Buscador comparador multiloja, relatório de vendas convertidas por loja (API Shopee + CSV), alerta de queda de preço, &quot;O que postar hoje&quot;, Radar de Oportunidades (fila de revisão), relatório semanal e equipe/múltiplos canais.
             </p>
             <p>
-              <strong>2. Copiador:</strong> Espelhamento e conversão de grupos do WhatsApp. Capture promoções de grupos de garimpo e envie direto para seus canais.
+              <strong>1. Copiador & Criar Conteúdo:</strong> Capture ofertas, aplique sua marca d&apos;água, gere cards 9:16 e dispare com link <code>?src=</code> rastreado.
             </p>
             <p>
-              <strong>3. Criar conteúdo:</strong> Gere ofertas por link com metadados automáticos, redija mensagens livres, crie Stories 9:16 e gerencie seus templates.
+              <strong>2. Ofertas & Inteligência:</strong> Consulte o Buscador Comparador, acompanhe o Radar de Oportunidades (sempre com aprovação manual) e crie alertas de preço.
             </p>
             <p>
-              <strong>4. Ofertas:</strong> Seu catálogo de produtos aprovados, motor de busca automática e curadoria estratégica de notas e preços.
-            </p>
-            <p>
-              <strong>5. Envios:</strong> Centralize a aprovação manual de ofertas, agendamentos futuros, campanhas em lote e histórico de entregas.
-            </p>
-            <p>
-              <strong>6. Resultados:</strong> Desempenho e métricas dos seus grupos WhatsApp e relatórios de comissões por loja.
-            </p>
-            <p>
-              <strong>7. Página pública:</strong> Sua vitrine pessoal (Bio Link) com suas redes, canais VIP e ofertas em destaque.
-            </p>
-            <p>
-              <strong>8. Conexões:</strong> Gerenciamento seguro da conexão WhatsApp via Evolution API e credenciais das lojas de afiliados.
+              <strong>3. Estatísticas & Conexões:</strong> Acompanhe cliques por origem, vendas convertidas, equipe e status do motor em segundo plano.
             </p>
 
-            <div className="rp-row rp-section">
+            <div className="rp-row rp-section" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <Link
+                href="/ajuda"
+                className="rp-btn rp-quiet"
+                onClick={() => setShowHelpDialog(false)}
+              >
+                Abrir Central de Ajuda
+              </Link>
+              <Link
+                href="/termos"
+                className="rp-btn rp-quiet"
+                onClick={() => setShowHelpDialog(false)}
+              >
+                Termos de Uso
+              </Link>
               <button
                 type="button"
                 className="rp-btn rp-primary"

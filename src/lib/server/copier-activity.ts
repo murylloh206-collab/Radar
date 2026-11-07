@@ -1,3 +1,4 @@
+import 'server-only';
 import { supabase } from '@/lib/supabase';
 
 export async function copierActivity(userId: string, connectionId: string) {

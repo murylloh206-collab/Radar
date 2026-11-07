@@ -1,3 +1,4 @@
+import 'server-only';
 import { PublicationJob } from '../types';
 import { readDatabase, writeDatabase, atomicReserveJob, savePublicationJob, getActiveEvolutionConfig, recoverStaleJobs, getWhatsAppConnection } from './storage';
 import { processAutomationCampaigns } from './automation-engine';

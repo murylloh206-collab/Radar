@@ -1,3 +1,4 @@
+import 'server-only';
 import { createHash } from 'node:crypto';
 import type { UserSession } from '@/lib/server/auth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';

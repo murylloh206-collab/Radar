@@ -1,3 +1,4 @@
+import 'server-only';
 import { PublicationJob, StoreCredential, StoreName, WhatsAppGroup } from '../types';
 import { DatabaseSchema } from './storage';
 import { detectStoreFromUrl } from './url-resolver';

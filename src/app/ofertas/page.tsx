@@ -4,19 +4,22 @@ import React, { Suspense, useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProductItem } from '@/lib/types';
+import { ComparatorSearchPanel } from '@/components/ComparatorSearchPanel';
+import { UltimateIntelligenceHub } from '@/components/UltimateIntelligenceHub';
 
 function OfertasContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTabParam = searchParams.get('aba');
 
-  const parseTab = (val: string | null) => {
+  const parseTab = (val: string | null): 'catalogo' | 'comparador' | 'busca' | 'curadoria' => {
+    if (val === 'comparador' || val === 'buscador') return 'comparador';
     if (val === 'busca' || val === 'busca-automatica') return 'busca';
     if (val === 'curadoria') return 'curadoria';
     return 'catalogo';
   };
 
-  const [activeTab, setActiveTab] = useState<'catalogo' | 'busca' | 'curadoria'>(() =>
+  const [activeTab, setActiveTab] = useState<'catalogo' | 'comparador' | 'busca' | 'curadoria'>(() =>
     parseTab(initialTabParam)
   );
 
@@ -105,7 +108,7 @@ function OfertasContent() {
     });
   }, [products, storeFilter, searchTerm]);
 
-  const handleSelectTab = (tab: 'catalogo' | 'busca' | 'curadoria') => {
+  const handleSelectTab = (tab: 'catalogo' | 'comparador' | 'busca' | 'curadoria') => {
     setActiveTab(tab);
     const mapped = tab === 'busca' ? 'busca-automatica' : tab;
     router.replace(`/ofertas?aba=${mapped}`, { scroll: false });
@@ -203,6 +206,14 @@ function OfertasContent() {
           <button
             role="tab"
             type="button"
+            aria-selected={activeTab === 'comparador'}
+            onClick={() => handleSelectTab('comparador')}
+          >
+            🔎 Buscador Comparador (Ultimate)
+          </button>
+          <button
+            role="tab"
+            type="button"
             aria-selected={activeTab === 'busca'}
             onClick={() => handleSelectTab('busca')}
           >
@@ -217,6 +228,13 @@ function OfertasContent() {
             Curadoria
           </button>
         </div>
+
+        {/* Aba Buscador Comparador (Ultimate) */}
+        {activeTab === 'comparador' && (
+          <div data-panel="comparador" role="tabpanel" className="rp-section">
+            <ComparatorSearchPanel />
+          </div>
+        )}
 
         {/* Aba 1: Catálogo */}
         {activeTab === 'catalogo' && (
@@ -508,6 +526,20 @@ function OfertasContent() {
           </div>
         )}
       </div>
+
+      {/* Central de Inteligência Ultimate: O que Postar Hoje, Radar de Oportunidades (Fila de Revisão) e Alerta de Queda de Preço */}
+      <UltimateIntelligenceHub
+        mode="offers"
+        onSelectOfferForCopier={(offer) => {
+          const params = new URLSearchParams({
+            aba: 'oferta-link',
+            title: offer.title,
+            price: String(offer.price),
+            url: offer.affiliateUrl,
+          });
+          router.push(`/criar-conteudo?${params.toString()}`);
+        }}
+      />
     </section>
   );
 }

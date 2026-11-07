@@ -70,7 +70,7 @@ function startChild() {
   console.log('[Copiador Supervisor] Iniciando worker em ' + path.join(sourceRoot, 'src/worker.ts'));
   child = fork(path.join(sourceRoot, 'src/worker.ts'), [], {
     cwd: sourceRoot,
-    execArgv: ['--import', pathToFileURL(requireProject.resolve('tsx')).href],
+    execArgv: ['--conditions', 'react-server', '--import', pathToFileURL(requireProject.resolve('tsx')).href],
     env: { ...process.env, RADAR_WORKER_SOURCE_ROOT: sourceRoot },
     windowsHide: true,
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'],

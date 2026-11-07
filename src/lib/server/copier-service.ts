@@ -1,3 +1,4 @@
+import 'server-only';
 import { runtimeDatabase } from './copier-runtime-context';
 import {
   CopySource,

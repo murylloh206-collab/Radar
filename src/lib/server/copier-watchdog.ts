@@ -1,3 +1,4 @@
+import 'server-only';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { runDurableCopierCycle } from './copier-runtime';
 

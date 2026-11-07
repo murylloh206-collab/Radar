@@ -1,3 +1,4 @@
+import 'server-only';
 import { StoreName } from '../types';
 
 export interface ProductRealData {

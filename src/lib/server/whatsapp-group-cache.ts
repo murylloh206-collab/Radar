@@ -1,3 +1,4 @@
+import 'server-only';
 import type { UserSession } from './auth';
 import type { WhatsAppGroup } from '@/lib/types';
 import { supabase } from '@/lib/supabase';

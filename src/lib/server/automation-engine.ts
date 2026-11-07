@@ -1,3 +1,4 @@
+import 'server-only';
 import { CuratorPlan, ListCampaign, PublicationJob, QueueCampaign } from '../types';
 import { convertToAffiliateLink } from './affiliate-converter';
 import { buildWhatsAppMessage } from './message-builder';

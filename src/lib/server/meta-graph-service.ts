@@ -1,3 +1,4 @@
+import 'server-only';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { encryptSecret, decryptSecret, encryptJson, decryptJson } from './crypto-vault';
 

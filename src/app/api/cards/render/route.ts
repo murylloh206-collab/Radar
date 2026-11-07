@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { checkPlanFeatureAccess, resolveCurrentUserId } from '@/lib/server/plan-guard';
 import { resolveEffectiveWatermarkConfig, getBrandSettings } from '@/lib/server/brand-settings';
 import { getOfficialWatermarkBadge, convertHandleToVectorPath } from '@/lib/server/watermark-vector';
+import { appendChannelSrcParam, registerTrackedLink } from '@/lib/server/click-tracker';
 
 function escapeXml(str: string): string {
   return str
@@ -72,6 +73,18 @@ export async function POST(req: NextRequest) {
     const coupon = typeof body.coupon === 'string' ? body.coupon.trim().toUpperCase() : '';
     const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
     const realDealBadge = typeof body.realDealBadge === 'string' ? body.realDealBadge.trim() : '';
+    const affiliateUrl = typeof body.affiliateUrl === 'string' ? body.affiliateUrl.trim() : '';
+
+    let trackedCardUrl = '';
+    if (affiliateUrl) {
+      const tracked = await registerTrackedLink({
+        userId,
+        destinationUrl: affiliateUrl,
+        productTitle: title,
+        originDefault: 'card',
+      });
+      trackedCardUrl = appendChannelSrcParam(`/r/${tracked.code}`, 'card');
+    }
 
     const [effectiveWm, brandSettings] = await Promise.all([
       resolveEffectiveWatermarkConfig(userId),
@@ -205,6 +218,7 @@ export async function POST(req: NextRequest) {
       width,
       height,
       imageDataUrl: dataUrl,
+      trackedCardUrl: trackedCardUrl || appendChannelSrcParam('/r/card', 'card'),
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

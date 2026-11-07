@@ -1,8 +1,12 @@
+import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ADMIN_UUID } from './auth';
 import { checkPlanFeatureAccess } from './plan-guard';
+import { ensureTelegramChannelSrcInText } from '@/lib/offer-format';
+
+export { ensureTelegramChannelSrcInText };
 
 export interface TelegramConnectionRecord {
   userId: string;
@@ -261,6 +265,8 @@ export async function sendOfferToTelegram(params: {
   }
 
   try {
+    const trackedText = ensureTelegramChannelSrcInText(params.text);
+
     if (params.imageUrl && params.imageUrl.startsWith('http')) {
       const photoRes = await fetch(
         `https://api.telegram.org/bot${conn.botToken}/sendPhoto`,
@@ -270,7 +276,7 @@ export async function sendOfferToTelegram(params: {
           body: JSON.stringify({
             chat_id: conn.chatId,
             photo: params.imageUrl,
-            caption: params.text.slice(0, 1024),
+            caption: trackedText.slice(0, 1024),
           }),
           signal: AbortSignal.timeout(15000),
         }
@@ -289,7 +295,7 @@ export async function sendOfferToTelegram(params: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: conn.chatId,
-          text: params.text,
+          text: trackedText,
           disable_web_page_preview: false,
         }),
         signal: AbortSignal.timeout(15000),

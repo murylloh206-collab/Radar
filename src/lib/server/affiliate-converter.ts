@@ -1,3 +1,4 @@
+import 'server-only';
 import crypto from 'crypto';
 import { StoreCredential, StoreName } from '../types';
 import { detectStoreFromUrl, resolveUrlSafely } from './url-resolver';

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { UserRound, Users } from 'lucide-react';
-import { safeWhatsAppPictureUrl } from '@/lib/server/whatsapp-picture';
+import { safeWhatsAppPictureUrl } from '@/lib/offer-format';
 
 // -----------------------------------------------------------------------------
 // Fila de Concorrência Limitada (Client-Side)

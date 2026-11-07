@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "npx tsx --test tests/acceptance.test.ts",
+    "test": "npx tsx --conditions react-server --test tests/acceptance.test.ts",
+    "test:saas": "npx tsx --conditions react-server --test --test-concurrency=1 tests/saas_phase1.test.ts tests/saas_phase2.test.ts tests/saas_phase3.test.ts tests/saas_phase4.test.ts",
     "typecheck": "tsc --noEmit",
-    "worker": "tsx src/worker.ts",
+    "worker": "tsx --conditions react-server src/worker.ts",
     "supervisor": "node scripts/copier-supervisor.cjs"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "opentype.js": "^2.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "server-only": "^0.0.1",
     "sharp": "^0.33.5",
     "tailwind-merge": "^3.0.2"
   },

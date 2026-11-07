@@ -1,3 +1,4 @@
+import 'server-only';
 import type { UserSession } from '@/lib/server/auth';
 import type { CopyDestination, CopySource } from '@/lib/types';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';

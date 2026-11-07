@@ -1,3 +1,4 @@
+import 'server-only';
 import { OfferEvaluation, ProductItem, QualityRule } from '../types';
 
 export interface EvaluateProductInput {

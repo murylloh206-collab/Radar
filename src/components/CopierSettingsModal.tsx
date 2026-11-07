@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { CopySource } from '@/lib/types';
-import { buildWhatsAppMessage, DEFAULT_TEMPLATE } from '@/lib/server/message-builder';
+import { buildWhatsAppMessage, DEFAULT_TEMPLATE } from '@/lib/message-builder';
 import { usePlan } from '@/components/PlanProvider';
 import './copier-settings-modal.css';
 

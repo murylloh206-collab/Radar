@@ -1,3 +1,4 @@
+import 'server-only';
 import { DatabaseSchema, readDatabase, writeDatabase, savePublicationJob } from './storage';
 import { PublicationJob } from '../types';
 

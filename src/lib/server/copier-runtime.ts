@@ -1,3 +1,4 @@
+import 'server-only';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';

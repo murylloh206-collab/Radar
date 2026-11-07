@@ -14,7 +14,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { InstagramIcon, FacebookIcon } from './SocialIcons';
-import { MetaIntegrationData } from '@/lib/server/meta-graph-service';
+import type { MetaIntegrationData } from '@/lib/offer-format';
 
 export default function MetaConnectionPanel() {
   const [integration, setIntegration] = useState<MetaIntegrationData | null>(null);

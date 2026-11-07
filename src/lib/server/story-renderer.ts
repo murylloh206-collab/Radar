@@ -1,3 +1,4 @@
+import 'server-only';
 import sharp from 'sharp';
 import crypto from 'crypto';
 import path from 'path';

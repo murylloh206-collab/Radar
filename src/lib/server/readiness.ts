@@ -1,3 +1,4 @@
+import 'server-only';
 import { DatabaseSchema, readDatabase, getActiveEvolutionConfig } from './storage';
 import { SystemReadiness, StoreName } from '../types';
 

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EngagementHook, MessageTemplate, StoreCoupon, WhatsAppGroup } from '@/lib/types';
-import { buildWhatsAppMessage, DEFAULT_TEMPLATE } from '@/lib/server/message-builder';
+import { buildWhatsAppMessage, DEFAULT_TEMPLATE } from '@/lib/message-builder';
 
 export default function GerarPostagemPage() {
   const [url, setUrl] = useState('');
