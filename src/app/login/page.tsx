@@ -1,21 +1,48 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
-const REQUIRE_AUTH = process.env.NEXT_PUBLIC_REQUIRE_AUTH === 'true';
+function sanitizeRedirectTarget(target?: string | null): string {
+  if (!target || typeof target !== 'string') return '/';
+  const trimmed = target.trim();
+  if (
+    !trimmed ||
+    trimmed === '/' ||
+    trimmed === '%2F' ||
+    trimmed.startsWith('/login') ||
+    trimmed.startsWith('/cadastro') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('//')
+  ) {
+    return '/';
+  }
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get('redirect') || '/';
+  const rawRedirect = searchParams.get('redirect');
+  const safeRedirect = sanitizeRedirectTarget(rawRedirect);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isExpired = searchParams.get('expired') === 'true';
+
+  // Se a sessão expirou ou o middleware mandou para login, limpa cookies obsoletos para evitar loops
+  useEffect(() => {
+    if (isExpired) {
+      document.cookie = 'radar_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;';
+      fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    }
+  }, [isExpired]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +63,8 @@ function LoginForm() {
         return;
       }
 
-      router.push(redirectPath);
-      router.refresh();
+      // Redireciona com navegação completa para o destino seguro validado
+      window.location.href = safeRedirect;
     } catch {
       setError('Erro de conexão ao tentar fazer login. Tente novamente.');
     } finally {
@@ -45,14 +72,12 @@ function LoginForm() {
     }
   };
 
-  const isExpired = searchParams.get('expired') === 'true';
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {isExpired && !error && (
         <div className="p-3.5 rounded-xl bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-xs font-semibold text-[#F59E0B] flex items-center gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>Sua sessão expirou por segurança. Faça login para retornar exatamente à tela de integração.</span>
+          <span>Sua sessão expirou por segurança. Faça login novamente para continuar.</span>
         </div>
       )}
 
@@ -105,41 +130,23 @@ function LoginForm() {
         <span>{loading ? 'Validando acesso...' : 'Entrar no Radar'}</span>
         <ArrowRight className="w-4 h-4" />
       </button>
+
+      <div className="text-center pt-2">
+        <p className="text-xs text-[#8EADC7]">
+          Ainda não tem conta?{' '}
+          <Link
+            href="/cadastro"
+            className="text-[#1CCAF2] font-semibold hover:underline transition-all"
+          >
+            Cadastre-se e ganhe 7 dias grátis
+          </Link>
+        </p>
+      </div>
     </form>
   );
 }
 
-function RedirectToApp() {
-  const searchParams = useSearchParams();
-  const redirectTarget = searchParams.get('redirect') || '/';
-
-  useEffect(() => {
-    const dest = redirectTarget.startsWith('/login') ? '/' : redirectTarget;
-    window.location.replace(dest);
-  }, [redirectTarget]);
-
-  return (
-    <div className="min-h-screen bg-[#061225] flex flex-col items-center justify-center p-4">
-      <div className="text-center space-y-4">
-        <Logo size="lg" />
-        <div className="flex items-center justify-center gap-2 text-sm text-[#8EADC7]">
-          <Loader2 className="w-4 h-4 animate-spin text-[#1CCAF2]" />
-          <span>Acessando o Painel Operacional...</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function LoginPage() {
-  if (!REQUIRE_AUTH) {
-    return (
-      <Suspense fallback={null}>
-        <RedirectToApp />
-      </Suspense>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#061225] flex flex-col items-center justify-center p-4 selection:bg-[#1CCAF2]/30 selection:text-[#F8FBFF]">
       <div className="w-full max-w-md space-y-6">

@@ -1,0 +1,62 @@
+<svg viewBox="0 0 560 450" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .sparkle, .sparkle-dot { animation: glow 3s ease-in-out infinite; }
+    .sparkle { transform-box: fill-box; transform-origin: center; animation-name: twinkle; }
+    .sparkle-delayed { animation-delay: -1.5s; }
+    .sparkle-dot { animation-duration: 4.2s; }
+    .sparkle-dot:nth-of-type(2) { animation-delay: -1.4s; }
+    .sparkle-dot:nth-of-type(3) { animation-delay: -2.8s; }
+    @keyframes twinkle {
+      0%, 100% { transform: scale(.76); opacity: .62; }
+      50% { transform: scale(1.12); opacity: 1; }
+    }
+    @keyframes glow {
+      0%, 100% { opacity: .42; }
+      50% { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; }
+      .sparkle { animation-name: glow; }
+      .sparkle, .sparkle-dot { animation-duration: 5s; }
+    }
+  </style>
+          <defs>
+            <linearGradient id="ticket" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#b6f2ff"/><stop offset=".56" stop-color="#45d6fa"/><stop offset="1" stop-color="#389fee"/></linearGradient>
+            <linearGradient id="tag" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#f1fdff"/><stop offset="1" stop-color="#73dafa"/></linearGradient>
+            <pattern id="lines" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(34)"><path d="M0 0v8" stroke="#0c3b67" stroke-opacity=".19" stroke-width="2"/></pattern>
+            <filter id="shadow" x="-.4" y="-.5" width="1.8" height="2"><feDropShadow dx="0" dy="15" stdDeviation="13" flood-color="#030914" flood-opacity=".6"/></filter>
+          </defs>
+          <g fill="none" stroke="#70d6ff" stroke-opacity=".29">
+            <circle cx="281" cy="222" r="158" stroke-dasharray="3 8"/>
+            <circle cx="281" cy="222" r="181"/>
+          </g>
+          <g fill="#b5f4ff">
+            <path class="sparkle" d="M441 74q2 16 18 18-16 2-18 18-2-16-18-18 16-2 18-18Z"/>
+            <path class="sparkle sparkle-delayed" d="M101 303q2 14 16 16-14 2-16 16-2-14-16-16 14-2 16-16Z"/>
+            <circle class="sparkle-dot" cx="486" cy="239" r="3"/>
+            <circle class="sparkle-dot" cx="156" cy="62" r="3"/>
+            <circle class="sparkle-dot" cx="246" cy="374" r="3"/>
+          </g>
+          <g transform="translate(106 103) rotate(9 112 83)" filter="url(#shadow)">
+            <rect width="288" height="174" rx="18" fill="#122c45" stroke="#4b8bb4" stroke-width="1.5"/>
+            <path d="M227 14v146" stroke="#4b8bb4" stroke-opacity=".55" stroke-dasharray="4 6"/>
+          </g>
+          <g transform="translate(106 138) rotate(-12 170 91)" filter="url(#shadow)">
+            <path d="M16 0h308a16 16 0 0 1 16 16v55a19 19 0 0 0 0 38v55a16 16 0 0 1-16 16H16a16 16 0 0 1-16-16v-55a19 19 0 0 0 0-38V16A16 16 0 0 1 16 0Z" fill="url(#ticket)"/>
+            <path d="M264 0h60a16 16 0 0 1 16 16v55a19 19 0 0 0 0 38v55a16 16 0 0 1-16 16h-60Z" fill="url(#lines)"/>
+            <path d="M264 13v154" stroke="#0d3e64" stroke-width="1.5" stroke-dasharray="4 6" opacity=".62"/>
+            <text x="32" y="42" fill="#0b3558" font-family="monospace" font-size="14" font-weight="700" letter-spacing="2.7">RADAR DE OFERTAS</text>
+            <text x="29" y="102" fill="#071a31" font-family="system-ui, sans-serif" font-weight="950" font-size="55" letter-spacing="-4">ACHADO!</text>
+            <path d="M33 121h198" stroke="#0d3e64" stroke-opacity=".4"/>
+            <text x="33" y="145" fill="#0b3558" font-family="monospace" font-size="13" font-weight="700" letter-spacing="2">CUPONS E PROMOÇÕES</text>
+            <g transform="translate(282 31)" fill="#0c2848"><path d="M0 0h3v118H0zm6 0h2v118H6zm5 0h5v118h-5zm8 0h2v118h-2zm5 0h4v118h-4zm8 0h2v118h-2z"/></g>
+          </g>
+          <g transform="translate(365 280) rotate(12 52 43)" filter="url(#shadow)">
+            <path d="M12 0h61l38 42-38 42H12A12 12 0 0 1 0 72V12A12 12 0 0 1 12 0Z" fill="url(#tag)"/>
+            <circle cx="92" cy="42" r="5" fill="#0b3558"/>
+            <path d="M32 56l30-28" fill="none" stroke="#0b3558" stroke-width="4.5" stroke-linecap="round"/>
+            <circle cx="36" cy="31" r="6.5" fill="none" stroke="#0b3558" stroke-width="4"/><circle cx="58" cy="53" r="6.5" fill="none" stroke="#0b3558" stroke-width="4"/>
+          </g>
+          <g fill="#a0dcf6" opacity=".84" font-family="monospace" font-size="10" font-weight="700" letter-spacing="2"><text x="23" y="34">RADAR DE OFERTAS</text><text x="383" y="418">DIRETO NO CELULAR</text></g>
+          <path d="M25 397v21h22m467-384h22v21" fill="none" stroke="#66b4d8" stroke-opacity=".6"/>
+        </svg>

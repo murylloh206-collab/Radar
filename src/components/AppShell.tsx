@@ -32,8 +32,30 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+const STANDALONE_PAGES = ['/login', '/cadastro', '/termos', '/ajuda', '/grupo'];
+
+function isStandalonePage(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (STANDALONE_PAGES.includes(pathname) || pathname.startsWith('/grupo/')) return true;
+  if (
+    pathname.startsWith('/r/') ||
+    pathname.startsWith('/u/') ||
+    pathname.startsWith('/@') ||
+    pathname.startsWith('/%40')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+
+  // Rotas públicas, autenticação e vitrines independentes não renderizam a barra lateral nem os menus operacionais
+  if (isStandalonePage(pathname)) {
+    return <>{children}</>;
+  }
+
   const sharedWhatsApp = useWhatsAppWorkspace();
   const { isDevMode, subscription, planDefinition, quota, setTestPlan, hasFeature } = usePlan();
   const canUsePanelBranding = hasFeature('panel_branding');
@@ -52,8 +74,8 @@ export function AppShell({ children }: AppShellProps) {
   const [customAccentColor, setCustomAccentColor] = useState<string>('#1CCAF2');
 
   // Informações de autenticação e conexão reais
-  const [userName, setUserName] = useState('Muryllo Henrique');
-  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState<string>('Minha Conta');
+  const [userEmail, setUserEmail] = useState<string>('');
   const [waConnected, setWaConnected] = useState<boolean>(false);
   const [waStatusLabel, setWaStatusLabel] = useState('Consultando WhatsApp…');
   const [waPhone, setWaPhone] = useState<string>('');
@@ -74,7 +96,15 @@ export function AppShell({ children }: AppShellProps) {
       .then((r) => r.json())
       .then((data) => {
         if (data.ok && data.user) {
-          if (data.user.email) setUserEmail(data.user.email);
+          if (data.user.email) {
+            setUserEmail(data.user.email);
+            const prefix = data.user.email.split('@')[0];
+            const cleanName = prefix
+              .split(/[._-]/)
+              .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+              .join(' ');
+            setUserName(cleanName || 'Usuário');
+          }
         }
       })
       .catch(() => {});
@@ -115,9 +145,8 @@ export function AppShell({ children }: AppShellProps) {
       await fetch('/api/auth/logout', { method: 'POST' });
       sharedWhatsApp.clear();
     } catch {}
-    startTransition(() => {
-      router.push('/login');
-    });
+    document.cookie = 'radar_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;';
+    window.location.href = '/login';
   };
 
   const getPageTitle = () => {
@@ -140,12 +169,12 @@ export function AppShell({ children }: AppShellProps) {
     return pathname.startsWith(path);
   };
 
-  const userInitials = userName
+  const userInitials = (userName || 'MC')
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
-    .join('') || 'MH';
+    .join('') || 'MC';
 
   return (
     <div className="rdv3-app" data-menu-open={menuOpen ? 'true' : 'false'}>
@@ -632,7 +661,7 @@ export function AppShell({ children }: AppShellProps) {
               E-mail da conta
               <input
                 type="email"
-                value={userEmail || 'muryllo@radardeofertas.com.br'}
+                value={userEmail || 'Não informado'}
                 disabled
               />
             </label>

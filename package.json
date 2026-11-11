@@ -14,6 +14,7 @@
     "supervisor": "node scripts/copier-supervisor.cjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.49.1",
     "@xenova/transformers": "^2.17.2",
     "clsx": "^2.1.1",

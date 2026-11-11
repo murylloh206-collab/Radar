@@ -37,6 +37,58 @@ function base64UrlToUint8Array(str: string): Uint8Array {
   return bytes;
 }
 
+function uint8ArrayToBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Assina um payload gerando token Edge-compatible com Web Crypto API
+ */
+export async function signSessionTokenEdge(
+  payload: { userId: string; email: string; role: 'admin' | 'user' },
+  secretStr?: string,
+  expiresInSeconds = 7 * 24 * 3600
+): Promise<string> {
+  const now = Date.now();
+  const session: EdgeSessionPayload = {
+    ...payload,
+    createdAt: now,
+    expiresAt: now + expiresInSeconds * 1000,
+  };
+
+  const jsonStr = JSON.stringify(session);
+  const dataStr = btoa(unescape(encodeURIComponent(jsonStr)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const secret =
+    secretStr ||
+    process.env.SESSION_SECRET?.trim() ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    'in-memory-test-secret-at-least-32-chars';
+
+  const enc = new TextEncoder();
+  const keyData = enc.encode(secret);
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const dataBytes = enc.encode(dataStr);
+  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, dataBytes);
+  const sigStr = uint8ArrayToBase64Url(new Uint8Array(signatureBuffer));
+
+  return `${dataStr}.${sigStr}`;
+}
+
 /**
  * Inspeciona token de sessão de forma assíncrona compatível com Edge Runtime
  */
@@ -69,7 +121,10 @@ export async function inspectSessionEdge(
   }
 
   // 2. Se a chave secreta foi fornecida, verificar assinatura criptográfica via Web Crypto API
-  const secret = secretStr || process.env.SESSION_SECRET;
+  const secret =
+    secretStr ||
+    process.env.SESSION_SECRET?.trim() ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (secret && typeof crypto !== 'undefined' && crypto.subtle) {
     try {
       const enc = new TextEncoder();

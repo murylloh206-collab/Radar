@@ -8,18 +8,26 @@ import { getSessionSecret } from './auth';
  * NUNCA utiliza chave efêmera aleatória em memória para garantir persistência após reinício do servidor.
  */
 export function getDerivedEncryptionKey(): Buffer {
-  const rawKey =
-    process.env.ENCRYPTION_KEY?.trim() ||
-    process.env.SESSION_SECRET?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const isProd = process.env.NODE_ENV === 'production';
+  const rawKey = process.env.ENCRYPTION_KEY?.trim();
 
-  if (!rawKey || rawKey.length < 16) {
-    throw new Error(
-      'CRÍTICO: Chave de criptografia estável não configurada no ambiente (ENCRYPTION_KEY). Configure uma chave de pelo menos 32 caracteres no arquivo .env.local para permitir a recuperação de credenciais após reinício.'
-    );
+  if (isProd) {
+    if (!rawKey || rawKey.length < 32) {
+      throw new Error(
+        'CRÍTICO: Em produção, ENCRYPTION_KEY é estritamente obrigatória e deve ter pelo menos 32 caracteres. Servidor não pode inicializar sem uma chave mestra estável e segura.'
+      );
+    }
+    return crypto.createHash('sha256').update(rawKey).digest();
   }
 
-  return crypto.createHash('sha256').update(rawKey).digest();
+  // Em desenvolvimento / testes locais
+  const devKey =
+    rawKey ||
+    process.env.SESSION_SECRET?.trim() ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    'radar-ofertas-dev-encryption-key-32chars';
+
+  return crypto.createHash('sha256').update(devKey).digest();
 }
 
 /**

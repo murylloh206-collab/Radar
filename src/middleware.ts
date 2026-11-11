@@ -1,7 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { inspectSessionEdge, SESSION_COOKIE_NAME } from './lib/edge-session';
 
-const PUBLIC_PAGE_PATHS = ['/login', '/u/'];
+function sanitizeRedirect(target?: string | null): string {
+  if (!target || typeof target !== 'string') return '/';
+  const trimmed = target.trim();
+  if (
+    !trimmed ||
+    trimmed === '/' ||
+    trimmed === '%2F' ||
+    trimmed.startsWith('/login') ||
+    trimmed.startsWith('/cadastro') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('//')
+  ) {
+    return '/';
+  }
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+// Rotas públicas que não exigem login
+const PUBLIC_PREFIXES = [
+  '/login',
+  '/cadastro',
+  '/planos',
+  '/termos',
+  '/ajuda',
+  '/grupo',
+  '/r/',
+  '/u/',
+  '/@',
+  '/%40',
+];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -88,21 +118,28 @@ export async function middleware(req: NextRequest) {
   const isAuthenticated = Boolean(inspection.valid);
   const isExpired = Boolean(inspection.expired);
 
-  const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
+  const REQUIRE_AUTH = process.env.REQUIRE_AUTH !== 'false';
 
   // 3. Rotas públicas de API (autenticação própria via token de webhook / cron)
   if (
     pathname.startsWith('/api/auth/') ||
     pathname === '/api/webhook/evolution' ||
-    pathname === '/api/worker/poll'
+    pathname === '/api/worker/poll' ||
+    pathname.startsWith('/api/comparator/search')
   ) {
     return NextResponse.next();
   }
 
-  // Se REQUIRE_AUTH estiver desativado (padrão sem tela de login)
-  if (!REQUIRE_AUTH) {
-    if (pathname === '/login') {
-      return NextResponse.redirect(new URL('/', req.url));
+  // 3.1 Se for qualquer rota pública, permitir passagem livre
+  const isPublicRoute = PUBLIC_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix)
+  );
+
+  if (isPublicRoute) {
+    // Se o usuário já estiver logado e tentar abrir /login ou /cadastro, manda para o painel com destino seguro
+    if (isAuthenticated && (pathname === '/login' || pathname === '/cadastro')) {
+      const safeTarget = sanitizeRedirect(req.nextUrl.searchParams.get('redirect'));
+      return NextResponse.redirect(new URL(safeTarget, req.url));
     }
     return NextResponse.next();
   }
@@ -132,24 +169,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 5. Bio links públicos (/u/[slug])
-  if (pathname.startsWith('/u/')) {
-    return NextResponse.next();
-  }
-
-  // 6. Página de login
-  if (pathname === '/login') {
-    if (isAuthenticated) {
-      const redirectTarget = req.nextUrl.searchParams.get('redirect') || '/';
-      return NextResponse.redirect(new URL(redirectTarget, req.url));
-    }
-    return NextResponse.next();
-  }
-
-  // 7. Qualquer outra página privada: redirecionar para /login se não autenticado
+  // 5. Qualquer outra página privada: redirecionar para /login se não autenticado
   if (!isAuthenticated) {
     const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('redirect', pathname);
+    const safeRedirect = sanitizeRedirect(pathname);
+    if (safeRedirect !== '/') {
+      loginUrl.searchParams.set('redirect', safeRedirect);
+    }
     if (isExpired) {
       loginUrl.searchParams.set('expired', 'true');
     }

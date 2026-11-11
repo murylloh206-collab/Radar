@@ -38,8 +38,14 @@ export function getPublicPageFilePath(): string {
   return path.join(dir, 'public_page.json');
 }
 
+const localStorefrontMemory = new Map<string, PublicPageConfig>();
+
 export async function loadPublicStorefrontConfig(userId?: string): Promise<PublicPageConfig> {
   const brand = await getBrandSettings(userId);
+
+  if (userId && localStorefrontMemory.has(userId)) {
+    return localStorefrontMemory.get(userId)!;
+  }
 
   if (isSupabaseConfigured && supabase && userId) {
     try {
@@ -50,7 +56,7 @@ export async function loadPublicStorefrontConfig(userId?: string): Promise<Publi
         .maybeSingle();
 
       if (!error && data) {
-        return {
+        const res: PublicPageConfig = {
           title: data.title || brand.panelName || DEFAULT_PUBLIC_PAGE_CONFIG.title,
           bio: data.bio || DEFAULT_PUBLIC_PAGE_CONFIG.bio,
           slug: data.slug || DEFAULT_PUBLIC_PAGE_CONFIG.slug,
@@ -62,6 +68,8 @@ export async function loadPublicStorefrontConfig(userId?: string): Promise<Publi
           btn2Url: data.btn2_url || '',
           updatedAt: data.updated_at || new Date().toISOString(),
         };
+        localStorefrontMemory.set(userId, res);
+        return res;
       }
     } catch {}
   }
@@ -85,5 +93,38 @@ export async function loadPublicStorefrontConfig(userId?: string): Promise<Publi
     logoUrl: brand.panelLogoUrl || null,
     accentColor: brand.accentColor || DEFAULT_PUBLIC_PAGE_CONFIG.accentColor,
   };
+}
+
+export async function savePublicStorefrontConfig(
+  userId: string,
+  config: Partial<PublicPageConfig>
+): Promise<PublicPageConfig> {
+  const current = await loadPublicStorefrontConfig(userId);
+  const updated: PublicPageConfig = {
+    ...current,
+    ...config,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (isSupabaseConfigured && supabase && userId) {
+    try {
+      await supabase.from('public_storefronts').upsert({
+        user_id: userId,
+        title: updated.title,
+        bio: updated.bio,
+        slug: updated.slug,
+        logo_url: updated.logoUrl,
+        accent_color: updated.accentColor,
+        btn1_text: updated.btn1Text,
+        btn1_url: updated.btn1Url,
+        btn2_text: updated.btn2Text,
+        btn2_url: updated.btn2Url,
+        updated_at: updated.updatedAt,
+      }, { onConflict: 'user_id' });
+    } catch {}
+  }
+
+  localStorefrontMemory.set(userId, updated);
+  return updated;
 }
 

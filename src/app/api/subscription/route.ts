@@ -132,9 +132,9 @@ async function computeOnboardingStatus(userId: string): Promise<{
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const userId = resolveCurrentUserId();
+    const userId = resolveCurrentUserId(req);
     const [subscription, quota, onboarding] = await Promise.all([
       getUserSubscription(userId),
       getDailyOfferQuotaStatus(userId),
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const action = body.action;
-    const userId = resolveCurrentUserId();
+    const userId = resolveCurrentUserId(req);
 
     if (action === 'set_test_plan') {
       // REGRA ESTRITA: O seletor "Plano de teste" SÓ PODE FUNCIONAR EM DESENVOLVIMENTO (NODE_ENV !== 'production')

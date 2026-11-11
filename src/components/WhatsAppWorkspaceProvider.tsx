@@ -112,7 +112,7 @@ export function WhatsAppWorkspaceProvider({ children }: { children: ReactNode })
   }, [load]);
 
   useEffect(() => {
-    if (['/login', '/cadastro'].some(route => pathname?.startsWith(route))) { clear(); return; }
+    if (['/login', '/cadastro', '/grupo'].some(route => pathname?.startsWith(route))) { clear(); return; }
     const saved = cache.current[selected.current];
     if (!saved || Date.now() - saved.receivedAt > 30000) void load(selected.current);
   }, [pathname, load, clear]);

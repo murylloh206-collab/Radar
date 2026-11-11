@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { ADMIN_UUID, SESSION_COOKIE_NAME, verifySession } from './auth';
+import { ADMIN_UUID, SESSION_COOKIE_NAME, isValidUuid, verifySession } from './auth';
 import { readDatabase } from './storage';
 import {
   BillingCycle,
@@ -62,13 +62,30 @@ export function resolveCurrentUserId(req?: NextRequest | Request): string {
       const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]+)`));
       if (match && match[1]) {
         const session = verifySession(decodeURIComponent(match[1]));
-        if (session?.userId) {
+        if (session?.userId && isValidUuid(session.userId)) {
+          return session.userId;
+        }
+      }
+    } catch {}
+
+    try {
+      const authHeader = req.headers.get('authorization') || '';
+      if (authHeader.startsWith('Bearer ')) {
+        const session = verifySession(authHeader.substring(7).trim());
+        if (session?.userId && isValidUuid(session.userId)) {
           return session.userId;
         }
       }
     } catch {}
   }
-  return ADMIN_UUID;
+
+  // Em desenvolvimento, se não houver cookie, mantém o ID administrativo de teste
+  if (isDevEnvironment()) {
+    return ADMIN_UUID;
+  }
+
+  // Em produção, sem usuário autenticado, retorna string vazia para impedir vazamento de dados
+  return '';
 }
 
 function generateReferralCode(userId: string): string {
@@ -245,24 +262,58 @@ export async function getUserSubscription(userIdInput?: string): Promise<UserSub
   if (!isDevEnvironment()) {
     return normalizeSubscriptionRecord(userId, {
       plano: 'impulse',
-      ciclo: 'anual',
+      ciclo: 'mensal',
       status: 'active',
       referral_code: generateReferralCode(userId),
     });
   }
 
-  const defaultTrialEnd = new Date(
-    Date.now() + SAAS_TRIAL_CONFIG.trialDurationDays * 24 * 60 * 60 * 1000
-  ).toISOString();
-  const initialRecord = normalizeSubscriptionRecord(userId, {
-    plano: 'plus',
+  return normalizeSubscriptionRecord(userId, {
+    plano: SAAS_TRIAL_CONFIG.defaultTrialPlan,
     ciclo: 'anual',
     status: 'trialing',
-    trial_ate: defaultTrialEnd,
+    trial_ate: new Date(
+      Date.now() + SAAS_TRIAL_CONFIG.trialDurationDays * 24 * 60 * 60 * 1000
+    ).toISOString(),
     referral_code: generateReferralCode(userId),
   });
-  writeLocalDevSubscription(userId, initialRecord);
-  return initialRecord;
+}
+
+export async function ensureUserSubscription(
+  userId: string,
+  options?: { referredBy?: string | null; customStatus?: SubscriptionStatus }
+): Promise<UserSubscriptionRecord> {
+  const trialEnd = new Date(
+    Date.now() + SAAS_TRIAL_CONFIG.trialDurationDays * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const referralCode = generateReferralCode(userId);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const initialRow = {
+        user_id: userId,
+        plano: SAAS_TRIAL_CONFIG.defaultTrialPlan,
+        ciclo: 'anual',
+        status: options?.customStatus || 'trialing',
+        trial_ate: trialEnd,
+        referral_code: referralCode,
+        referred_by: options?.referredBy || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: inserted } = await supabase
+        .from('user_subscriptions')
+        .upsert(initialRow, { onConflict: 'user_id' })
+        .select('*')
+        .maybeSingle();
+
+      if (inserted) {
+        return normalizeSubscriptionRecord(userId, inserted);
+      }
+    } catch {}
+  }
+
+  return getUserSubscription(userId);
 }
 
 /**
