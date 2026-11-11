@@ -62,11 +62,15 @@ test('Fase 4 (Ajustes Pré-Fase): ?src= obrigatório por canal, is_test=true exc
     title: 'Fone Bluetooth JBL Wave Buds',
     currentPrice: 199.9,
     originalPrice: 299.9,
-    affiliateUrl: 'https://mercadolivre.com.br/sec/jbl123',
+    affiliateUrl: 'https://s.shopee.com.br/9V2xc3YITN?src=whatsapp',
   });
   assert.ok(
-    builtMsg.includes('https://mercadolivre.com.br/sec/jbl123?src=whatsapp'),
-    'Mensagem gerada para o WhatsApp deve anexar ?src=whatsapp no link'
+    builtMsg.includes('https://s.shopee.com.br/9V2xc3YITN'),
+    'Mensagem gerada para o WhatsApp deve manter o link encurtado limpo'
+  );
+  assert.ok(
+    !builtMsg.includes('src=whatsapp'),
+    'Mensagem gerada para o WhatsApp NÃO deve anexar ?src=whatsapp em links encurtados externos'
   );
 
   // Fallback Plano B quando ?src= não está presente

@@ -525,7 +525,7 @@ export async function evaluateAndTriggerPriceDropAlerts(
           mediaType: 'none',
           originalUrl: alert.productUrl,
           cleanUrl: alert.productUrl,
-          affiliateUrl: appendChannelSrcParam(alert.affiliateUrl || alert.productUrl, 'whatsapp'),
+          affiliateUrl: alert.affiliateUrl || alert.productUrl,
           linkVerified: true,
           status: 'agendado',
           scheduledFor: now,
@@ -947,7 +947,7 @@ export async function runOpportunityRadarScan(
       ? `Queda forte detectada: ${dropPct}% OFF`
       : `Oferta Relâmpago detectada (${dropPct}% OFF)`;
 
-    const trackedAffiliate = appendChannelSrcParam(prod.affiliateUrl || url, 'whatsapp');
+    const trackedAffiliate = prod.affiliateUrl || url;
     const formattedMsg = buildWhatsAppMessage({
       title: prod.title,
       originalPrice: referencePrice > prod.currentPrice ? referencePrice : undefined,

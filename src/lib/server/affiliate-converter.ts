@@ -78,6 +78,10 @@ export function sanitizeStoreUrl(urlStr: string, store: StoreName): string {
 
     if (store === 'shopee') {
       url.search = '';
+      const opaanlpMatch = url.pathname.match(/^\/opaanlp\/(\d+)\/(\d+)/i);
+      if (opaanlpMatch) {
+        url.pathname = `/product/${opaanlpMatch[1]}/${opaanlpMatch[2]}`;
+      }
     }
 
     if (store === 'amazon') {
@@ -121,6 +125,10 @@ export function extractProductId(urlStr: string, store: StoreName): string | nul
 
     if (store === 'shopee') {
       url.search = '';
+      const opaanlpMatch = url.pathname.match(/^\/opaanlp\/(\d+)\/(\d+)/i);
+      if (opaanlpMatch) {
+        url.pathname = `/product/${opaanlpMatch[1]}/${opaanlpMatch[2]}`;
+      }
     }
 
     if (store === 'amazon') {
@@ -251,9 +259,10 @@ export async function generateShopeeShortLinkDetailed(
 
     const link = json?.data?.generateShortLink?.shortLink;
     if (res.ok && link && typeof link === 'string' && link.startsWith('http')) {
+      const cleanShortLink = link.replace(/\?lp=aff$/i, '');
       return {
         ok: true,
-        shortLink: link,
+        shortLink: cleanShortLink,
         httpStatus: res.status,
       };
     }

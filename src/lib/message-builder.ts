@@ -3,7 +3,7 @@
  * NUNCA deve importar módulos de `src/lib/server/*`, `fs`, banco de dados ou `plan-guard`.
  */
 import { generateSmartHook, detectProductCategory } from './hook-generator';
-import { appendChannelSrcParam, type ClickOrigin } from './offer-format';
+import { appendChannelSrcParam, stripChannelSrcParam, type ClickOrigin } from './offer-format';
 
 export interface FormatMessageOptions {
   templateText?: string;
@@ -217,10 +217,12 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     message = message.replace(/^[^\n]*\{cupom\}[^\n]*\n?/gm, '');
   }
 
-  // 10. Link de Afiliado em linha dedicada (com ?src= obrigatório para rastreamento de canal)
-  const originForLink: ClickOrigin = options.channelOrigin || 'whatsapp';
-  const trackedAffiliateUrl = appendChannelSrcParam(affiliateUrl.trim(), originForLink);
-  message = message.replace('{link}', trackedAffiliateUrl);
+  // 10. Link de Afiliado em linha dedicada (mantém o link encurtado limpo, sem ?src=whatsapp)
+  const trimmedUrl = affiliateUrl.trim();
+  const finalAffiliateUrl = trimmedUrl.startsWith('/r/')
+    ? appendChannelSrcParam(trimmedUrl, options.channelOrigin || 'whatsapp')
+    : stripChannelSrcParam(trimmedUrl);
+  message = message.replace('{link}', finalAffiliateUrl);
 
   // 11. Assinatura Discreta da Marca (🎯 Radar de Ofertas)
   let cleanSignature = watermarkText.replace(/—\s*Produtos que valem a pena!/gi, '').trim();

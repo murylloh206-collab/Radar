@@ -20,6 +20,7 @@ import {
 } from './copier-service';
 import { validateJobForDispatch } from './job-validator';
 import { getDailyOfferQuotaStatus } from './plan-guard';
+import { stripChannelSrcFromMessageText } from '../offer-format';
 
 type InboxEntry = { id: string; user_id: string; connection_id: string; payload: EvolutionWebhookPayload; lease_token: string; attempts: number };
 type StoredJob = { id: string; user_id: string; connection_id: string; runtime_token: string; runtime_verified_url: string | null; runtime_payload: PublicationJob; scheduled_for: string; attempts: number; max_attempts: number; sendStarted?: boolean };
@@ -327,11 +328,12 @@ async function sendEntry(row: StoredJob) {
   if (!media && job.mediaType !== 'none') {
     return updateJob(row, { status: 'falha', runtime_delivery: 'blocked', error_details: 'Oferta exige fotografia, mas a mídia processada não está disponível. Envio bloqueado para evitar publicação incompleta.' });
   }
+  const cleanMessageText = stripChannelSrcFromMessageText(job.messageText);
   let response: Response;
   try {
     response = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/${media ? 'sendMedia' : 'sendText'}/${encodeURIComponent(connection.instanceName)}`, {
       method: 'POST', headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify(media ? { number: job.targetJid, mediatype: job.mediaType === 'video' ? 'video' : 'image', media: job.mediaUrl, caption: job.messageText } : { number: job.targetJid, text: job.messageText }),
+      body: JSON.stringify(media ? { number: job.targetJid, mediatype: job.mediaType === 'video' ? 'video' : 'image', media: job.mediaUrl, caption: cleanMessageText } : { number: job.targetJid, text: cleanMessageText }),
       signal: AbortSignal.timeout(35000), cache: 'no-store',
     });
   } catch (netErr: unknown) {
@@ -341,6 +343,24 @@ async function sendEntry(row: StoredJob) {
   if (!response.ok) {
     let errBody = '';
     try { errBody = await response.text(); } catch {}
+    const isConnectionClosed = /connection\s+closed|connection\s+terminated|socket\s+closed/i.test(errBody);
+    if (isConnectionClosed && row.attempts < (row.max_attempts || 3)) {
+      try {
+        await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/instance/connect/${encodeURIComponent(connection.instanceName)}`, {
+          method: 'GET',
+          headers: { apikey: connection.apiKey },
+          signal: AbortSignal.timeout(8000),
+          cache: 'no-store',
+        });
+      } catch {}
+      return updateJob(row, {
+        status: 'agendado',
+        locked_at: null,
+        runtime_delivery: null,
+        scheduled_for: new Date(Date.now() + 20000).toISOString(),
+        error_details: 'Sessão do WhatsApp oscilou (Connection Closed). Reconectando para reenvio automático.',
+      });
+    }
     const briefErr = errBody ? `: ${errBody.slice(0, 120)}` : '';
     return updateJob(row, { status: 'falha', runtime_delivery: response.status >= 500 ? 'uncertain' : 'rejected', error_details: `Gateway retornou HTTP ${response.status}${briefErr}. Não houve repetição automática.` });
   }

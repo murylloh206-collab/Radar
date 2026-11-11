@@ -40,7 +40,7 @@ export function extractShopeeIds(urlStr: string): { shopId: string; itemId: stri
     const matchI = urlStr.match(/-i\.(\d+)\.(\d+)/);
     if (matchI) return { shopId: matchI[1], itemId: matchI[2] };
 
-    const matchProd = urlStr.match(/\/product\/(\d+)\/(\d+)/);
+    const matchProd = urlStr.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/);
     if (matchProd) return { shopId: matchProd[1], itemId: matchProd[2] };
 
     return null;
@@ -165,13 +165,19 @@ async function fetchHtmlMetadata(
     if (res.ok) {
       const html = await res.text();
 
-      // OpenGraph title
+      // OpenGraph title (removendo SVGs inline para nunca capturar <svg><title>Shopping Cart Icon</title></svg>)
+      const htmlWithoutSvg = html.replace(/<svg[\s\S]*?<\/svg>/gi, '');
       const ogTitleMatch =
-        html.match(/<meta property=["']og:title["'] content=["'](.*?)["']/i) ||
-        html.match(/<meta name=["']twitter:title["'] content=["'](.*?)["']/i) ||
-        html.match(/<title>(.*?)<\/title>/i);
+        htmlWithoutSvg.match(/<meta property=["']og:title["'] content=["'](.*?)["']/i) ||
+        htmlWithoutSvg.match(/<meta name=["']twitter:title["'] content=["'](.*?)["']/i) ||
+        htmlWithoutSvg.match(/<title>(.*?)<\/title>/i);
       if (ogTitleMatch) {
-        title = ogTitleMatch[1].replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code)).trim();
+        const candidateTitle = ogTitleMatch[1].replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code)).trim();
+        if (
+          !/^(shopping cart icon|shopee brasil\b|mercado livre brasil\b|login\b)/i.test(candidateTitle)
+        ) {
+          title = candidateTitle;
+        }
       }
 
       // OpenGraph image

@@ -450,6 +450,9 @@ export function isPromotionalHookLine(line: string): boolean {
     'crisp bar da', 'pra sair de casa', 'lowe summer', 'full hd, smart tv', 'alpha lupus',
     'esse nike', 'a gaveta de', 'nike nos pés', 'destaque em', 'excelente condição',
     'item de destaque', 'produto com desconto', 'preço diferenciado', 'conforto e',
+    'já pode parar', 'manda um abraço', 'pra deixar a sua', 'é muita elegância',
+    'pra não ficar', 'cupom de ', 'resgate às', 'tutorial para', 'o segredo do', 'baixou',
+    'shopping cart icon', 'shopee brasil',
   ];
   if (hookPrefixes.some((prefix) => lower.startsWith(prefix))) return true;
 
@@ -462,7 +465,8 @@ export function isPromotionalHookLine(line: string): boolean {
       'OPORTUNIDADE', 'ROTINA', 'QUALIDADE', 'ATENÇÃO', 'SUPER', 'ESPECIAL',
       'IMPERDÍVEL', 'TECNOLOGIA', 'CELULAR', 'COMPRA', 'LIMPEZA', 'ACHADO',
       'ACHADINHO', 'ACHADOS', 'SAPATEIRA', 'GUERRA', 'ESTILO', 'SWOOSH',
-      'CARTÃO', 'CASA', 'VERÃO', 'INVERNO',
+      'CARTÃO', 'CASA', 'VERÃO', 'INVERNO', 'CUPOM', 'CLIMA', 'ABRAÇO', 'CALCINHAS',
+      'SEGREDO', 'PULSEIRA INTELIGENTE', 'BAIXOU',
     ];
     if (commercialWords.some((word) => clean.toUpperCase().includes(word))) {
       return true;
@@ -560,10 +564,17 @@ export function extractOfferDetailsFromWhatsAppText(
   // 4. Código do Cupom
   // Suporta: `🔖Utilize o Cupom: OFERTADEZ`, `Utilize o Cupom: XYZ`, `Cupom: ABC`, etc.
   const cupomMatch = rawText.match(
-    /(?:cupom|utilize\s+o\s+cupom|use\s+o\s+cupom)[\s:🔖]+[*_`~]?\s*([A-Z0-9_-]{3,25})/i
+    /(?:cupom\s*:|utilize\s+o\s+cupom\s*:?|use\s+o\s+cupom\s*:?|código\s+do\s+cupom\s*:?)[\s🔖]*[*_`~]?\s*([A-Z0-9_-]{4,25})/i
   );
   if (cupomMatch) {
-    couponCode = cupomMatch[1].trim().toUpperCase();
+    const candidateCoupon = cupomMatch[1].trim().toUpperCase();
+    const invalidCouponWords = new Set([
+      'PARA', 'PODER', 'USAR', 'AQUI', 'HOJE', 'LINK', 'MAIS', 'SITE',
+      'CUPOM', 'RESGATE', 'APARTIR', 'MEIA', 'NOITE', 'ABAIXO', 'TELA', 'LOJA',
+    ]);
+    if (!invalidCouponWords.has(candidateCoupon)) {
+      couponCode = candidateCoupon;
+    }
   }
 
   // 5. Extrair título real da oferta a partir das linhas do texto
@@ -942,6 +953,42 @@ export async function processIncomingMessage(
     productData.imageUrl = conversionResult.meta.extractedImageUrl;
   }
   const parsedFromWhatsApp = extractOfferDetailsFromWhatsAppText(rawText, conversionResult.store);
+
+  // Bloquear avisos/tutoriais genéricos de cupom sem produto e sem preço na mensagem original
+  if (
+    !parsedFromWhatsApp.currentPrice &&
+    (/tutorial\s+para\s+resgatar|resgate\s+para\s+poder\s+usar|cupom\s+de\s+\d+%\s+no\s+(?:mercado\s+livre|shopee|amazon|magalu)/i.test(rawText) ||
+      /\/m\/cupom|\/m\/frete|\/cupons/i.test(conversionResult.cleanUrl || ''))
+  ) {
+    const discardReason = 'Informativo de cupom geral sem produto ou preço específico — ignorado pelo copiador de ofertas.';
+    const incomingRecord: IncomingMessage = {
+      id: ensureValidUuid(),
+      userId: authorizedSource.userId,
+      connectionId: authorizedSource.connectionId || options?.connectionId,
+      messageId,
+      instanceName,
+      remoteJid,
+      senderJid,
+      senderName,
+      rawText,
+      extractedUrls,
+      cleanText: sanitizeCopiedText(rawText),
+      extractedStore: conversionResult.store,
+      resolvedDestinationUrl: conversionResult.cleanUrl,
+      status: 'descartada',
+      discardReason,
+      isSimulation,
+      receivedAt: new Date().toISOString(),
+    };
+    await saveIncomingMessageRecord(incomingRecord);
+    return {
+      accepted: true,
+      messageId,
+      status: 'descartada',
+      reason: discardReason,
+      jobIds: [],
+    };
+  }
 
   const isGenericStoreTitle = (t?: string) =>
     !t ||

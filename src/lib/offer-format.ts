@@ -48,6 +48,31 @@ export interface MetaIntegrationData {
   lastVerifiedAt?: string;
 }
 
+export function stripChannelSrcParam(rawUrl: string): string {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed || trimmed === '#' || trimmed.startsWith('/r/')) return trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.searchParams.has('src')) {
+      parsed.searchParams.delete('src');
+    }
+    if (parsed.hostname.toLowerCase().includes('s.shopee.com.br') && parsed.searchParams.get('lp') === 'aff') {
+      parsed.searchParams.delete('lp');
+    }
+    return parsed.toString();
+  } catch {
+    return trimmed
+      .replace(/([?&])src=(whatsapp|telegram|vitrine|card|outro)\b(&)?/gi, (_, p1, _p2, p3) => (p3 ? p1 : ''))
+      .replace(/\?lp=aff\b/gi, '')
+      .replace(/[?&]$/, '');
+  }
+}
+
+export function stripChannelSrcFromMessageText(text: string): string {
+  if (!text) return '';
+  return text.replace(/https?:\/\/[^\s)]+/g, (matchedUrl) => stripChannelSrcParam(matchedUrl));
+}
+
 export function appendChannelSrcParam(rawUrl: string, origin: ClickOrigin): string {
   const trimmed = (rawUrl || '').trim();
   if (!trimmed || trimmed === '#') return trimmed;
