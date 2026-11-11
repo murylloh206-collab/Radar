@@ -5,11 +5,30 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
+import { PLANS_CONFIG, PlanId, BillingCycle, formatCurrencyBRL } from '@/lib/plans-config';
+
+function parsePlanParam(raw: string | null): PlanId | null {
+  if (!raw) return null;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'impulse' || normalized === 'plus' || normalized === 'ultimate') {
+    return normalized;
+  }
+  return null;
+}
+
+function parseCycleParam(raw: string | null): BillingCycle {
+  if (!raw) return 'mensal';
+  const normalized = raw.trim().toLowerCase();
+  return normalized === 'anual' ? 'anual' : 'mensal';
+}
 
 function CadastroForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const refCode = searchParams.get('ref') || '';
+  const selectedPlanId = parsePlanParam(searchParams.get('plano') || searchParams.get('plan'));
+  const selectedCycle = parseCycleParam(searchParams.get('periodo') || searchParams.get('cycle'));
+  const selectedPlan = selectedPlanId ? PLANS_CONFIG[selectedPlanId] : null;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,6 +68,8 @@ function CadastroForm() {
           password,
           acceptedTerms,
           refCode,
+          intendedPlan: selectedPlanId || undefined,
+          intendedCycle: selectedPlanId ? selectedCycle : undefined,
         }),
       });
 
@@ -60,9 +81,11 @@ function CadastroForm() {
       }
 
       if (data.requiresEmailConfirmation) {
-        setSuccessMessage('Conta criada com sucesso! Enviamos um link de confirmação para o seu e-mail. Por favor, confirme para ativar seu teste gratuito de 7 dias.');
+        setSuccessMessage(
+          'Conta criada com sucesso! Enviamos um link de confirmação para o seu e-mail. Confirme seu endereço para acessar sua conta e prosseguir com a contratação do plano escolhido.'
+        );
       } else {
-        router.push('/');
+        router.push('/painel');
         router.refresh();
       }
     } catch {
@@ -74,18 +97,42 @@ function CadastroForm() {
 
   return (
     <div className="w-full max-w-md p-8 bg-[#0D1B31] border border-[#1E293B] rounded-2xl shadow-2xl backdrop-blur-sm">
-      <div className="flex flex-col items-center mb-8">
+      <div className="flex flex-col items-center mb-6 text-center">
         <Logo className="h-10 mb-2" />
         <h1 className="text-xl font-bold text-white tracking-wide">Crie sua conta no Radar de Ofertas</h1>
         <p className="text-sm text-slate-400 mt-1">
-          Ganhe <span className="text-[#1CCAF2] font-semibold">7 dias de teste grátis</span> no plano Plus
+          Configure seu acesso para organizar e divulgar suas ofertas
         </p>
       </div>
+
+      {selectedPlan && (
+        <div
+          className="mb-5 p-3.5 bg-[#081528] border border-[#2B3A50] rounded-xl text-xs text-slate-200 space-y-1"
+          aria-live="polite"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold text-[#35D4ED]">
+              Plano selecionado: {selectedPlan.name} ({selectedCycle === 'anual' ? 'Anual' : 'Mensal'})
+            </span>
+            <Link href="/#rh-planos" className="text-[11px] text-slate-400 hover:text-white underline">
+              Alterar
+            </Link>
+          </div>
+          <p className="text-slate-300">
+            {selectedCycle === 'anual'
+              ? `12× R$ ${formatCurrencyBRL(selectedPlan.pricing.annualMonthlyInstallment)}/parcela · Total anual R$ ${formatCurrencyBRL(selectedPlan.pricing.annualTotalPrice)} (compromisso de 12 meses).`
+              : `R$ ${formatCurrencyBRL(selectedPlan.pricing.monthlyPrice)}/mês · Assinatura mensal.`}
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Intenção de contratação: a confirmação do plano ocorre na etapa de assinatura após o cadastro.
+          </p>
+        </div>
+      )}
 
       {refCode && (
         <div className="mb-4 p-3 bg-cyan-950/40 border border-cyan-800/60 rounded-xl text-xs text-cyan-300 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span>Indicação reconhecida ({refCode})! Seu bônus de afiliado será aplicado.</span>
+          <span>Indicação reconhecida ({refCode}).</span>
         </div>
       )}
 
@@ -111,14 +158,15 @@ function CadastroForm() {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              E-mail profissional
+            <label htmlFor="cadastro-email" className="block text-xs font-semibold text-slate-300 mb-1.5">
+              E-mail de acesso
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
                 <Mail className="h-4 w-4" />
               </div>
               <input
+                id="cadastro-email"
                 type="email"
                 required
                 value={email}
@@ -130,7 +178,7 @@ function CadastroForm() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label htmlFor="cadastro-password" className="block text-xs font-semibold text-slate-300 mb-1.5">
               Senha (mínimo 6 dígitos)
             </label>
             <div className="relative">
@@ -138,6 +186,7 @@ function CadastroForm() {
                 <Lock className="h-4 w-4" />
               </div>
               <input
+                id="cadastro-password"
                 type="password"
                 required
                 value={password}
@@ -149,7 +198,7 @@ function CadastroForm() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label htmlFor="cadastro-confirm-password" className="block text-xs font-semibold text-slate-300 mb-1.5">
               Confirmar senha
             </label>
             <div className="relative">
@@ -157,6 +206,7 @@ function CadastroForm() {
                 <Lock className="h-4 w-4" />
               </div>
               <input
+                id="cadastro-confirm-password"
                 type="password"
                 required
                 value={confirmPassword}
@@ -182,7 +232,7 @@ function CadastroForm() {
                   Termos de Uso
                 </Link>{' '}
                 e a{' '}
-                <Link href="/termos#privacidade" target="_blank" className="text-[#1CCAF2] hover:underline font-medium">
+                <Link href="/privacidade" target="_blank" className="text-[#1CCAF2] hover:underline font-medium">
                   Política de Privacidade (LGPD)
                 </Link>
                 .
@@ -193,7 +243,7 @@ function CadastroForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-4 flex items-center justify-center space-x-2 py-3 px-4 bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] hover:from-[#0665bd] hover:to-[#17b4d9] text-white font-medium rounded-xl text-sm shadow-lg shadow-cyan-950/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
+            className="w-full mt-4 flex items-center justify-center space-x-2 py-3 px-4 bg-[#35D4ED] hover:bg-[#70E6F5] text-[#06131C] font-semibold rounded-xl text-sm shadow-lg shadow-cyan-950/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
           >
             {loading ? (
               <>
@@ -202,7 +252,7 @@ function CadastroForm() {
               </>
             ) : (
               <>
-                <span>Cadastrar e começar trial</span>
+                <span>Começar agora</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </>
             )}
@@ -213,7 +263,7 @@ function CadastroForm() {
       <div className="mt-6 pt-6 border-t border-slate-800/80 text-center text-xs text-slate-400">
         Já tem uma conta?{' '}
         <Link href="/login" className="text-[#1CCAF2] hover:underline font-medium">
-          Fazer login
+          Entrar
         </Link>
       </div>
     </div>
@@ -222,7 +272,7 @@ function CadastroForm() {
 
 export default function CadastroPage() {
   return (
-    <div className="min-h-screen bg-[#061225] flex flex-col justify-center items-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#080D18] flex flex-col justify-center items-center px-4 py-10 relative overflow-hidden">
       <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -236,14 +286,15 @@ export default function CadastroPage() {
         <CadastroForm />
       </Suspense>
 
-      <div className="mt-8 text-center text-xs text-slate-500 flex items-center space-x-4">
-        <span>© {new Date().getFullYear()} Radar de Ofertas SaaS</span>
+      <div className="mt-8 text-center text-xs text-slate-400 flex flex-wrap items-center justify-center gap-3">
+        <Link href="/" className="hover:text-white transition-colors">Início</Link>
         <span>•</span>
-        <Link href="/termos" className="hover:text-slate-400 transition-colors">Termos & Privacidade</Link>
+        <Link href="/termos" className="hover:text-white transition-colors">Termos</Link>
         <span>•</span>
-        <Link href="/ajuda" className="hover:text-slate-400 transition-colors">Central de Ajuda</Link>
+        <Link href="/privacidade" className="hover:text-white transition-colors">Privacidade</Link>
+        <span>•</span>
+        <Link href="/ajuda" className="hover:text-white transition-colors">Ajuda</Link>
       </div>
     </div>
   );
 }
-

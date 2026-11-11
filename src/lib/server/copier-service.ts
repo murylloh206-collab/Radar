@@ -63,15 +63,24 @@ export interface CopierProcessResult {
   jobIds?: string[];
 }
 
+export function stripInvisibleChars(text: string): string {
+  return String(text || '').replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
+}
+
 export function extractWhatsAppMessageText(messageData: Record<string, any> | undefined): string {
   if (!messageData) return '';
+  const rootMsg =
+    messageData.message && typeof messageData.message === 'object' && !messageData.extendedTextMessage && !messageData.conversation
+      ? messageData.message
+      : messageData;
+
   // Desempacotar mensagens efêmeras, de visualização única ou com legendas
   const innerMsg =
-    messageData.ephemeralMessage?.message ||
-    messageData.viewOnceMessage?.message ||
-    messageData.viewOnceMessageV2?.message ||
-    messageData.documentWithCaptionMessage?.message ||
-    messageData;
+    rootMsg.ephemeralMessage?.message ||
+    rootMsg.viewOnceMessage?.message ||
+    rootMsg.viewOnceMessageV2?.message ||
+    rootMsg.documentWithCaptionMessage?.message ||
+    rootMsg;
 
   const text =
     innerMsg?.conversation ||
@@ -84,13 +93,214 @@ export function extractWhatsAppMessageText(messageData: Record<string, any> | un
     innerMsg?.listResponseMessage?.title ||
     '';
 
-  return String(text || '').trim();
+  return stripInvisibleChars(String(text || '')).trim();
 }
 
 export function extractUrlsFromText(text: string): string[] {
-  const urlRegex = /(https?:\/\/[^\s]+)/gi;
-  const matches = text.match(urlRegex) || [];
-  return Array.from(new Set(matches.map((u) => u.replace(/[),.]+$/, ''))));
+  const cleaned = stripInvisibleChars(text);
+  const urlRegex = /(https?:\/\/[^\s`'"<>]+)/gi;
+  const matches = cleaned.match(urlRegex) || [];
+  return Array.from(
+    new Set(matches.map((u) => stripInvisibleChars(u).replace(/[),.;!*_~`]+$/, '')))
+  );
+}
+
+export function normalizeOfferUrlForDedup(rawUrl?: string | null): string {
+  if (!rawUrl) return '';
+  const cleaned = stripInvisibleChars(String(rawUrl)).trim().replace(/[),.;!*_~`]+$/, '');
+  if (!cleaned.startsWith('http')) return '';
+  try {
+    const parsed = new URL(cleaned);
+    // Remove parâmetros de tracking de canal ou sessão
+    const trackingParams = [
+      'src',
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'matt_word',
+      'matt_tool',
+      'forceInApp',
+      'ref',
+      'social_share',
+    ];
+    for (const p of trackingParams) {
+      parsed.searchParams.delete(p);
+    }
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    const search = parsed.searchParams.toString();
+    return `${host}${pathname}${search ? '?' + search : ''}`;
+  } catch {
+    return cleaned.toLowerCase();
+  }
+}
+
+export function extractCanonicalProductId(urlOrId?: string | null): string {
+  if (!urlOrId) return '';
+  const str = stripInvisibleChars(String(urlOrId));
+  const mlbMatch = str.match(/\b(MLB-?\d{7,15})\b/i);
+  if (mlbMatch) {
+    return `mlb:${mlbMatch[1].toUpperCase().replace('-', '')}`;
+  }
+  const shopeeItemMatch =
+    str.match(/\/product\/(\d+)\/(\d+)/i) || str.match(/i\.(\d+)\.(\d+)/i);
+  if (shopeeItemMatch) {
+    return `shopee:${shopeeItemMatch[1]}:${shopeeItemMatch[2]}`;
+  }
+  return '';
+}
+
+export function normalizeProductTitleForDedup(title?: string | null): string {
+  if (!title) return '';
+  const clean = stripInvisibleChars(String(title))
+    .replace(/^[*_~`]+|[*_~`]+$/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.length < 12) return '';
+  if (isPromotionalHookLine(title)) return '';
+  return clean;
+}
+
+export function extractProductTitleFromFormattedMessage(messageText?: string | null): string {
+  if (!messageText) return '';
+  const lines = stripInvisibleChars(String(messageText))
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    if (
+      line.startsWith('De:') ||
+      line.startsWith('~De') ||
+      line.startsWith('De ~') ||
+      line.startsWith('Por ') ||
+      line.startsWith('💰') ||
+      line.startsWith('🔥') ||
+      line.startsWith('💳') ||
+      line.startsWith('🎟️') ||
+      line.startsWith('🛒') ||
+      line.startsWith('🎯') ||
+      line.startsWith('http')
+    ) {
+      continue;
+    }
+    const stripped = line
+      .replace(/^(?:📦|🛍️|🏷️|✨)\s*/u, '')
+      .replace(/^[*_~`]+|[*_~`]+$/g, '')
+      .trim();
+    if (!isPromotionalHookLine(stripped) && stripped.length >= 8) {
+      return stripped;
+    }
+  }
+  return '';
+}
+
+export function computeIncomingOfferFingerprint(rawText: string): {
+  urls: string[];
+  normalizedUrls: string[];
+  normalizedText: string;
+} {
+  const urls = extractUrlsFromText(rawText)
+    .map((u) => normalizeOfferUrlForDedup(u))
+    .filter(Boolean);
+  const normalizedText = stripInvisibleChars(rawText)
+    .replace(/https?:\/\/[^\s]+/gi, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .trim();
+  return { urls, normalizedUrls: urls, normalizedText };
+}
+
+export interface DuplicateCheckCandidate {
+  targetJid: string;
+  affiliateUrl?: string | null;
+  originalUrl?: string | null;
+  cleanUrl?: string | null;
+  externalId?: string | null;
+  productTitle?: string | null;
+}
+
+export function isDuplicateOfferJob(
+  candidate: DuplicateCheckCandidate,
+  existingJobs: Array<
+    Partial<PublicationJob> & {
+      runtimeDelivery?: string | null;
+      cleanUrl?: string | null;
+      externalId?: string | null;
+    }
+  >,
+  windowHours = 24
+): boolean {
+  const cutoffMs = Date.now() - windowHours * 60 * 60 * 1000;
+  const candAff = normalizeOfferUrlForDedup(candidate.affiliateUrl);
+  const candOrig = normalizeOfferUrlForDedup(candidate.originalUrl);
+  const candClean = normalizeOfferUrlForDedup(candidate.cleanUrl);
+  const candCanonId =
+    extractCanonicalProductId(candidate.externalId) ||
+    extractCanonicalProductId(candidate.cleanUrl) ||
+    extractCanonicalProductId(candidate.originalUrl);
+  const candTitle = normalizeProductTitleForDedup(candidate.productTitle);
+
+  return existingJobs.some((j) => {
+    if (!j || j.targetJid !== candidate.targetJid) return false;
+
+    const status = String(j.status || '');
+    const delivery = String(
+      j.runtimeDelivery || (j as any).runtime_delivery || ''
+    );
+
+    // Inclui 'enviado', 'agendado', 'enviando' e qualquer job com delivery 'accepted' ou 'uncertain'
+    const isActiveOrDelivered =
+      status === 'enviado' ||
+      status === 'agendado' ||
+      status === 'enviando' ||
+      delivery === 'accepted' ||
+      delivery === 'uncertain';
+
+    if (!isActiveOrDelivered) return false;
+
+    const refTimeStr = j.sentAt || j.createdAt || j.updatedAt || j.scheduledFor;
+    if (refTimeStr) {
+      const t = new Date(refTimeStr).getTime();
+      if (!isNaN(t) && t < cutoffMs) return false;
+    }
+
+    const jobAff = normalizeOfferUrlForDedup(j.affiliateUrl);
+    const jobOrig = normalizeOfferUrlForDedup(j.originalUrl);
+    const jobClean = normalizeOfferUrlForDedup(j.cleanUrl);
+    const jobCanonId =
+      extractCanonicalProductId(j.externalId) ||
+      extractCanonicalProductId(j.cleanUrl) ||
+      extractCanonicalProductId(j.originalUrl);
+
+    if (candAff && (candAff === jobAff || candAff === jobOrig || candAff === jobClean)) {
+      return true;
+    }
+    if (candOrig && (candOrig === jobOrig || candOrig === jobAff || candOrig === jobClean)) {
+      return true;
+    }
+    if (candClean && (candClean === jobClean || candClean === jobOrig || candClean === jobAff)) {
+      return true;
+    }
+    if (candCanonId && jobCanonId && candCanonId === jobCanonId) {
+      return true;
+    }
+
+    if (candTitle) {
+      const existingTitle = normalizeProductTitleForDedup(
+        extractProductTitleFromFormattedMessage(j.messageText)
+      );
+      if (existingTitle && candTitle === existingTitle) {
+        return true;
+      }
+    }
+
+    return false;
+  });
 }
 
 async function shortenUrlForWhatsApp(url: string): Promise<string> {
@@ -213,12 +423,16 @@ export function extractTitleFromProductUrl(urlStr: string): string | undefined {
 }
 
 export function isPromotionalHookLine(line: string): boolean {
-  const clean = line.trim();
+  const clean = stripInvisibleChars(line)
+    .replace(/^[*_~`]+|[*_~`]+$/g, '')
+    .trim();
   if (!clean || clean.length < 4) return true;
   const lower = clean.toLowerCase();
 
-  // Termina com exclamação, interrogação ou emoji promocional comum
-  if (/[!?🔥🚨✨⚡👏💥😱👇👉💡🏃💪👟📱⌚💎🎉🛒]$/u.test(clean)) return true;
+  // Termina com exclamação, interrogação (mesmo seguidos de emojis) ou com qualquer emoji Unicode
+  if (/(?:[!?]\s*(?:\p{Extended_Pictographic}|\uFE0F|\u200D|\s)*|(?:\p{Extended_Pictographic}|\uFE0F))$/u.test(clean)) {
+    return true;
+  }
 
   // Frases de abertura ou slogans de marketing comuns em grupos de ofertas
   const hookPrefixes = [
@@ -233,7 +447,9 @@ export function isPromotionalHookLine(line: string): boolean {
     'se liga', 'já pensou', 'já imaginou', 'não deixe', 'não fique', 'quem quer',
     'quem precisa', 'precisando de', 'o básico', 'o modelo', 'o frasco', 'embalagem',
     'espuma pra', 'prepare-se', 'confira', 'achados', 'achadinhos', 'microfibra e praticidade',
-    'crisp bar da',
+    'crisp bar da', 'pra sair de casa', 'lowe summer', 'full hd, smart tv', 'alpha lupus',
+    'esse nike', 'a gaveta de', 'nike nos pés', 'destaque em', 'excelente condição',
+    'item de destaque', 'produto com desconto', 'preço diferenciado', 'conforto e',
   ];
   if (hookPrefixes.some((prefix) => lower.startsWith(prefix))) return true;
 
@@ -246,6 +462,7 @@ export function isPromotionalHookLine(line: string): boolean {
       'OPORTUNIDADE', 'ROTINA', 'QUALIDADE', 'ATENÇÃO', 'SUPER', 'ESPECIAL',
       'IMPERDÍVEL', 'TECNOLOGIA', 'CELULAR', 'COMPRA', 'LIMPEZA', 'ACHADO',
       'ACHADINHO', 'ACHADOS', 'SAPATEIRA', 'GUERRA', 'ESTILO', 'SWOOSH',
+      'CARTÃO', 'CASA', 'VERÃO', 'INVERNO',
     ];
     if (commercialWords.some((word) => clean.toUpperCase().includes(word))) {
       return true;
@@ -1037,13 +1254,18 @@ export async function processIncomingMessage(
     const scheduledTime = isImmediateDispatchMode && pendingSameDest.length === 0
       ? new Date().toISOString()
       : new Date(baseScheduledTime + delaySeconds * 1000).toISOString();
-    // Deduplicação básica: checar se este mesmo link de afiliado ou produto foi enviado para o mesmo grupo nas últimas 12 horas
-    const alreadySentRecently = db.jobs.some(
-      (j) =>
-        j.targetJid === dest.groupJid &&
-        j.affiliateUrl === conversionResult.affiliateUrl &&
-        (j.status === 'enviado' || j.status === 'agendado') &&
-        new Date(j.createdAt).getTime() > Date.now() - 12 * 60 * 60 * 1000
+    // Deduplicação canônica: checar se este mesmo link, produto ou título foi enviado/agendado/entregue para o mesmo grupo nas últimas 24 horas
+    const alreadySentRecently = isDuplicateOfferJob(
+      {
+        targetJid: dest.groupJid,
+        affiliateUrl: conversionResult.affiliateUrl,
+        originalUrl: primaryUrl,
+        cleanUrl: conversionResult.cleanUrl,
+        externalId: productData.externalId,
+        productTitle: productData.title,
+      },
+      db.jobs,
+      24
     );
 
     if (alreadySentRecently) {
@@ -1056,7 +1278,7 @@ export async function processIncomingMessage(
           'Link montado localmente com parâmetros da conta.'
         : undefined;
 
-    const job: PublicationJob = {
+    const job: PublicationJob & { cleanUrl?: string } = {
       id: ensureValidUuid(),
       userId: authorizedSource.userId,
       connectionId: authorizedSource.connectionId || options?.connectionId,
@@ -1072,6 +1294,7 @@ export async function processIncomingMessage(
       mediaUrl: finalMediaUrl, // URL da composição ou foto oficial configurada
       affiliateUrl: conversionResult.affiliateUrl,
       originalUrl: primaryUrl,
+      cleanUrl: conversionResult.cleanUrl,
       status: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? 'agendado' : 'aguardando_aprovacao',
       errorDetails: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? undefined : (planQuotaReason || imageReviewReason || unverifiedReason),
       scheduledFor: scheduledTime,
@@ -1083,6 +1306,20 @@ export async function processIncomingMessage(
 
     await savePublicationJob(job);
     createdJobIds.push(job.id);
+  }
+
+  if (createdJobIds.length === 0) {
+    incomingRecord.status = 'descartada';
+    incomingRecord.discardReason =
+      'Oferta duplicada bloqueada: este mesmo produto/link já foi enviado ou agendado recentemente.';
+    await saveIncomingMessageRecord(incomingRecord);
+    return {
+      accepted: false,
+      messageId,
+      status: 'descartada',
+      reason: incomingRecord.discardReason,
+      jobIds: [],
+    };
   }
 
   // Em produção (Render / Vercel / Local), executa o envio imediatamente na requisição para não depender de timers voláteis

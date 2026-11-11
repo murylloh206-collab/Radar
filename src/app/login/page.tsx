@@ -7,7 +7,7 @@ import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 function sanitizeRedirectTarget(target?: string | null): string {
-  if (!target || typeof target !== 'string') return '/';
+  if (!target || typeof target !== 'string') return '/painel';
   const trimmed = target.trim();
   if (
     !trimmed ||
@@ -19,7 +19,7 @@ function sanitizeRedirectTarget(target?: string | null): string {
     trimmed.startsWith('https://') ||
     trimmed.startsWith('//')
   ) {
-    return '/';
+    return '/painel';
   }
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
@@ -138,7 +138,7 @@ function LoginForm() {
             href="/cadastro"
             className="text-[#1CCAF2] font-semibold hover:underline transition-all"
           >
-            Cadastre-se e ganhe 7 dias grátis
+            Começar agora
           </Link>
         </p>
       </div>

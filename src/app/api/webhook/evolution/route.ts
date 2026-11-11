@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { acceptCopierEvent, runDurableCopierCycle, CopierRuntimeError } from '@/lib/server/copier-runtime';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 60;
 export async function GET() { return NextResponse.json({ ok: true, service: 'Evolution webhook receiver' }); }
 export async function POST(req: NextRequest) {
   if (['secret', 'apikey', 'token'].some(parameter => req.nextUrl.searchParams.has(parameter))) {

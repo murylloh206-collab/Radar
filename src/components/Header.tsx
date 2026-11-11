@@ -81,7 +81,7 @@ export function Header() {
     <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#061225]/90 backdrop-blur-md border-b border-[#18334D]">
       {/* Mobile Logo */}
       <div className="flex items-center gap-3 md:hidden">
-        <Link href="/">
+        <Link href="/painel">
           <Logo size="sm" />
         </Link>
       </div>

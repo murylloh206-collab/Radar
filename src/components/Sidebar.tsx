@@ -48,7 +48,7 @@ export function Sidebar() {
     {
       title: 'Principal',
       items: [
-        { label: 'Início', href: '/', icon: LayoutDashboard },
+        { label: 'Início', href: '/painel', icon: LayoutDashboard },
         { label: 'Conexão WhatsApp', href: '/conexao-whatsapp', icon: QrCode },
         { label: 'Conectar Lojas', href: '/conectar-lojas', icon: Store, badge: 'SaaS' },
         { label: 'Copiador WhatsApp', href: '/copiador', icon: Copy },
@@ -85,7 +85,7 @@ export function Sidebar() {
     <aside className="hidden md:flex flex-col w-20 xl:w-64 h-screen fixed left-0 top-0 bg-[#061225] border-r border-[#18334D] z-40 select-none transition-all duration-200">
       {/* Top Logo */}
       <div className="p-3.5 xl:p-5 border-b border-[#18334D] flex items-center justify-center xl:justify-start">
-        <Link href="/" className="block">
+        <Link href="/painel" className="block">
           <div className="xl:hidden">
             <Logo size="sm" />
           </div>

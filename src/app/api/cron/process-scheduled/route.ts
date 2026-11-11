@@ -3,7 +3,7 @@ import { runCopierWatchdog } from '@/lib/server/copier-watchdog';
 import { runDurableCopierCycle } from '@/lib/server/copier-runtime';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 /**
  * Rota de compatibilidade para cronjobs legados ou externos:

@@ -3,60 +3,97 @@ import Link from 'next/link';
 
 export default function AjudaPage() {
   return (
-    <section className="rp-page">
-      <div className="rp-head">
-        <div>
-          <span className="rp-step">Suporte & Documentação</span>
-          <h1>Central de Ajuda — Radar de Ofertas</h1>
-          <p className="rp-sub">
-            Guia rápido dos recursos por plano (Impulse, Plus e Ultimate), canais de disparo, marca d&apos;água e métricas.
-          </p>
-        </div>
-        <div className="rp-actions">
-          <Link href="/planos" className="rp-btn rp-primary">
-            Comparar Planos
-          </Link>
-          <Link href="/termos" className="rp-btn rp-quiet">
-            Termos de Uso
-          </Link>
-        </div>
-      </div>
-
-      <div className="rp-panel rp-section" style={{ lineHeight: 1.65, fontSize: 13, color: '#CBD5E1' }}>
-        <h2 style={{ color: '#F8FBFF', fontSize: 17, marginTop: 0 }}>
-          O que está incluído em cada plano?
-        </h2>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
-          <div style={{ background: '#050E1C', border: '1px solid #18283D', borderRadius: 12, padding: 14 }}>
-            <strong style={{ color: '#F8FBFF', fontSize: 15 }}>
-              1. Plano Impulse (Entrada — até 30 ofertas/dia)
-            </strong>
-            <p style={{ margin: '6px 0 0', fontSize: 12 }}>
-              Ideal para iniciar sua operação: Copiador de grupos WhatsApp, conversão de links de afiliado (Mercado Livre, Shopee, Amazon, Magalu e Netshoes), marca d&apos;água padrão oficial do Radar de Ofertas, Envio Seguro no WhatsApp e métricas básicas do WhatsApp.
+    <div style={{ minHeight: '100vh', background: '#080D18', color: '#F4F6FA', padding: '40px 20px' }}>
+      <section className="rp-page" style={{ maxWidth: 960, margin: '0 auto' }}>
+        <div className="rp-head" style={{ flexWrap: 'wrap' }}>
+          <div>
+            <span className="rp-step" style={{ color: '#35D4ED' }}>Suporte & Documentação</span>
+            <h1 style={{ color: '#F4F6FA' }}>Central de Ajuda — Radar de Ofertas</h1>
+            <p className="rp-sub" style={{ color: '#B6C2D2' }}>
+              Guia rápido dos recursos por plano (Impulse, Plus e Ultimate), canais de divulgação, personalização e atendimento.
             </p>
           </div>
-
-          <div style={{ background: '#050E1C', border: '1px solid #1C314B', borderRadius: 12, padding: 14 }}>
-            <strong style={{ color: '#1CCAF2', fontSize: 15 }}>
-              2. Plano Plus (Mais Popular — ofertas ilimitadas + 7 dias grátis)
-            </strong>
-            <p style={{ margin: '6px 0 0', fontSize: 12 }}>
-              Inclui tudo do Impulse sem limite diário de ofertas, mais: <strong>Marca d&apos;água personalizável</strong> (logo própria, @ do Instagram, posição livre, opacidade e tamanho), <strong>Gerador de Legendas com IA</strong> (Curta, Urgência e Storytelling), <strong>Cards de Imagem Automáticos</strong> (Feed 1:1 e Story 9:16), <strong>Selo de Promoção Real</strong> (baseado em 30 dias de histórico), <strong>Vitrine Pública <code>/@slug</code></strong>, <strong>Postagem no Telegram</strong> via Bot API oficial e métricas de cliques da plataforma por origem (<code>?src=whatsapp</code>, <code>telegram</code>, <code>vitrine</code>, <code>card</code>).
-            </p>
-          </div>
-
-          <div style={{ background: '#050E1C', border: '1px solid #20C997', borderRadius: 12, padding: 14 }}>
-            <strong style={{ color: '#20C997', fontSize: 15 }}>
-              3. Plano Ultimate (Operação Completa, Comparador, Inteligência e Equipe)
-            </strong>
-            <p style={{ margin: '6px 0 0', fontSize: 12 }}>
-              Inclui tudo do Plus, mais: <strong>Buscador Comparador Multiloja</strong> tolerante a erros de digitação (<code>pg_trgm</code> + <code>unaccent</code>), <strong>Relatório de Vendas Convertidas por Loja</strong> (API Oficial Shopee + Importação CSV com média diária, semanal e mensal), <strong>Alerta de Queda de Preço</strong> (WhatsApp/Telegram), <strong>&quot;O que Postar Hoje&quot;</strong>, <strong>Radar de Oportunidades com Fila de Revisão</strong> (nunca posta sozinho), <strong>Relatório Semanal Automático</strong> (WhatsApp + E-mail) e <strong>Gestão de Equipe (Dono e Colaborador) + Múltiplos Canais</strong>.
-            </p>
+          <div className="rp-actions">
+            <Link href="/" className="rp-btn rp-quiet">
+              Voltar ao início
+            </Link>
+            <Link href="/#rh-planos" className="rp-btn rp-primary">
+              Comparar Planos
+            </Link>
+            <Link href="/termos" className="rp-btn rp-quiet">
+              Termos de Uso
+            </Link>
           </div>
         </div>
-      </div>
-    </section>
+
+        <div
+          className="rp-panel rp-section"
+          style={{
+            lineHeight: 1.65,
+            fontSize: 13,
+            color: '#CBD5E1',
+            background: '#111B2C',
+            borderColor: '#2B3A50',
+          }}
+        >
+          <h2 style={{ color: '#F4F6FA', fontSize: 17, marginTop: 0 }}>
+            O que está incluído em cada plano?
+          </h2>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
+            <div style={{ background: '#080D18', border: '1px solid #2B3A50', borderRadius: 12, padding: 14 }}>
+              <strong style={{ color: '#F4F6FA', fontSize: 15 }}>
+                1. Plano Impulse
+              </strong>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#B6C2D2' }}>
+                Para organizar seus primeiros fluxos de divulgação: copiador e modelos de mensagem, imagens originais do anúncio, agendamento, histórico de envios e métricas básicas do WhatsApp.
+              </p>
+            </div>
+
+            <div style={{ background: '#080D18', border: '1px solid #35D4ED', borderRadius: 12, padding: 14 }}>
+              <strong style={{ color: '#35D4ED', fontSize: 15 }}>
+                2. Plano Plus (Mais popular)
+              </strong>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#B6C2D2' }}>
+                Inclui tudo do Impulse, mais: marca d&apos;água com sua logo e seu @, cores e identidade do painel, cards para feed (1:1), story (9:16), vitrine pública no link da bio e métricas básicas de cliques.
+              </p>
+            </div>
+
+            <div style={{ background: '#080D18', border: '1px solid #70D8AE', borderRadius: 12, padding: 14 }}>
+              <strong style={{ color: '#70D8AE', fontSize: 15 }}>
+                3. Plano Ultimate
+              </strong>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#B6C2D2' }}>
+                Inclui tudo do Plus, mais: buscador e comparador de ofertas, alertas de queda de preço, métricas por loja e visão consolidada, além de vendas informadas pelas integrações quando disponíveis.
+              </p>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 20,
+              paddingTop: 16,
+              borderTop: '1px solid #2B3A50',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              fontSize: 12,
+            }}
+          >
+            <span>Precisa falar com o atendimento?</span>
+            <a
+              href="https://wa.me/5519993812187"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#35D4ED', fontWeight: 600 }}
+            >
+              Conversar com o suporte no WhatsApp ↗
+            </a>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
-

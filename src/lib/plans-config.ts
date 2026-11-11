@@ -43,6 +43,8 @@ export interface PlanDefinition {
   id: PlanId;
   name: string;
   tagline: string;
+  landingSummary: string;
+  landingBenefits: string[];
   badge?: string;
   popular?: boolean;
   dailyOfferLimit: number | null; // null = ilimitado
@@ -81,9 +83,9 @@ export interface UserSubscriptionRecord {
 
 export const SAAS_TRIAL_CONFIG = {
   defaultTrialPlan: 'plus' as PlanId,
-  trialDurationDays: 7,
-  enabled: true,
-  durationDays: 7,
+  trialDurationDays: 0,
+  enabled: false,
+  durationDays: 0,
 };
 
 export const TRIAL_CONFIG = SAAS_TRIAL_CONFIG;
@@ -107,6 +109,13 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
     id: 'impulse',
     name: 'Impulse',
     tagline: 'Para quem está começando a automatizar grupos de ofertas no WhatsApp.',
+    landingSummary: 'Para organizar seus primeiros fluxos de divulgação.',
+    landingBenefits: [
+      'Copiador e modelos de mensagem',
+      'Imagens originais do anúncio',
+      'Agendamento e histórico de envios',
+      'Métricas básicas do WhatsApp',
+    ],
     dailyOfferLimit: 20,
     trialDays: 0,
     pricing: {
@@ -122,11 +131,11 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
       'Até 20 ofertas postadas por dia',
       'Copiador automático de grupos WhatsApp',
       'Conexão WhatsApp em tempo real',
-      'Marca d’água padrão da plataforma (@radar.ofertas.br1)',
+      'Imagens originais do anúncio',
       'Métricas básicas do WhatsApp (cliques e postagens 7 dias)',
       'Gerador de legenda com IA (WhatsApp, Instagram e Telegram)',
       'Onboarding guiado passo a passo',
-      'Envio seguro no WhatsApp (proteção anti-bloqueio)',
+      'Envio seguro no WhatsApp (intervalos e limites configuráveis)',
     ],
     features: [
       'copier',
@@ -141,10 +150,18 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
     id: 'plus',
     name: 'Plus',
     tagline: 'Para criadores e afiliados que querem identidade própria, agendamento e mais escala.',
+    landingSummary: 'Para divulgar com uma identidade que é sua.',
+    landingBenefits: [
+      'Tudo do Impulse',
+      'Marca d’água com sua logo e seu @',
+      'Cores e identidade do painel',
+      'Cards para feed, story e vitrine',
+      'Métricas básicas de cliques',
+    ],
     badge: 'Mais popular',
     popular: true,
     dailyOfferLimit: 100,
-    trialDays: 7,
+    trialDays: 0,
     pricing: {
       monthlyPrice: 59.9,
       annualMonthlyInstallment: 47.9,
@@ -191,6 +208,14 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
     id: 'ultimate',
     name: 'Ultimate',
     tagline: 'Operação profissional ilimitada com buscador comparador, inteligência de vendas e equipe.',
+    landingSummary: 'Para explorar oportunidades e acompanhar resultados.',
+    landingBenefits: [
+      'Tudo do Plus',
+      'Buscador e comparador de ofertas',
+      'Alertas de queda de preço',
+      'Métricas por loja e visão consolidada',
+      'Vendas informadas pelas integrações',
+    ],
     dailyOfferLimit: null, // Ilimitado
     trialDays: 0,
     pricing: {

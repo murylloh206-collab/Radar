@@ -112,7 +112,7 @@ export function WhatsAppWorkspaceProvider({ children }: { children: ReactNode })
   }, [load]);
 
   useEffect(() => {
-    if (['/login', '/cadastro', '/grupo'].some(route => pathname?.startsWith(route))) { clear(); return; }
+    if (pathname === '/' || ['/login', '/cadastro', '/grupo', '/termos', '/privacidade', '/ajuda'].some(route => pathname?.startsWith(route))) { clear(); return; }
     const saved = cache.current[selected.current];
     if (!saved || Date.now() - saved.receivedAt > 30000) void load(selected.current);
   }, [pathname, load, clear]);
@@ -134,6 +134,19 @@ export function WhatsAppWorkspaceProvider({ children }: { children: ReactNode })
       return false;
     }, 15000);
   }, [selectedId, observe]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (pathname === '/' || ['/login', '/cadastro', '/grupo', '/termos', '/privacidade', '/ajuda'].some(route => pathname?.startsWith(route))) return;
+    return serialPoll(async signal => {
+      try {
+        await fetch('/api/copier/watchdog', { cache: 'no-store', signal });
+      } catch {
+        // Ignora falha de rede transitória
+      }
+      return false;
+    }, 90000);
+  }, [selectedId, pathname]);
 
   const workspace = records[selectedId]?.workspace || (!selectedId ? records['']?.workspace : null) || null;
   return <Context.Provider value={{ workspace, loading, error, selectedId, select, reload, refreshGroups, observe, clear }}>{children}</Context.Provider>;

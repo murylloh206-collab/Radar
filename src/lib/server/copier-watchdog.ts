@@ -1,6 +1,7 @@
 import 'server-only';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { runDurableCopierCycle } from './copier-runtime';
+import { acceptCopierEvent, runDurableCopierCycle } from './copier-runtime';
+import { extractUrlsFromText, extractWhatsAppMessageText } from './copier-service';
 
 export interface WatchdogReport {
   ok: boolean;
@@ -16,6 +17,7 @@ export interface WatchdogReport {
     restarted?: boolean;
     reason?: string;
   };
+  recoveredFromHistory?: number;
   cycle: {
     processed: number;
     dispatched: number;
@@ -30,9 +32,10 @@ const DEFAULT_INSTANCE_NAME = 'radar_00000000_4453f2';
 /**
  * Watchdog Sentinela de Auto-Cura do Copiador:
  * 1. Pinga o servidor Render para mantê-lo 100% acordado (anti-sleep).
- * 2. Verifica a saúde do WebSocket Baileys da Evolution API.
- * 3. Se detectar socket zumbi, desconectado ou inativo por mais de 45min de dia, reinicia a instância automaticamente.
- * 4. Drena e processa qualquer mensagem pendente na fila.
+ * 2. Verifica a saúde do WebSocket Baileys da Evolution API (aguardando handshake caso esteja em 'connecting').
+ * 3. Se detectar socket desconectado, reconecta/reinicia a instância automaticamente.
+ * 4. Busca ativamente na Evolution API as últimas mensagens dos grupos de origem ativos (recuperação pós-hibernação).
+ * 5. Drena e processa qualquer mensagem pendente na fila.
  */
 export async function runCopierWatchdog(forceRestart = false): Promise<WatchdogReport> {
   const now = new Date();
@@ -41,19 +44,23 @@ export async function runCopierWatchdog(forceRestart = false): Promise<WatchdogR
   let baseUrl = process.env.EVOLUTION_BASE_URL || process.env.EVOLUTION_API_URL || DEFAULT_GATEWAY_URL;
   let apiKey = process.env.EVOLUTION_API_KEY || DEFAULT_GATEWAY_KEY;
   let instanceName = process.env.EVOLUTION_INSTANCE_NAME || DEFAULT_INSTANCE_NAME;
+  let connectionRow: Record<string, unknown> | null = null;
 
   // 1. Tentar ler do Supabase as credenciais reais da conexão
   if (isSupabaseConfigured && supabase) {
     try {
       const { data: waConns } = await supabase.from('whatsapp_connections').select('*').limit(1);
-      if (waConns?.[0]?.instance_name) {
-        instanceName = waConns[0].instance_name;
+      if (waConns?.[0]) {
+        connectionRow = waConns[0];
+        if (waConns[0].instance_name) instanceName = String(waConns[0].instance_name);
+        if (waConns[0].base_url) baseUrl = String(waConns[0].base_url);
+        if (waConns[0].api_key) apiKey = String(waConns[0].api_key);
       }
       const { data: legacy } = await supabase.from('integrations_whatsapp').select('*').limit(1);
       if (legacy?.[0]) {
         if (legacy[0].base_url) baseUrl = legacy[0].base_url;
         if (legacy[0].api_key) apiKey = legacy[0].api_key;
-        if (legacy[0].instance_name) instanceName = legacy[0].instance_name;
+        if (!connectionRow && legacy[0].instance_name) instanceName = legacy[0].instance_name;
       }
     } catch {}
   }
@@ -61,80 +68,80 @@ export async function runCopierWatchdog(forceRestart = false): Promise<WatchdogR
   const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
   let gatewayAlive = false;
   let gatewayHttpStatus = 0;
+  let currentState = 'unknown';
 
-  // 2. Ping Keep-Alive no Gateway (impede o Render de suspender)
-  try {
-    const pingRes = await fetch(`${cleanBaseUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`, {
-      headers: { apikey: apiKey },
-      signal: AbortSignal.timeout(12000),
-      cache: 'no-store',
-    });
-    gatewayHttpStatus = pingRes.status;
-    gatewayAlive = pingRes.ok;
-  } catch (err) {
-    gatewayHttpStatus = 503;
-    gatewayAlive = false;
+  const fetchConnectionState = async (timeoutMs = 10000): Promise<{ ok: boolean; status: number; state: string }> => {
+    try {
+      const res = await fetch(`${cleanBaseUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`, {
+        headers: { apikey: apiKey },
+        signal: AbortSignal.timeout(timeoutMs),
+        cache: 'no-store',
+      });
+      if (!res.ok) return { ok: false, status: res.status, state: 'unknown' };
+      const data = await res.json();
+      const state = String(data?.instance?.state || data?.state || 'unknown');
+      return { ok: true, status: res.status, state };
+    } catch {
+      return { ok: false, status: 503, state: 'unknown' };
+    }
+  };
+
+  // 2. Ping Keep-Alive + Leitura do Estado da Conexão no Gateway
+  const initialCheck = await fetchConnectionState(12000);
+  gatewayHttpStatus = initialCheck.status;
+  gatewayAlive = initialCheck.ok;
+  currentState = initialCheck.state;
+
+  // Se o Render acabou de acordar e o Baileys está em 'connecting', aguarda 6s antes de tomar qualquer ação
+  // (dar restart durante 'connecting' interrompe o handshake e derruba a sessão!)
+  if (gatewayAlive && currentState.toLowerCase() === 'connecting' && !forceRestart) {
+    await new Promise((r) => setTimeout(r, 6000));
+    const recheck = await fetchConnectionState(8000);
+    if (recheck.ok) {
+      currentState = recheck.state;
+    }
   }
 
-  // 3. Checar Estado da Conexão
-  let currentState = 'unknown';
   let shouldRestart = forceRestart;
   let restartReason = forceRestart ? 'Forçado manualmente pelo usuário' : '';
 
   if (gatewayAlive) {
-    try {
-      const stateRes = await fetch(`${cleanBaseUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`, {
-        headers: { apikey: apiKey },
-        signal: AbortSignal.timeout(8000),
-        cache: 'no-store',
-      });
-      if (stateRes.ok) {
-        const stateData = await stateRes.json();
-        currentState = stateData?.instance?.state || stateData?.state || 'unknown';
+    const normalizedState = currentState.toLowerCase();
+    if (['close', 'closed', 'disconnected'].includes(normalizedState)) {
+      // Tentar reconectar suavemente via /instance/connect antes de forçar restart
+      try {
+        await fetch(`${cleanBaseUrl}/instance/connect/${encodeURIComponent(instanceName)}`, {
+          headers: { apikey: apiKey },
+          signal: AbortSignal.timeout(8000),
+          cache: 'no-store',
+        });
+        await new Promise((r) => setTimeout(r, 3000));
+        const afterConnect = await fetchConnectionState(6000);
+        if (afterConnect.ok && ['open', 'connecting'].includes(afterConnect.state.toLowerCase())) {
+          currentState = afterConnect.state;
+        } else {
+          shouldRestart = true;
+          restartReason = `Instância estava desconectada (state: ${currentState})`;
+        }
+      } catch {
+        shouldRestart = true;
+        restartReason = `Instância estava desconectada (state: ${currentState})`;
       }
-    } catch {}
-
-    if (['close', 'closed', 'disconnected'].includes(currentState.toLowerCase())) {
-      shouldRestart = true;
-      restartReason = `Instância estava desconectada (state: ${currentState})`;
-    } else if (currentState.toLowerCase() !== 'open') {
+    } else if (normalizedState !== 'open' && normalizedState !== 'connecting') {
       shouldRestart = true;
       restartReason = `Instância não confirmada (state: ${currentState})`;
-    } else if (!forceRestart && isSupabaseConfigured && supabase) {
-      // Detector de Socket Zumbi:
-      // Se estamos em horário comercial (08:00 às 22:00 BRT) e a última mensagem recebida tem mais de 45 minutos,
-      // o WebSocket pode ter congelado silenciosamente (zombie socket). Reinicia a sessão preventivamente.
+    } else if (normalizedState === 'open' && !forceRestart && isSupabaseConfigured && supabase) {
+      // Atualizar status conectado no banco caso estivesse desatualizado
       try {
-        const brtHour = Number(
-          new Intl.DateTimeFormat('en-GB', {
-            timeZone: 'America/Sao_Paulo',
-            hour: '2-digit',
-            hourCycle: 'h23',
-          }).format(now)
-        );
-
-        if (brtHour >= 8 && brtHour < 22) {
-          const { data: latestInbox } = await supabase
-            .from('copier_inbox')
-            .select('received_at')
-            .order('received_at', { ascending: false })
-            .limit(1);
-
-          if (latestInbox?.[0]?.received_at) {
-            const lastMs = Date.now() - new Date(latestInbox[0].received_at).getTime();
-            const minutesSinceLast = Math.round(lastMs / (60 * 1000));
-            // Mais de 45 minutos sem nenhuma mensagem do grupo no meio do dia
-            if (minutesSinceLast >= 45) {
-              shouldRestart = true;
-              restartReason = `Detector anti-zombie: ${minutesSinceLast} minutos sem eventos recebidos em horário comercial`;
-            }
-          }
-        }
+        await supabase
+          .from('whatsapp_connections')
+          .update({ last_ping_at: timestamp, status: 'connected' })
+          .eq('instance_name', instanceName);
       } catch {}
     }
   }
 
-  // 4. Executar Auto-Restart se necessário
+  // 4. Executar Auto-Restart somente se realmente necessário
   let didRestart = false;
   if (shouldRestart && gatewayAlive) {
     try {
@@ -146,7 +153,6 @@ export async function runCopierWatchdog(forceRestart = false): Promise<WatchdogR
       didRestart = restartRes.ok;
       if (didRestart) {
         currentState = 'restarted_open';
-        // Atualizar last_ping_at no Supabase
         if (isSupabaseConfigured && supabase) {
           await supabase
             .from('whatsapp_connections')
@@ -159,10 +165,81 @@ export async function runCopierWatchdog(forceRestart = false): Promise<WatchdogR
     }
   }
 
-  // 5. Drenagem e Execução do Ciclo de Envios
+  // 5. Recuperação Ativa de Mensagens dos Grupos de Origem (caso o Render estivesse dormindo quando a mensagem chegou)
+  let recoveredFromHistory = 0;
+  if (
+    gatewayAlive &&
+    ['open', 'restarted_open'].includes(currentState.toLowerCase()) &&
+    isSupabaseConfigured &&
+    supabase &&
+    connectionRow?.webhook_secret
+  ) {
+    try {
+      const { data: activeSources } = await supabase
+        .from('copy_sources')
+        .select('source_jid')
+        .eq('connection_id', String(connectionRow.id))
+        .eq('is_active', true);
+
+      const twoHoursAgoSec = Math.floor((Date.now() - 2 * 60 * 60 * 1000) / 1000);
+
+      for (const src of activeSources || []) {
+        const sourceJid = String(src.source_jid || '');
+        if (!sourceJid) continue;
+        try {
+          const histRes = await fetch(`${cleanBaseUrl}/chat/findMessages/${encodeURIComponent(instanceName)}`, {
+            method: 'POST',
+            headers: { apikey: apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              where: { key: { remoteJid: sourceJid } },
+              limit: 6,
+            }),
+            signal: AbortSignal.timeout(8000),
+            cache: 'no-store',
+          });
+          if (!histRes.ok) continue;
+          const histData = await histRes.json();
+          const records: unknown[] =
+            histData?.messages?.records ||
+            (Array.isArray(histData?.messages) ? histData.messages : Array.isArray(histData) ? histData : []);
+
+          const recentRecords = records
+            .filter((rec: any) => {
+              if (!rec?.key?.id || rec?.key?.fromMe) return false;
+              const ts = Number(rec?.messageTimestamp || 0);
+              if (ts > 0 && ts < twoHoursAgoSec) return false;
+              const txt = extractWhatsAppMessageText(rec);
+              return extractUrlsFromText(txt).length > 0;
+            })
+            .slice(0, 5);
+
+          if (recentRecords.length > 0) {
+            const acceptRes = await acceptCopierEvent(
+              {
+                event: 'messages.upsert',
+                instance: instanceName,
+                data: recentRecords as any,
+              },
+              String(connectionRow.webhook_secret)
+            );
+            recoveredFromHistory += acceptRes.inserted || 0;
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // 6. Drenagem e Execução do Ciclo de Envios
   let cycleRes = { processed: 0, dispatched: 0 };
   try {
-    cycleRes = await runDurableCopierCycle();
+    const first = await runDurableCopierCycle();
+    cycleRes.processed += first.processed;
+    cycleRes.dispatched += first.dispatched;
+    if (first.processed > 0) {
+      const second = await runDurableCopierCycle();
+      cycleRes.processed += second.processed;
+      cycleRes.dispatched += second.dispatched;
+    }
   } catch (cycleErr) {
     console.error('[Watchdog] Erro ao executar ciclo:', cycleErr);
   }
@@ -181,6 +258,7 @@ export async function runCopierWatchdog(forceRestart = false): Promise<WatchdogR
       restarted: didRestart,
       reason: restartReason || undefined,
     },
+    recoveredFromHistory,
     cycle: cycleRes,
   };
 }

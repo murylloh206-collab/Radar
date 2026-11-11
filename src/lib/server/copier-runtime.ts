@@ -7,9 +7,17 @@ import type { PublicationJob, StoreCredential } from '../types';
 import { getInitialDatabase } from './storage';
 import { scopedCopierRules } from './copier-scoped-rules';
 import { copierGroupCatalog } from './copier-group-catalog';
+import { savedWhatsAppGroups } from './whatsapp-group-cache';
 import { getStoreCredentialsMapWithSecrets } from './credentials-vault';
 import { withCopierDatabase } from './copier-runtime-context';
-import { processIncomingMessage, type EvolutionWebhookPayload } from './copier-service';
+import {
+  computeIncomingOfferFingerprint,
+  extractProductTitleFromFormattedMessage,
+  extractWhatsAppMessageText,
+  isDuplicateOfferJob,
+  processIncomingMessage,
+  type EvolutionWebhookPayload,
+} from './copier-service';
 import { validateJobForDispatch } from './job-validator';
 import { getDailyOfferQuotaStatus } from './plan-guard';
 
@@ -55,12 +63,83 @@ export async function acceptCopierEvent(payload: EvolutionWebhookPayload, suppli
     .eq('user_id', connection.user_id).eq('connection_id', connection.id).eq('is_active', true), 'Origens monitoradas');
   const monitored = new Set((sources || []).filter(source => source.configuration?.ownerJid === connection.owner_jid).map(source => source.source_jid));
   const entries = Array.isArray(payload.data) ? payload.data : [payload.data];
-  const records = entries.flatMap(entry => {
+  const candidateEntries = entries.filter(entry => {
     const key = entry?.key;
-    if (key?.fromMe || !monitored.has(key?.remoteJid) || !key?.id || typeof key.id !== 'string' || !/^\d{5,30}@g\.us$/.test(key.remoteJid || '')) return [];
-    return [{ user_id: connection.user_id, connection_id: connection.id, message_id: key.id,
-      payload: { event: 'messages.upsert', instance, data: entry } }];
+    return !key?.fromMe && monitored.has(key?.remoteJid) && key?.id && typeof key.id === 'string' && /^\d{5,30}@g\.us$/.test(key.remoteJid || '');
   });
+  if (!candidateEntries.length) return { accepted: true, inserted: 0 };
+
+  // Deduplicação na entrada: evita que múltiplos bots do grupo de origem (com message_id diferentes ou caracteres invisíveis)
+  // enfileirem a mesma oferta duas vezes no copier_inbox
+  const cutoffIso = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  const recentInboxRes = await client
+    .from('copier_inbox')
+    .select('message_id, status, payload, received_at')
+    .eq('user_id', connection.user_id)
+    .eq('connection_id', connection.id)
+    .in('status', ['pending', 'processing', 'processed'])
+    .gte('received_at', cutoffIso)
+    .order('received_at', { ascending: false })
+    .limit(50);
+
+  const seenUrls = new Set<string>();
+  const seenTexts = new Set<string>();
+  const seenMsgIds = new Set<string>();
+
+  for (const row of recentInboxRes.data || []) {
+    if (row.message_id) seenMsgIds.add(String(row.message_id));
+    const prevData = Array.isArray(row.payload?.data) ? row.payload.data[0] : row.payload?.data;
+    const prevText = extractWhatsAppMessageText(prevData);
+    if (!prevText) continue;
+    const fp = computeIncomingOfferFingerprint(prevText);
+    for (const u of fp.normalizedUrls) seenUrls.add(u);
+    if (fp.normalizedText.length >= 20) seenTexts.add(fp.normalizedText);
+  }
+
+  const records: Array<{
+    user_id: string;
+    connection_id: string;
+    message_id: string;
+    payload: { event: string; instance: string; data: unknown };
+  }> = [];
+
+  for (const entry of candidateEntries) {
+    const msgId = String(entry.key!.id);
+    if (seenMsgIds.has(msgId)) continue;
+
+    // Ignorar mensagens antigas (> 90 min) reenviadas pelo Baileys ao sincronizar histórico offline
+    const rawTs = Number((entry as Record<string, unknown>)?.messageTimestamp || 0);
+    const msgTimeMs = rawTs > 1e12 ? rawTs : rawTs * 1000;
+    if (msgTimeMs > 0 && Date.now() - msgTimeMs > 90 * 60 * 1000) {
+      continue;
+    }
+
+    const rawText = extractWhatsAppMessageText(entry);
+    const fp = computeIncomingOfferFingerprint(rawText);
+    if (fp.normalizedUrls.length === 0) {
+      // Mensagens de aviso no grupo sem nenhum link de produto (ex.: "CUPOM ESGOTADO")
+      continue;
+    }
+
+    const hasDuplicateUrl = fp.normalizedUrls.some(u => seenUrls.has(u));
+    const hasDuplicateText = fp.normalizedText.length >= 20 && seenTexts.has(fp.normalizedText);
+
+    if (hasDuplicateUrl || hasDuplicateText) {
+      continue;
+    }
+
+    seenMsgIds.add(msgId);
+    for (const u of fp.normalizedUrls) seenUrls.add(u);
+    if (fp.normalizedText.length >= 20) seenTexts.add(fp.normalizedText);
+
+    records.push({
+      user_id: connection.user_id,
+      connection_id: connection.id,
+      message_id: msgId,
+      payload: { event: 'messages.upsert', instance, data: entry },
+    });
+  }
+
   if (records.length) checked(await client.from('copier_inbox').upsert(records, {
     onConflict: 'user_id,connection_id,message_id', ignoreDuplicates: true,
   }), 'Persistência do evento');
@@ -70,12 +149,19 @@ export async function acceptCopierEvent(payload: EvolutionWebhookPayload, suppli
 async function snapshot(userId: string, connectionId: string) {
   const client = database();
   const session = serviceSession(userId);
+  const loadCatalog = async () => {
+    const saved = await savedWhatsAppGroups(session, connectionId);
+    if (saved.groups.length > 0 && saved.connection.ownerJid) {
+      return saved;
+    }
+    return copierGroupCatalog(session, { connectionId, permissions: true });
+  };
   const [scoped, catalog, settingsResponse, qualityResponse, recentResponse, credentials] = await Promise.all([
     scopedCopierRules(session, connectionId),
-    copierGroupCatalog(session, { connectionId, permissions: true }),
+    loadCatalog(),
     client.from('user_settings').select('*').eq('user_id', userId).maybeSingle(),
     client.from('quality_rules').select('*').eq('user_id', userId),
-    client.from('publication_jobs').select('runtime_payload,status,sent_at,updated_at').eq('user_id', userId)
+    client.from('publication_jobs').select('id,runtime_payload,status,runtime_delivery,affiliate_url,original_url,clean_url,message_text,created_at,sent_at,updated_at').eq('user_id', userId)
       .eq('connection_id', connectionId).order('created_at', { ascending: false }).limit(200),
     getStoreCredentialsMapWithSecrets(userId),
   ]);
@@ -103,15 +189,37 @@ async function snapshot(userId: string, connectionId: string) {
     blockedKeywords: rule.blocked_keywords || [], updatedAt: rule.updated_at }));
   initial.templates = []; initial.hooks = []; initial.coupons = []; initial.products = []; initial.evaluations = [];
   initial.incomingMessages = []; initial.queueCampaigns = []; initial.listCampaigns = []; initial.curatorPlans = [];
-  initial.jobs = (recent || []).filter(row => row.runtime_payload).map(row => ({ ...row.runtime_payload,
-    status: row.status, sentAt: row.sent_at, updatedAt: row.updated_at } as PublicationJob));
+  initial.jobs = (recent || []).filter(row => row.runtime_payload).map(row => ({
+    ...row.runtime_payload,
+    id: row.id || row.runtime_payload.id,
+    status: row.status,
+    runtimeDelivery: row.runtime_delivery ?? null,
+    affiliateUrl: row.affiliate_url || row.runtime_payload?.affiliateUrl,
+    originalUrl: row.original_url || row.runtime_payload?.originalUrl,
+    cleanUrl: row.clean_url || (row.runtime_payload as PublicationJob & { cleanUrl?: string })?.cleanUrl,
+    messageText: row.message_text || row.runtime_payload?.messageText,
+    createdAt: row.created_at || row.runtime_payload?.createdAt,
+    sentAt: row.sent_at,
+    updatedAt: row.updated_at,
+  } as PublicationJob & { runtimeDelivery?: string | null; cleanUrl?: string }));
   return initial;
 }
 
 async function processEntry(entry: InboxEntry) {
   const started = performance.now();
-  const scoped = await scopedCopierRules(serviceSession(entry.user_id), entry.connection_id);
   const raw = Array.isArray(entry.payload.data) ? entry.payload.data[0] : entry.payload.data;
+  const rawTs = Number((raw as Record<string, unknown>)?.messageTimestamp || 0);
+  const msgTimeMs = rawTs > 1e12 ? rawTs : rawTs * 1000;
+  if (msgTimeMs > 0 && Date.now() - msgTimeMs > 2 * 60 * 60 * 1000) {
+    checked(await database().rpc('copier_complete_inbox', {
+      p_id: entry.id,
+      p_token: entry.lease_token,
+      p_result: { status: 'descartada', reason: 'Mensagem histórica antiga (> 2h) sincronizada após reconexão; descartada para evitar envio de ofertas vencidas.' },
+      p_jobs: [],
+    }), 'Conclusão de evento histórico antigo');
+    return;
+  }
+  const scoped = await scopedCopierRules(serviceSession(entry.user_id), entry.connection_id);
   const matchingSource = scoped.sources.find(source => source.isActive && source.groupJid === raw?.key?.remoteJid &&
     (source as typeof source & { ownerJid?: string }).ownerJid === scoped.connection.ownerJid);
   if (!matchingSource || raw?.key?.fromMe) {
@@ -175,6 +283,34 @@ async function sendEntry(row: StoredJob) {
   }
   const validation = validateJobForDispatch(job, initial);
   if (!validation.valid) return updateJob(row, { status: 'falha', error_details: validation.error });
+
+  // Trava anti-duplicata de última milha antes de disparar na Evolution API:
+  // Impede que 2 jobs da mesma oferta sejam enviados caso tenham sido criados quase simultaneamente
+  const otherJobs = initial.jobs.filter(j => j.id !== row.id);
+  const isDuplicateAtSendTime = isDuplicateOfferJob(
+    {
+      targetJid: job.targetJid,
+      affiliateUrl: job.affiliateUrl,
+      originalUrl: job.originalUrl,
+      cleanUrl: (job as PublicationJob & { cleanUrl?: string }).cleanUrl,
+      productTitle: extractProductTitleFromFormattedMessage(job.messageText),
+    },
+    otherJobs.filter(j =>
+      j.status === 'enviado' ||
+      j.status === 'enviando' ||
+      (j as PublicationJob & { runtimeDelivery?: string | null }).runtimeDelivery === 'accepted' ||
+      (j as PublicationJob & { runtimeDelivery?: string | null }).runtimeDelivery === 'uncertain'
+    ),
+    24
+  );
+  if (isDuplicateAtSendTime) {
+    return updateJob(row, {
+      status: 'falha',
+      runtime_delivery: 'blocked',
+      error_details: 'Envio duplicado bloqueado preventivamente: oferta já enviada recentemente para este grupo.',
+    });
+  }
+
   const quota = await getDailyOfferQuotaStatus(row.user_id);
   if (quota.limitReached) {
     return updateJob(row, {
@@ -196,7 +332,7 @@ async function sendEntry(row: StoredJob) {
     response = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/${media ? 'sendMedia' : 'sendText'}/${encodeURIComponent(connection.instanceName)}`, {
       method: 'POST', headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify(media ? { number: job.targetJid, mediatype: job.mediaType === 'video' ? 'video' : 'image', media: job.mediaUrl, caption: job.messageText } : { number: job.targetJid, text: job.messageText }),
-      signal: AbortSignal.timeout(20000), cache: 'no-store',
+      signal: AbortSignal.timeout(35000), cache: 'no-store',
     });
   } catch (netErr: unknown) {
     const netMsg = netErr instanceof Error ? netErr.message : String(netErr);
@@ -276,8 +412,9 @@ export async function runDurableCopierCycle() {
     await configurePendingWebhook();
 
     // 2ª Rodada: Processa eventos da caixa de entrada recebidos pelo Webhook
+    // Limita a 2 itens (ou 5s) por ciclo para garantir folga de tempo para o envio imediato na 3ª rodada
     const batchStarted = performance.now();
-    for (let count = 0; count < 12 && performance.now() - batchStarted < 8000; count++) {
+    for (let count = 0; count < 2 && performance.now() - batchStarted < 5000; count++) {
       const entries = checked(await database().rpc('copier_claim_inbox'), 'Reserva de evento') as InboxEntry[];
       if (!entries.length) break;
       {
@@ -289,8 +426,8 @@ export async function runDurableCopierCycle() {
         }
         catch (error) {
           checked(await database().from('copier_inbox').update({ status: entry.attempts >= 3 ? 'failed' : 'pending',
-            available_at: new Date(Date.now() + 30000).toISOString(), lease_until: null,
-            last_error: error instanceof CopierRuntimeError ? error.message : 'Falha de processamento. Consulte configurações de afiliados e gateway.' })
+            available_at: new Date(Date.now() + 15000).toISOString(), lease_until: null,
+            last_error: error instanceof Error ? error.message : 'Falha de processamento. Consulte configurações de afiliados e gateway.' })
             .eq('id', entry.id).eq('lease_token', entry.lease_token), 'Registro da falha do evento');
         }
       }

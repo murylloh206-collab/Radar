@@ -68,7 +68,7 @@ export async function photoGatewayRequest(config: GatewayConfig, endpoint: strin
       method: body ? 'POST' : 'GET',
       headers: { apikey: config.apiKey, ...(body ? { 'Content-Type': 'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(8000), cache: 'no-store',
+      signal: AbortSignal.timeout(35000), cache: 'no-store',
     });
   } catch {
     throw new WhatsAppPhotoError('GATEWAY_UNAVAILABLE', 503, 'Não foi possível consultar as fotos no gateway agora.');

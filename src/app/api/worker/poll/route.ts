@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runDurableCopierCycle } from '@/lib/server/copier-runtime';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 async function handlePoll(req: NextRequest) {
   try {
     const cronSecret = process.env.CRON_SECRET;

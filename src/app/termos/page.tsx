@@ -1,92 +1,127 @@
 import React from 'react';
 import Link from 'next/link';
-import { PLANS_ORDER, PLANS_CONFIG } from '@/lib/plans-config';
+import { PLANS_ORDER, PLANS_CONFIG, formatCurrencyBRL } from '@/lib/plans-config';
 
 export default function TermosPage() {
   return (
-    <section className="rp-page">
-      <div className="rp-head">
-        <div>
-          <span className="rp-step">Jurídico & Transparência SaaS</span>
-          <h1>Termos de Uso e Assinatura — Radar de Ofertas</h1>
-          <p className="rp-sub">
-            Regras de utilização da plataforma, limites operacionais dos planos Impulse, Plus e Ultimate, período de teste e política de cancelamento.
-          </p>
+    <div style={{ minHeight: '100vh', background: '#080D18', color: '#F4F6FA', padding: '40px 20px' }}>
+      <section className="rp-page" style={{ maxWidth: 960, margin: '0 auto' }}>
+        <div className="rp-head" style={{ flexWrap: 'wrap' }}>
+          <div>
+            <span className="rp-step" style={{ color: '#35D4ED' }}>Jurídico & Transparência SaaS</span>
+            <h1 style={{ color: '#F4F6FA' }}>Termos de Uso e Assinatura — Radar de Ofertas</h1>
+            <p className="rp-sub" style={{ color: '#B6C2D2' }}>
+              Regras de utilização da plataforma, recursos dos planos Impulse, Plus e Ultimate, condições de assinatura e uso responsável.
+            </p>
+          </div>
+          <div className="rp-actions">
+            <Link href="/" className="rp-btn rp-quiet">
+              Voltar ao início
+            </Link>
+            <Link href="/#rh-planos" className="rp-btn rp-primary">
+              Ver Planos e Preços
+            </Link>
+          </div>
         </div>
-        <div className="rp-actions">
-          <Link href="/planos" className="rp-btn rp-primary">
-            Ver Planos e Preços
-          </Link>
-        </div>
-      </div>
-
-      <div className="rp-panel rp-section" style={{ lineHeight: 1.65, fontSize: 13, color: '#CBD5E1' }}>
-        <h2 style={{ color: '#F8FBFF', fontSize: 17, marginTop: 0 }}>
-          1. Planos de Assinatura (Impulse, Plus e Ultimate)
-        </h2>
-        <p>
-          O Radar de Ofertas opera no modelo de Software como Serviço (SaaS) com três níveis de assinatura validados diretamente no servidor:
-        </p>
 
         <div
+          className="rp-panel rp-section"
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: 14,
-            margin: '16px 0',
+            lineHeight: 1.65,
+            fontSize: 13,
+            color: '#CBD5E1',
+            background: '#111B2C',
+            borderColor: '#2B3A50',
           }}
         >
-          {PLANS_ORDER.map((pid) => {
-            const p = PLANS_CONFIG[pid];
-            return (
-              <div
-                key={pid}
-                style={{
-                  background: '#050E1C',
-                  border: '1px solid #1C314B',
-                  borderRadius: 12,
-                  padding: 14,
-                }}
-              >
-                <strong style={{ color: '#1CCAF2', fontSize: 15 }}>Plano {p.name}</strong>
-                <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>{p.tagline}</div>
-                <div style={{ fontSize: 12, color: '#F8FBFF', marginTop: 8 }}>
-                  • Mensal: R$ {p.monthlyPrice.toFixed(2).replace('.', ',')}/mês
-                  <br />
-                  • Anual (12x): R$ {p.annualMonthlyEquivalent.toFixed(2).replace('.', ',')}/mês (Total R$ {p.annualTotalPrice.toFixed(2).replace('.', ',')})
+          <h2 style={{ color: '#F4F6FA', fontSize: 17, marginTop: 0 }}>
+            1. Planos de Assinatura (Impulse, Plus e Ultimate)
+          </h2>
+          <p>
+            O Radar de Ofertas opera no modelo de Software como Serviço (SaaS) com três planos de assinatura nas modalidades mensal ou anual (com compromisso de 12 meses). Não há período de teste gratuito.
+          </p>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: 14,
+              margin: '16px 0',
+            }}
+          >
+            {PLANS_ORDER.map((pid) => {
+              const p = PLANS_CONFIG[pid];
+              return (
+                <div
+                  key={pid}
+                  style={{
+                    background: '#080D18',
+                    border: '1px solid #2B3A50',
+                    borderRadius: 12,
+                    padding: 14,
+                  }}
+                >
+                  <strong style={{ color: '#35D4ED', fontSize: 15 }}>Plano {p.name}</strong>
+                  <div style={{ fontSize: 12, color: '#B6C2D2', marginTop: 4 }}>{p.landingSummary}</div>
+                  <div style={{ fontSize: 12, color: '#F4F6FA', marginTop: 8 }}>
+                    • Mensal: R$ {formatCurrencyBRL(p.monthlyPrice)}/mês
+                    <br />
+                    • Anual: 12× R$ {formatCurrencyBRL(p.annualMonthlyEquivalent)}/parcela (Total anual R$ {formatCurrencyBRL(p.annualTotalPrice)})
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: '#20C997', marginTop: 8 }}>
-                  Limite diário:{' '}
-                  {p.dailyOfferLimit === null
-                    ? 'Ofertas ilimitadas/dia'
-                    : `Até ${p.dailyOfferLimit} ofertas/dia`}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          <h2 style={{ color: '#F4F6FA', fontSize: 17 }}>
+            2. Contas de Afiliado e Vínculo com Lojas
+          </h2>
+          <p>
+            O Radar de Ofertas é uma plataforma independente, sem vínculo de aprovação ou parceria oficial com o Mercado Livre, Shopee, WhatsApp ou Telegram. Para gerar links de afiliado, o usuário deve possuir cadastro próprio aprovado na respectiva loja e configurar suas credenciais no painel.
+          </p>
+
+          <h2 style={{ color: '#F4F6FA', fontSize: 17 }}>
+            3. Conexão com o WhatsApp e Uso Responsável
+          </h2>
+          <p>
+            A conexão utilizada com o WhatsApp não é oficial da Meta/WhatsApp, existindo risco de restrição ou bloqueio do número conectado. Os controles de intervalo, horários e limites diários ajudam a organizar o ritmo de envios, mas não eliminam esse risco. O usuário compromete-se a publicar apenas em grupos e canais próprios ou autorizados, sem prática de spam.
+          </p>
+
+          <h2 style={{ color: '#F4F6FA', fontSize: 17 }}>
+            4. Cancelamento, Renovação e Direito de Arrependimento
+          </h2>
+          <p>
+            As assinaturas podem ser gerenciadas pelo titular a qualquer momento, mantendo-se o acesso até o fim do período contratado. Conforme o Art. 49 do Código de Defesa do Consumidor, o titular dispõe do prazo de 7 dias corridos após a contratação inicial para exercer o direito de arrependimento.
+          </p>
+
+          <div
+            style={{
+              marginTop: 20,
+              paddingTop: 16,
+              borderTop: '1px solid #2B3A50',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 16,
+              fontSize: 12,
+            }}
+          >
+            <Link href="/privacidade" style={{ color: '#35D4ED' }}>
+              Política de Privacidade →
+            </Link>
+            <Link href="/ajuda" style={{ color: '#35D4ED' }}>
+              Central de Ajuda →
+            </Link>
+            <a
+              href="https://wa.me/5519993812187"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#35D4ED' }}
+            >
+              Atendimento no WhatsApp ↗
+            </a>
+          </div>
         </div>
-
-        <h2 style={{ color: '#F8FBFF', fontSize: 17 }}>
-          2. Período de Teste Grátis (7 Dias no Plano Plus)
-        </h2>
-        <p>
-          Novas contas elegíveis podem ativar 7 dias de teste grátis no plano <strong>Plus</strong> para validar marca d&apos;água personalizada, vitrine pública <code>/@slug</code>, gerador de legendas IA, postagem no Telegram e selo de promoção real.
-        </p>
-
-        <h2 style={{ color: '#F8FBFF', fontSize: 17 }}>
-          3. Cancelamento, Renovação e Reembolso
-        </h2>
-        <p>
-          As assinaturas nos ciclos Mensal, Trimestral e Anual podem ser canceladas a qualquer momento, sem multa fidelidade. O acesso aos recursos do plano contratado permanece ativo até o término do ciclo já pago. Conforme o Código de Defesa do Consumidor (Art. 49), solicitações de arrependimento em até 7 dias corridos após a primeira contratação contam com reembolso integral.
-        </p>
-
-        <h2 style={{ color: '#F8FBFF', fontSize: 17 }}>
-          4. Integridade de Dados, APIs Oficiais e Envio Seguro
-        </h2>
-        <p>
-          O Radar de Ofertas não inventa métricas, cliques ou vendas convertidas. Todos os relatórios refletem exclusivamente cliques reais registrados pelo redirecionador <code>/r/[code]</code>, APIs oficiais de afiliados (como Shopee Affiliate GraphQL e Mercado Livre) ou relatórios CSV importados pelo próprio titular. O recurso de Envio Seguro aplica intervalos configuráveis e limite horário para proteger a conta de WhatsApp do usuário contra bloqueios por spam.
-        </p>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

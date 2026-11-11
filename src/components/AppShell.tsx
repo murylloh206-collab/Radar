@@ -32,7 +32,7 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const STANDALONE_PAGES = ['/login', '/cadastro', '/termos', '/ajuda', '/grupo'];
+const STANDALONE_PAGES = ['/', '/login', '/cadastro', '/termos', '/privacidade', '/ajuda', '/grupo'];
 
 function isStandalonePage(pathname: string | null): boolean {
   if (!pathname) return false;
@@ -150,7 +150,7 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   const getPageTitle = () => {
-    if (pathname === '/') return 'Início';
+    if (pathname === '/painel') return 'Início';
     if (pathname.startsWith('/copiador')) return 'Copiador';
     if (pathname.startsWith('/criar-conteudo') || pathname.startsWith('/gerar-postagem') || pathname.startsWith('/mensagem-avulsa') || pathname.startsWith('/stories')) return 'Criar conteúdo';
     if (pathname.startsWith('/ofertas')) return 'Ofertas';
@@ -165,7 +165,7 @@ export function AppShell({ children }: AppShellProps) {
   const pageTitle = getPageTitle();
 
   const isCurrent = (path: string) => {
-    if (path === '/') return pathname === '/';
+    if (path === '/painel') return pathname === '/painel';
     return pathname.startsWith(path);
   };
 
@@ -197,7 +197,7 @@ export function AppShell({ children }: AppShellProps) {
         </button>
 
         {/* Marca do Painel (Personalizável no Plus e Ultimate) */}
-        <Link href="/" className="rdv3-brand">
+        <Link href="/painel" className="rdv3-brand">
           {canUsePanelBranding && customPanelLogoUrl ? (
             <img
               src={customPanelLogoUrl}
@@ -237,9 +237,9 @@ export function AppShell({ children }: AppShellProps) {
         <nav className="rdv3-nav" aria-label="Navegação principal">
           <h2>Visão geral</h2>
           <Link
-            href="/"
-            className={isCurrent('/') ? 'rdv3-active' : ''}
-            aria-current={isCurrent('/') ? 'page' : undefined}
+            href="/painel"
+            className={isCurrent('/painel') ? 'rdv3-active' : ''}
+            aria-current={isCurrent('/painel') ? 'page' : undefined}
           >
             <span className="nav-icon">
               <LayoutDashboard className="w-3.5 h-3.5" />
@@ -746,9 +746,9 @@ export function AppShell({ children }: AppShellProps) {
           <div className="rp-stack rp-section" style={{ fontSize: 12, lineHeight: 1.6, color: '#c6ccce' }}>
             <p>
               <strong>Planos SaaS (Impulse, Plus e Ultimate):</strong>
-              <br />• <strong>Impulse:</strong> Até 30 ofertas/dia, copiador de grupos, marca d&apos;água padrão, envio seguro e métricas básicas do WhatsApp.
-              <br />• <strong>Plus (7 dias grátis):</strong> Ofertas ilimitadas, marca d&apos;água personalizável, legendas com IA, cards Feed/Story, selo de promoção real, vitrine <code>/@slug</code>, Telegram e métricas da plataforma.
-              <br />• <strong>Ultimate:</strong> Buscador comparador multiloja, relatório de vendas convertidas por loja (API Shopee + CSV), alerta de queda de preço, &quot;O que postar hoje&quot;, Radar de Oportunidades (fila de revisão), relatório semanal e equipe/múltiplos canais.
+              <br />• <strong>Impulse:</strong> Copiador de grupos, modelos de mensagem, imagens originais do anúncio, agendamento, histórico de envios e métricas básicas do WhatsApp.
+              <br />• <strong>Plus:</strong> Marca d&apos;água personalizável, identidade do painel, cards Feed/Story, vitrine <code>/@slug</code>, Telegram e métricas básicas de cliques.
+              <br />• <strong>Ultimate:</strong> Buscador comparador multiloja, métricas por loja e visão consolidada, alerta de queda de preço, &quot;O que postar hoje&quot;, Radar de Oportunidades (fila de revisão) e equipe/múltiplos canais.
             </p>
             <p>
               <strong>1. Copiador & Criar Conteúdo:</strong> Capture ofertas, aplique sua marca d&apos;água, gere cards 9:16 e dispare com link <code>?src=</code> rastreado.

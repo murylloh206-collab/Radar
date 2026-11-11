@@ -289,9 +289,7 @@ export default function PlanosPage() {
                           : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
                       }`}
                     >
-                      {plan.id === 'plus'
-                        ? `Testar ${TRIAL_CONFIG.durationDays} dias grátis no Plus`
-                        : `Assinar ${plan.name}`}
+                      {`Escolher ${plan.name}`}
                     </button>
                   )}
 

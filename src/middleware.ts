@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { inspectSessionEdge, SESSION_COOKIE_NAME } from './lib/edge-session';
 
 function sanitizeRedirect(target?: string | null): string {
-  if (!target || typeof target !== 'string') return '/';
+  if (!target || typeof target !== 'string') return '/painel';
   const trimmed = target.trim();
   if (
     !trimmed ||
@@ -14,7 +14,7 @@ function sanitizeRedirect(target?: string | null): string {
     trimmed.startsWith('https://') ||
     trimmed.startsWith('//')
   ) {
-    return '/';
+    return '/painel';
   }
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   '/cadastro',
   '/planos',
   '/termos',
+  '/privacidade',
   '/ajuda',
   '/grupo',
   '/r/',
@@ -131,9 +132,11 @@ export async function middleware(req: NextRequest) {
   }
 
   // 3.1 Se for qualquer rota pública, permitir passagem livre
-  const isPublicRoute = PUBLIC_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(prefix)
-  );
+  const isPublicRoute =
+    pathname === '/' ||
+    PUBLIC_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(prefix)
+    );
 
   if (isPublicRoute) {
     // Se o usuário já estiver logado e tentar abrir /login ou /cadastro, manda para o painel com destino seguro
@@ -173,7 +176,7 @@ export async function middleware(req: NextRequest) {
   if (!isAuthenticated) {
     const loginUrl = new URL('/login', req.url);
     const safeRedirect = sanitizeRedirect(pathname);
-    if (safeRedirect !== '/') {
+    if (safeRedirect !== '/painel') {
       loginUrl.searchParams.set('redirect', safeRedirect);
     }
     if (isExpired) {
