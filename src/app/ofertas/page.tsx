@@ -528,18 +528,20 @@ function OfertasContent() {
       </div>
 
       {/* Central de Inteligência Ultimate: O que Postar Hoje, Radar de Oportunidades (Fila de Revisão) e Alerta de Queda de Preço */}
-      <UltimateIntelligenceHub
-        mode="offers"
-        onSelectOfferForCopier={(offer) => {
-          const params = new URLSearchParams({
-            aba: 'oferta-link',
-            title: offer.title,
-            price: String(offer.price),
-            url: offer.affiliateUrl,
-          });
-          router.push(`/criar-conteudo?${params.toString()}`);
-        }}
-      />
+      <div id="alertas">
+        <UltimateIntelligenceHub
+          mode="offers"
+          onSelectOfferForCopier={(offer) => {
+            const params = new URLSearchParams({
+              aba: 'oferta-link',
+              title: offer.title,
+              price: String(offer.price),
+              url: offer.affiliateUrl,
+            });
+            router.push(`/criar-conteudo?${params.toString()}`);
+          }}
+        />
+      </div>
     </section>
   );
 }

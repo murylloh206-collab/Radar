@@ -1,0 +1,870 @@
+#radar-access {
+  --bg: #080d18;
+  --surface: #111b2c;
+  --surface-2: #0d1625;
+  --line: #2b3a50;
+  --text: #f4f6fa;
+  --muted: #b6c2d2;
+  --cyan: #35d4ed;
+  --mint: #7ef0b4;
+  --amber: #f6c768;
+  --danger: #f59b9b;
+  position: relative;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 15px/1.65 Inter, Arial, sans-serif;
+  color-scheme: dark;
+  isolation: isolate;
+  overflow-x: clip;
+  overflow-wrap: break-word;
+}
+
+#radar-access::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(53, 212, 237, 0.11), transparent 44%),
+    radial-gradient(circle at 82% 72%, rgba(69, 98, 220, 0.1), transparent 42%);
+  z-index: 0;
+}
+
+#radar-access * {
+  box-sizing: border-box;
+}
+
+#radar-access [hidden] {
+  display: none !important;
+}
+
+#radar-access h1,
+#radar-access h2,
+#radar-access h3,
+#radar-access p {
+  margin: 0;
+}
+
+#radar-access button,
+#radar-access input {
+  font: inherit;
+}
+
+#radar-access button {
+  cursor: pointer;
+}
+
+#radar-access a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#radar-access :is(button, a, input, summary):focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+}
+
+#radar-access .shell {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 56px, 1120px);
+  margin: 0 auto;
+}
+
+#radar-access .overline {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+#radar-access h1 {
+  font: 700 clamp(32px, 4.4vw, 52px)/1.08 "Playfair Display", Georgia, serif;
+  letter-spacing: -1.4px;
+  color: var(--text);
+}
+
+#radar-access h2 {
+  font: 600 clamp(25px, 3.2vw, 36px)/1.18 Inter, Arial, sans-serif;
+  letter-spacing: -1px;
+  color: var(--text);
+}
+
+#radar-access h3 {
+  font-size: 17px;
+  line-height: 1.32;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#radar-access p {
+  color: var(--muted);
+}
+
+#radar-access .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#radar-access .brand-mark {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(53, 212, 237, 0.55);
+  background: radial-gradient(circle, rgba(53, 212, 237, 0.28), transparent 68%);
+  flex-shrink: 0;
+}
+
+#radar-access .brand-mark::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(53, 212, 237, 0.35);
+}
+
+#radar-access .brand-mark::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  top: 4px;
+  right: 4px;
+  box-shadow: 0 0 10px var(--cyan);
+}
+
+#radar-access .inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--cyan);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#radar-access .inline-link:hover {
+  text-decoration: underline;
+}
+
+#radar-access .action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 11px 18px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: rgba(17, 27, 44, 0.78);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform 0.16s, border-color 0.18s, background 0.18s;
+}
+
+#radar-access .action:hover {
+  border-color: rgba(53, 212, 237, 0.55);
+  transform: translateY(-1px);
+}
+
+#radar-access .action.primary {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #06131c;
+  font-weight: 700;
+}
+
+#radar-access .action.primary:hover {
+  background: #63e0f3;
+}
+
+#radar-access .action.primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+#radar-access .auth-shell {
+  padding: 28px 0 42px;
+}
+
+#radar-access .auth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+#radar-access .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: rgba(17, 27, 44, 0.72);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#radar-access .back-link:hover {
+  color: var(--text);
+  border-color: rgba(53, 212, 237, 0.48);
+}
+
+#radar-access .auth-layout {
+  display: grid;
+  grid-template-columns: 0.96fr 1.04fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+#radar-access .auth-art,
+#radar-access .auth-form {
+  border-radius: 26px;
+  border: 1px solid var(--line);
+  background: rgba(17, 27, 44, 0.9);
+  padding: 32px;
+}
+
+#radar-access .auth-art {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(53, 212, 237, 0.18), transparent 52%),
+    linear-gradient(180deg, rgba(19, 31, 51, 0.96), rgba(9, 15, 27, 0.96));
+}
+
+#radar-access .auth-art h2 {
+  margin-top: 12px;
+  max-width: 420px;
+}
+
+#radar-access .auth-art > div > p {
+  margin-top: 10px;
+  max-width: 410px;
+}
+
+#radar-access .brand-world {
+  position: relative;
+  min-height: 255px;
+  margin: 26px 0 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(58, 79, 108, 0.78);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(53, 212, 237, 0.14), transparent 64%),
+    rgba(8, 13, 24, 0.78);
+  padding: 20px;
+  display: grid;
+  place-items: center;
+}
+
+#radar-access .world-ring {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 1px dashed rgba(53, 212, 237, 0.28);
+}
+
+#radar-access .floating-poster {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 290px);
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 13px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(53, 212, 237, 0.48);
+  background: rgba(15, 25, 41, 0.96);
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.42);
+}
+
+#radar-access .floating-poster img {
+  width: 76px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 13px;
+  display: block;
+}
+
+#radar-access .floating-poster small {
+  display: block;
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+#radar-access .floating-poster strong {
+  display: block;
+  font-size: 15px;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+#radar-access .floating-poster span {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  background: rgba(53, 212, 237, 0.13);
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#radar-access .floating-label {
+  position: absolute;
+  padding: 7px 11px;
+  border-radius: 99px;
+  border: 1px solid rgba(59, 78, 106, 0.85);
+  background: rgba(11, 18, 31, 0.92);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+#radar-access .floating-label.top {
+  top: 16px;
+  left: 16px;
+}
+
+#radar-access .floating-label.bottom {
+  right: 16px;
+  bottom: 16px;
+  color: var(--mint);
+}
+
+#radar-access .auth-footnote {
+  font-size: 12px;
+  color: #93a5bc;
+}
+
+#radar-access .auth-form h1 {
+  font-size: clamp(28px, 3.2vw, 38px);
+  margin-top: 8px;
+}
+
+#radar-access .auth-form > p {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+#radar-access .intent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 11px 14px;
+  border-radius: 15px;
+  border: 1px solid rgba(53, 212, 237, 0.36);
+  background: rgba(53, 212, 237, 0.08);
+  font-size: 13px;
+  color: var(--text);
+}
+
+#radar-access .intent strong {
+  color: var(--cyan);
+}
+
+#radar-access form {
+  margin-top: 20px;
+  display: grid;
+  gap: 15px;
+}
+
+#radar-access .field {
+  display: grid;
+  gap: 7px;
+}
+
+#radar-access .field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#radar-access .field input {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(58, 79, 108, 0.95);
+  background: rgba(8, 13, 24, 0.88);
+  color: var(--text);
+  font-size: 15px;
+}
+
+#radar-access .field input::placeholder {
+  color: #7789a1;
+}
+
+#radar-access .field input:focus {
+  border-color: var(--cyan);
+}
+
+#radar-access .password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+#radar-access .password-wrap input {
+  padding-right: 92px;
+}
+
+#radar-access .show-pass {
+  position: absolute;
+  right: 8px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(58, 79, 108, 0.8);
+  background: rgba(17, 27, 44, 0.9);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#radar-access .show-pass:hover {
+  color: var(--text);
+  border-color: rgba(53, 212, 237, 0.45);
+}
+
+#radar-access .field-note {
+  font-size: 12px;
+  color: #93a5bc;
+}
+
+#radar-access .form-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#radar-access .checkbox {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+#radar-access .checkbox input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--cyan);
+}
+
+#radar-access .checkbox button,
+#radar-access .checkbox a {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--cyan);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+#radar-access .wide-button {
+  width: 100%;
+  min-height: 48px;
+  font-size: 15px;
+}
+
+#radar-access .auth-switch {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(43, 58, 80, 0.72);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+#radar-access .form-info {
+  padding: 10px 13px;
+  border-radius: 13px;
+  background: rgba(8, 13, 24, 0.66);
+  border: 1px solid rgba(43, 58, 80, 0.78);
+  font-size: 12px;
+  color: #9fb0c7;
+}
+
+#radar-access .form-message {
+  padding: 11px 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(53, 212, 237, 0.38);
+  background: rgba(53, 212, 237, 0.09);
+  color: var(--text);
+  font-size: 13px;
+}
+
+#radar-access .form-message.warn {
+  border-color: rgba(246, 199, 104, 0.45);
+  background: rgba(246, 199, 104, 0.1);
+  color: #ffe2a4;
+}
+
+#radar-access .auth-bottom {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #93a5bc;
+}
+
+#radar-access .auth-bottom-links {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+#radar-access .auth-bottom button,
+#radar-access .auth-bottom a {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#radar-access .auth-bottom button:hover,
+#radar-access .auth-bottom a:hover {
+  color: var(--cyan);
+}
+
+#radar-access .simple-auth {
+  max-width: 560px;
+  margin: 18px auto 0;
+  border-radius: 26px;
+  border: 1px solid var(--line);
+  background: rgba(17, 27, 44, 0.92);
+  padding: 34px;
+}
+
+#radar-access .mail-visual {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  border: 1px solid rgba(53, 212, 237, 0.45);
+  background: rgba(53, 212, 237, 0.11);
+  color: var(--cyan);
+}
+
+#radar-access .simple-auth h1 {
+  font-size: clamp(28px, 3.2vw, 38px);
+  margin-top: 8px;
+}
+
+#radar-access .simple-auth > p {
+  margin-top: 8px;
+}
+
+#radar-access .legal {
+  padding: 28px 0 56px;
+}
+
+#radar-access .legal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 28px 30px;
+  border-radius: 26px;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 100% 0, rgba(53, 212, 237, 0.14), transparent 52%),
+    rgba(17, 27, 44, 0.9);
+}
+
+#radar-access .legal-head h1 {
+  font-size: clamp(30px, 3.8vw, 44px);
+  margin-top: 8px;
+}
+
+#radar-access .legal-head .intro {
+  margin-top: 10px;
+  max-width: 620px;
+  font-size: 15px;
+}
+
+#radar-access .legal-seal {
+  padding: 12px 15px;
+  border-radius: 16px;
+  border: 1px solid rgba(53, 212, 237, 0.34);
+  background: rgba(8, 13, 24, 0.72);
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 250px;
+}
+
+#radar-access .legal-seal strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+#radar-access .legal-highlights {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+#radar-access .legal-highlight {
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(13, 22, 37, 0.86);
+}
+
+#radar-access .legal-highlight span {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  background: rgba(53, 212, 237, 0.12);
+  color: var(--cyan);
+}
+
+#radar-access .legal-highlight p {
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+#radar-access .legal-layout {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+#radar-access .legal-index {
+  position: sticky;
+  top: 24px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(13, 22, 37, 0.86);
+  display: grid;
+  gap: 7px;
+}
+
+#radar-access .legal-index strong {
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 4px;
+}
+
+#radar-access .legal-index button {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 11px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#radar-access .legal-index button:hover {
+  background: rgba(53, 212, 237, 0.1);
+  color: var(--text);
+}
+
+#radar-access .legal-topics {
+  display: grid;
+  gap: 12px;
+}
+
+#radar-access details.legal-topic {
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(17, 27, 44, 0.88);
+  padding: 18px 22px;
+}
+
+#radar-access details.legal-topic summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#radar-access details.legal-topic summary::-webkit-details-marker {
+  display: none;
+}
+
+#radar-access details.legal-topic summary::after {
+  content: '+';
+  color: var(--cyan);
+  font-size: 20px;
+  line-height: 1;
+}
+
+#radar-access details.legal-topic[open] summary::after {
+  content: '–';
+}
+
+#radar-access details.legal-topic p {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+#radar-access details.legal-topic ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+#radar-access details.legal-topic strong {
+  color: var(--text);
+}
+
+#radar-access .legal-help {
+  margin-top: 16px;
+  padding: 18px 22px;
+  border-radius: 20px;
+  border: 1px solid rgba(43, 58, 80, 0.85);
+  background: rgba(11, 18, 31, 0.82);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 980px) {
+  #radar-access .auth-layout,
+  #radar-access .legal-layout,
+  #radar-access .legal-highlights {
+    grid-template-columns: 1fr;
+  }
+
+  #radar-access .legal-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #radar-access .legal-index {
+    position: static;
+  }
+}
+
+@media (max-width: 650px) {
+  #radar-access .shell {
+    width: calc(100% - 32px);
+  }
+
+  #radar-access .auth-art {
+    display: none;
+  }
+
+  #radar-access .auth-form,
+  #radar-access .simple-auth,
+  #radar-access .legal-head {
+    padding: 24px 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #radar-access *,
+  #radar-access *::before,
+  #radar-access *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  #radar-access {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  #radar-access::before,
+  #radar-access .back-link,
+  #radar-access .legal-index {
+    display: none !important;
+  }
+
+  #radar-access .shell {
+    width: 100% !important;
+  }
+
+  #radar-access .legal-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  #radar-access .legal-head,
+  #radar-access .legal-highlight,
+  #radar-access details.legal-topic,
+  #radar-access .legal-help {
+    background: #ffffff !important;
+    border-color: #d1d5db !important;
+    color: #111827 !important;
+    break-inside: avoid;
+  }
+
+  #radar-access h1,
+  #radar-access h2,
+  #radar-access h3,
+  #radar-access p,
+  #radar-access li,
+  #radar-access summary,
+  #radar-access strong {
+    color: #111827 !important;
+  }
+}
+

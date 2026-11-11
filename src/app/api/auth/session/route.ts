@@ -1,23 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/server/auth';
+import { getSessionFromRequest, inspectRequestSession } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
-  const session = getSessionFromRequest(req);
+  const inspection = inspectRequestSession(req);
 
-  if (!session) {
+  if (inspection.valid && inspection.session) {
+    return NextResponse.json({
+      ok: true,
+      authenticated: true,
+      hasCookieSession: true,
+      expired: false,
+      user: {
+        userId: inspection.session.userId,
+        email: inspection.session.email,
+        role: inspection.session.role,
+      },
+    });
+  }
+
+  if (inspection.expired) {
     return NextResponse.json({
       ok: false,
       authenticated: false,
+      hasCookieSession: false,
+      expired: true,
+    });
+  }
+
+  const fallbackSession = getSessionFromRequest(req);
+  if (!fallbackSession || req.nextUrl.searchParams.get('strict') === '1') {
+    return NextResponse.json({
+      ok: false,
+      authenticated: false,
+      hasCookieSession: false,
+      expired: false,
     });
   }
 
   return NextResponse.json({
     ok: true,
     authenticated: true,
+    hasCookieSession: false,
+    expired: false,
     user: {
-      userId: session.userId,
-      email: session.email,
-      role: session.role,
+      userId: fallbackSession.userId,
+      email: fallbackSession.email,
+      role: fallbackSession.role,
     },
   });
 }

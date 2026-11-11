@@ -6,8 +6,9 @@ import { ensureUserSubscription } from '@/lib/server/plan-guard';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, acceptedTerms, refCode } = body;
+    const { name, email, password, acceptedTerms, refCode } = body;
 
+    const cleanName = String(name || '').trim().slice(0, 80);
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanPass = (password || '').trim();
 
@@ -17,13 +18,13 @@ export async function POST(req: NextRequest) {
 
     if (!acceptedTerms) {
       return NextResponse.json(
-        { ok: false, error: 'É obrigatório aceitar os Termos de Uso e a Política de Privacidade.' },
+        { ok: false, error: 'Confirme os Termos de Uso e a Política de Privacidade para criar sua conta.' },
         { status: 400 }
       );
     }
 
-    if (cleanPass.length < 6) {
-      return NextResponse.json({ ok: false, error: 'A senha deve ter no mínimo 6 caracteres.' }, { status: 400 });
+    if (cleanPass.length < 8) {
+      return NextResponse.json({ ok: false, error: 'Use pelo menos 8 caracteres na senha.' }, { status: 400 });
     }
 
     if (!isSupabaseConfigured || !supabase) {
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
       password: cleanPass,
       options: {
         data: {
+          name: cleanName || undefined,
+          full_name: cleanName || undefined,
           accepted_terms: true,
           accepted_terms_at: new Date().toISOString(),
           referred_by: refCode || null,
@@ -47,41 +50,31 @@ export async function POST(req: NextRequest) {
 
     if (error || !data.user) {
       return NextResponse.json(
-        { ok: false, error: error?.message || 'Falha ao criar usuário no Supabase Auth.' },
+        { ok: false, error: error?.message || 'Não foi possível criar a conta agora. Verifique os dados e tente novamente.' },
         { status: 400 }
       );
     }
 
     const userId = data.user.id;
-    // Se não há sessão retornada no signUp, significa que a confirmação de e-mail é obrigatória
     const requiresEmailConfirmation = !data.session;
 
-    // REGRA ESTABELECIDA: O trial de 7 dias NÃO é ativado até que o e-mail seja confirmado.
-    // Se o usuário ainda não confirmou o e-mail, registramos a assinatura como 'pending_confirmation'.
-    if (!requiresEmailConfirmation) {
-      // Confirmação já atendida ou desativada no Supabase
-      await ensureUserSubscription(userId, {
-        referredBy: refCode || null,
-        customStatus: 'trialing',
-      });
-    } else {
-      // Cria registro aguardando verificação do e-mail (sem conceder os 7 dias de trial até o primeiro login verificado)
-      await ensureUserSubscription(userId, {
-        referredBy: refCode || null,
-        customStatus: 'pending_confirmation' as any,
-      });
-    }
+    // Sem período de teste grátis: conta criada sem ativar assinatura paga nem liberar recursos pagos indevidamente
+    await ensureUserSubscription(userId, {
+      referredBy: refCode || null,
+      customStatus: 'canceled',
+      withoutTrial: true,
+    });
 
     const response = NextResponse.json({
       ok: true,
       requiresEmailConfirmation,
       user: {
         id: userId,
+        name: cleanName || undefined,
         email: cleanEmail,
       },
     });
 
-    // Se já estiver confirmado/logado de imediato, emite cookie de sessão
     if (data.session) {
       const token = signSession({
         userId,

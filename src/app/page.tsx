@@ -2,34 +2,35 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
   ArrowUpRight,
   BadgePercent,
-  BellRing,
-  ChartNoAxesCombined,
   CopyCheck,
   Expand,
   Eye,
-  Fingerprint,
   Headphones,
   Lamp,
   LayoutTemplate,
   Link as LinkIcon,
   Menu,
-  MessageSquareText,
-  MessagesSquare,
+  MessageCircle,
   Palette,
-  PanelsTopLeft,
+  Pause,
   Play,
-  Repeat2,
-  Search,
   Send,
   SlidersHorizontal,
   Store,
   TextCursorInput,
 } from 'lucide-react';
 import { BillingCycle, PLAN_ORDER, PLANS_CONFIG } from '@/lib/plans-config';
+import {
+  hasKnownAccountPreference,
+  markKnownAccountPreference,
+  PUBLIC_RESOURCES,
+  PublicResourceKey,
+} from '@/lib/access-navigation';
 import './radar-home.css';
 
 interface RadarPromo {
@@ -53,15 +54,13 @@ const RADAR_PROMOS: RadarPromo[] = [
 type CopyOrigin = 'tecnologia' | 'casa';
 type MessageTone = 'direto' | 'proximo' | 'essencial';
 type ArtFormat = 'feed' | 'story';
-type FeatureKey =
-  | 'copiador'
-  | 'mensagens'
-  | 'identidade'
-  | 'cards'
-  | 'vitrine'
-  | 'metricas'
-  | 'busca'
-  | 'alertas';
+type JourneyStep = 'origin' | 'identity' | 'delivery';
+
+const JOURNEY_COPY: Record<JourneyStep, string> = {
+  origin: 'Escolha as fontes que você pode acompanhar. Você decide quais grupos entram na sua rotina.',
+  identity: 'Personalize o texto e use o link da sua integração. A conversão precisa ser validada antes do envio.',
+  delivery: 'Defina os canais, os horários e os intervalos. Você acompanha o histórico e pode pausar a operação.',
+};
 
 const MESSAGE_TONES: Record<MessageTone, string> = {
   direto:
@@ -77,55 +76,6 @@ const ART_COLORS = [
   { hex: '#70d8ae', label: 'Menta' },
   { hex: '#f0c36d', label: 'Dourado suave' },
 ] as const;
-
-interface FeatureModalInfo {
-  title: string;
-  text: string;
-  anchor: string;
-}
-
-const FEATURES_INFO: Record<FeatureKey, FeatureModalInfo> = {
-  copiador: {
-    title: 'Copiador de ofertas',
-    text: 'Defina a origem, os destinos, os horários e os filtros. A oferta passa pela conversão do link da sua conta antes de entrar no fluxo de envio.',
-    anchor: '#rh-copiador',
-  },
-  mensagens: {
-    title: 'Mensagens próprias',
-    text: 'Salve um modelo com seu tom de voz. As informações da oferta preenchem o texto, sem inventar preço anterior, desconto ou disponibilidade.',
-    anchor: '#rh-mensagens',
-  },
-  identidade: {
-    title: 'Identidade da sua marca',
-    text: 'A partir do Plus, personalize as cores do painel e configure a marca d’água com sua logo e seu @. No Impulse, use as imagens originais do anúncio.',
-    anchor: '#rh-criacao',
-  },
-  cards: {
-    title: 'Cards para feed e story',
-    text: 'Prepare a oferta em formato quadrado ou vertical, com identidade visual e leitura adequada. A geração da arte é diferente da publicação nas redes sociais.',
-    anchor: '#rh-criacao',
-  },
-  vitrine: {
-    title: 'Sua vitrine no link da bio',
-    text: 'Reúna ofertas em uma página compartilhável com os links da sua integração. A vitrine faz parte do Plus e do Ultimate.',
-    anchor: '#rh-planos',
-  },
-  metricas: {
-    title: 'Métricas com contexto',
-    text: 'Impulse: métricas básicas do WhatsApp. Plus: também métricas básicas de cliques. Ultimate: visão por loja e consolidada, com vendas quando informadas pela integração. Cliques não garantem vendas nem identificam todos os visitantes.',
-    anchor: '#rh-planos',
-  },
-  busca: {
-    title: 'Buscador e comparador',
-    text: 'No Ultimate, pesquise produtos e compare as ofertas encontradas nas lojas conectadas. Preço, frete, disponibilidade e cupons precisam ser conferidos nas condições da loja.',
-    anchor: '#rh-planos',
-  },
-  alertas: {
-    title: 'Alertas de queda de preço',
-    text: 'No Ultimate, acompanhe produtos e os preços registrados. O alerta depende de novas consultas e da disponibilidade da integração; não é uma promessa de preço em tempo real.',
-    anchor: '#rh-planos',
-  },
-};
 
 const FAQ_ITEMS = [
   {
@@ -314,7 +264,12 @@ interface DialogState {
 }
 
 export default function RadarPublicHomePage() {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [journeyStep, setJourneyStep] = useState<JourneyStep>('identity');
+  const [journeyPaused, setJourneyPaused] = useState(false);
+  const [hasActiveSession, setHasActiveSession] = useState(false);
+  const [hasKnownAccount, setHasKnownAccount] = useState(false);
   const [origin, setOrigin] = useState<CopyOrigin>('tecnologia');
   const [copyStatus, setCopyStatus] = useState(
     'Escolha uma origem e veja como a oferta será preparada.'
@@ -328,10 +283,10 @@ export default function RadarPublicHomePage() {
   const [billing, setBilling] = useState<BillingCycle>('mensal');
   const [openFaqId, setOpenFaqId] = useState<string | null>(null);
   const [dialogData, setDialogData] = useState<DialogState>({
-    kicker: 'Conheça o recurso',
+    kicker: 'Sua personalização',
     title: '',
     text: '',
-    label: 'Entendi',
+    label: 'Voltar à edição',
   });
 
   const navRef = useRef<HTMLElement | null>(null);
@@ -340,6 +295,63 @@ export default function RadarPublicHomePage() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const lastTriggerRef = useRef<HTMLElement | null>(null);
   const activeArtBlobUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reducedMotion) {
+        setJourneyPaused(true);
+      }
+      if (hasKnownAccountPreference()) {
+        setHasKnownAccount(true);
+      }
+    }
+
+    let cancelled = false;
+    fetch('/api/auth/session?strict=1', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.hasCookieSession) {
+          setHasActiveSession(true);
+          setHasKnownAccount(true);
+          markKnownAccountPreference();
+        } else if (data?.expired) {
+          setHasActiveSession(false);
+          setHasKnownAccount(true);
+          markKnownAccountPreference();
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleResourceNavigation = useCallback(
+    (resourceKey: PublicResourceKey) => {
+      const def = PUBLIC_RESOURCES[resourceKey];
+      if (!def) return;
+
+      if (hasActiveSession) {
+        router.push(def.route);
+        return;
+      }
+
+      const query = new URLSearchParams({
+        recurso: def.key,
+        redirect: def.route,
+      }).toString();
+
+      if (hasKnownAccount || hasKnownAccountPreference()) {
+        router.push(`/login?${query}`);
+      } else {
+        router.push(`/cadastro?${query}`);
+      }
+    },
+    [hasActiveSession, hasKnownAccount, router]
+  );
 
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
@@ -533,23 +545,6 @@ export default function RadarPublicHomePage() {
     }
   };
 
-  const handleOpenFeature = (
-    key: FeatureKey,
-    event: React.MouseEvent<HTMLButtonElement>
-  ) => {
-    const info = FEATURES_INFO[key];
-    openModal(
-      {
-        kicker: 'Conheça o recurso',
-        title: info.title,
-        text: info.text,
-        label: info.anchor === '#rh-planos' ? 'Ver planos' : 'Experimentar a demonstração',
-        targetAnchor: info.anchor,
-      },
-      event.currentTarget
-    );
-  };
-
   const displayBrand = brand.trim() || 'SUA MARCA';
 
   return (
@@ -614,10 +609,18 @@ export default function RadarPublicHomePage() {
             </nav>
 
             <div className="nav-actions">
-              <Link href="/login">Entrar</Link>
-              <Link href="/cadastro" className="action primary">
-                Começar agora <ArrowUpRight aria-hidden="true" />
-              </Link>
+              {hasActiveSession ? (
+                <Link href="/painel" className="action primary">
+                  Meu painel <ArrowUpRight aria-hidden="true" />
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login">Entrar</Link>
+                  <Link href="/cadastro" className="action primary">
+                    Começar agora <ArrowUpRight aria-hidden="true" />
+                  </Link>
+                </>
+              )}
             </div>
 
             <button
@@ -675,12 +678,20 @@ export default function RadarPublicHomePage() {
             >
               FAQ
             </a>
-            <Link href="/login" onClick={closeMenu}>
-              Entrar
-            </Link>
-            <Link href="/cadastro" className="action primary" onClick={closeMenu}>
-              Começar agora
-            </Link>
+            {hasActiveSession ? (
+              <Link href="/painel" className="action primary" onClick={closeMenu}>
+                Meu painel
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" onClick={closeMenu}>
+                  Entrar
+                </Link>
+                <Link href="/cadastro" className="action primary" onClick={closeMenu}>
+                  Começar agora
+                </Link>
+              </>
+            )}
           </nav>
         </header>
 
@@ -716,75 +727,194 @@ export default function RadarPublicHomePage() {
                 Sua divulgação, organizada. Escolha o plano que acompanha sua rotina.
               </p>
 
-              <div className="browser">
-                <div className="browser-bar">
-                  <span className="dots" aria-hidden="true">
-                    ●●●
-                  </span>
-                  Radar · visão da operação
-                  <span className="demo-label">Demonstração — dados de exemplo</span>
-                </div>
-                <div className="flow">
-                  <div className="flow-card">
-                    <div className="eyebrow">01 · Origem</div>
-                    <div className="row">
-                      <span className="mini-icon">
-                        <MessagesSquare aria-hidden="true" />
-                      </span>
-                      <strong>Grupo selecionado</strong>
-                    </div>
-                    <p>Você escolhe de onde vêm as ofertas.</p>
+              <div
+                className={`journey${journeyPaused ? ' stopped' : ''}`}
+                id="ra-flow"
+                aria-label="Como uma oferta percorre o Radar"
+              >
+                <div className="journey-top">
+                  <div>
+                    <span className="overline">Como o Radar trabalha com você</span>
+                    <strong>Uma oferta. Todo o caminho conectado.</strong>
                   </div>
-                  <span className="arrow" aria-hidden="true">
-                    →
-                  </span>
-                  <div className="flow-card accent">
-                    <div className="eyebrow">02 · Sua identidade</div>
-                    <div className="row">
-                      <span className="mini-icon">
-                        <Fingerprint aria-hidden="true" />
-                      </span>
-                      <strong>Oferta personalizada</strong>
-                    </div>
-                    <p>Seu texto. Seu link de afiliado.</p>
-                    <span className="tag">✓ Revisão antes do envio</span>
-                  </div>
-                  <span className="arrow" aria-hidden="true">
-                    →
-                  </span>
-                  <div className="flow-card">
-                    <div className="eyebrow">03 · Destino</div>
-                    <div className="row">
-                      <span className="mini-icon">
-                        <Send aria-hidden="true" />
-                      </span>
-                      <strong>Seus canais</strong>
-                    </div>
-                    <p>Grupos e horários definidos por você.</p>
-                  </div>
-                </div>
-                <div className="browser-bottom">
-                  <span>Da descoberta à publicação, com suas escolhas.</span>
-                  <a
-                    className="text-link"
-                    href="#rh-copiador"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      scrollToAnchor('#rh-copiador');
-                    }}
+                  <button
+                    type="button"
+                    className="motion-toggle"
+                    id="ra-motion"
+                    aria-pressed={journeyPaused}
+                    onClick={() => setJourneyPaused((prev) => !prev)}
                   >
-                    Explorar a demonstração →
-                  </a>
+                    {journeyPaused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
+                    <span>{journeyPaused ? 'Retomar animação' : 'Pausar animação'}</span>
+                  </button>
+                </div>
+
+                <div className="journey-stage">
+                  <span className="packet" aria-hidden="true" />
+
+                  <button
+                    type="button"
+                    className={`scene-card${journeyStep === 'origin' ? ' active' : ''}`}
+                    data-step="origin"
+                    aria-pressed={journeyStep === 'origin'}
+                    onClick={() => setJourneyStep('origin')}
+                  >
+                    <div className="scene-step">
+                      <span>01 · Origem</span>
+                      <span>Grupos</span>
+                    </div>
+                    <div className="scene-visual" aria-hidden="true">
+                      <div className="paper-stack">
+                        <div className="paper">
+                          <span className="avatar">G1</span>
+                          <div>
+                            <strong>Suas fontes</strong>
+                            <span>Ofertas de origem</span>
+                          </div>
+                        </div>
+                        <div className="paper">
+                          <span className="avatar">G2</span>
+                          <div>
+                            <strong>Sua seleção</strong>
+                            <span>O que faz sentido</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h3>Encontre o que vale divulgar.</h3>
+                      <p>Você escolhe os grupos de origem.</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`scene-card central${journeyStep === 'identity' ? ' active' : ''}`}
+                    data-step="identity"
+                    aria-pressed={journeyStep === 'identity'}
+                    onClick={() => setJourneyStep('identity')}
+                  >
+                    <div className="scene-step">
+                      <span>02 · Sua marca</span>
+                      <span>Link + voz</span>
+                    </div>
+                    <div className="scene-visual">
+                      <div className="photo-tile">
+                        <img
+                          src="/assets/camiseta-oversized-preta.webp"
+                          alt="Camiseta preta em uma composição de oferta"
+                          width={65}
+                          height={80}
+                        />
+                        <div>
+                          <b>A SUA MARCA</b>
+                          <small>Seu texto. Seu link.</small>
+                          <span className="mini-badge">Identidade personalizada</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h3>Transforme em uma oferta sua.</h3>
+                      <p>A mensagem segue o seu estilo.</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`scene-card${journeyStep === 'delivery' ? ' active' : ''}`}
+                    data-step="delivery"
+                    aria-pressed={journeyStep === 'delivery'}
+                    onClick={() => setJourneyStep('delivery')}
+                  >
+                    <div className="scene-step">
+                      <span>03 · Seus canais</span>
+                      <span>Seu ritmo</span>
+                    </div>
+                    <div className="scene-visual" aria-hidden="true">
+                      <div className="channel-stack">
+                        <div className="channel">
+                          <div className="channel-left">
+                            <span className="channel-mark">
+                              <MessageCircle aria-hidden="true" />
+                            </span>
+                            <div>
+                              <strong>WhatsApp</strong>
+                              <span>Seus grupos</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="channel blue">
+                          <div className="channel-left">
+                            <span className="channel-mark">
+                              <Send aria-hidden="true" />
+                            </span>
+                            <div>
+                              <strong>Telegram</strong>
+                              <span>Seu canal</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h3>Chegue aos seus canais.</h3>
+                      <p>Destinos e horários definidos por você.</p>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="journey-foot">
+                  <p id="ra-flow-copy" aria-live="polite">
+                    {JOURNEY_COPY[journeyStep]}
+                  </p>
+                  <button
+                    type="button"
+                    className="inline-link"
+                    data-resource="copiador"
+                    onClick={() => handleResourceNavigation('copiador')}
+                  >
+                    Abrir o copiador →
+                  </button>
                 </div>
               </div>
             </div>
           </section>
 
-          <div className="shell stores">
-            <span className="small">Integrações para afiliados</span>
-            <strong>Mercado Livre</strong>
-            <span aria-hidden="true">·</span>
-            <strong>Shopee</strong>
+          <div className="shell">
+            <div className="integrations" aria-label="Integrações para afiliados">
+              <div>
+                <strong>Integrações para afiliados</strong>
+                <p>Conecte as contas que fazem parte da sua rotina.</p>
+              </div>
+              <div className="brand-tiles">
+                <div className="store-tile">
+                  <img
+                    className="store-logo"
+                    src="/brands/mercadolivre-original.png"
+                    alt="Mercado Livre"
+                    width={60}
+                    height={60}
+                  />
+                  <div>
+                    Mercado Livre
+                    <small>Conta de afiliado</small>
+                  </div>
+                </div>
+                <div className="store-tile">
+                  <img
+                    className="store-logo"
+                    src="/brands/shopee-original.png"
+                    alt="Shopee"
+                    width={60}
+                    height={60}
+                  />
+                  <div>
+                    Shopee
+                    <small>Conta de afiliado</small>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <section id="rh-como" className="section">
@@ -1192,103 +1322,237 @@ export default function RadarPublicHomePage() {
 
           <section id="rh-recursos" className="section">
             <div className="shell">
-              <div className="eyebrow">Tudo se conecta</div>
-              <h2>
-                Uma plataforma.
-                <br />
-                Várias partes da sua rotina.
-              </h2>
-              <p className="lead">
-                Explore cada recurso e veja onde ele entra na sua operação.
-              </p>
-              <div className="features">
+              <div className="section-head">
+                <div>
+                  <span className="overline">Tudo se conecta</span>
+                  <h2>Uma plataforma. Várias partes da sua rotina.</h2>
+                  <p className="lead" style={{ marginTop: 10 }}>
+                    Toque em um recurso para abrir no painel ou continuar a partir da sua conta.
+                  </p>
+                </div>
+                <div className="account-hint" id="ra-account-hint">
+                  {hasActiveSession ? (
+                    <>
+                      <span>Sua sessão está ativa.</span>
+                      <Link href="/painel">Ir para o painel →</Link>
+                    </>
+                  ) : (
+                    <>
+                      <span>Começando agora?</span>
+                      <Link href="/login">Já tenho conta →</Link>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="feature-grid">
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="copiador"
-                  onClick={(e) => handleOpenFeature('copiador', e)}
+                  className="resource"
+                  data-resource="copiador"
+                  onClick={() => handleResourceNavigation('copiador')}
                 >
-                  <Repeat2 aria-hidden="true" />
-                  <h3>Copiador de ofertas</h3>
-                  <p>Origens, destinos e intervalos sob seu controle.</p>
-                  <small>Conhecer recurso ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <span className="tiny-sheet">
+                        Origem
+                        <small>Seus grupos</small>
+                      </span>
+                      <span>→</span>
+                      <span className="tiny-sheet">
+                        Destino
+                        <small>Seu link</small>
+                      </span>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Copiador de ofertas</h3>
+                      <p>Grupos de origem, destinos e ritmo de publicação.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>{hasActiveSession ? 'Abrir no painel' : 'Acessar recurso'}</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="mensagens"
-                  onClick={(e) => handleOpenFeature('mensagens', e)}
+                  className="resource"
+                  data-resource="mensagens"
+                  onClick={() => handleResourceNavigation('mensagens')}
                 >
-                  <MessageSquareText aria-hidden="true" />
-                  <h3>Mensagens próprias</h3>
-                  <p>Modelos de texto para o estilo do seu público.</p>
-                  <small>Conhecer recurso ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <div className="bubble-stack">
+                        <span className="bubble-line">Sua abertura</span>
+                        <span className="bubble-line alt">Seu link de afiliado</span>
+                      </div>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Mensagens próprias</h3>
+                      <p>Textos e modelos que combinam com seu público.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>{hasActiveSession ? 'Abrir no painel' : 'Acessar recurso'}</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="identidade"
-                  onClick={(e) => handleOpenFeature('identidade', e)}
+                  className="resource"
+                  data-resource="identidade"
+                  onClick={() => handleResourceNavigation('identidade')}
                 >
-                  <Fingerprint aria-hidden="true" />
-                  <h3>Sua identidade</h3>
-                  <p>Marca d’água, logo e cores do seu painel.</p>
-                  <small>A partir do Plus ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <div className="swatch-stack">
+                        <span className="brand-chip">SUA MARCA</span>
+                        <span className="swatch" />
+                        <span className="swatch second" />
+                      </div>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Sua identidade</h3>
+                      <p>Sua logo, sua marca d’água e as cores do painel.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>A partir do Plus</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="cards"
-                  onClick={(e) => handleOpenFeature('cards', e)}
+                  className="resource"
+                  data-resource="cards"
+                  onClick={() => handleResourceNavigation('cards')}
                 >
-                  <PanelsTopLeft aria-hidden="true" />
-                  <h3>Feed e stories</h3>
-                  <p>Formatos diferentes para apresentar a mesma oferta.</p>
-                  <small>A partir do Plus ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <div className="mini-photo">
+                        <img
+                          src="/assets/camiseta-oversized-preta.webp"
+                          alt=""
+                          width={44}
+                          height={54}
+                        />
+                        <div className="format-pills">
+                          <span>Feed 1:1</span>
+                          <span>Story 9:16</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Feed e stories</h3>
+                      <p>Uma oferta em formatos prontos para compartilhar.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>A partir do Plus</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="vitrine"
-                  onClick={(e) => handleOpenFeature('vitrine', e)}
+                  className="resource"
+                  data-resource="vitrine"
+                  onClick={() => handleResourceNavigation('vitrine')}
                 >
-                  <Store aria-hidden="true" />
-                  <h3>Vitrine no link da bio</h3>
-                  <p>Uma página que reúne suas ofertas.</p>
-                  <small>A partir do Plus ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <div className="mini-window">
+                        <span className="url-pill">Sua vitrine</span>
+                        <div className="window-bars">
+                          <span />
+                          <span />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Vitrine no link da bio</h3>
+                      <p>Um endereço para reunir e divulgar suas ofertas.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>A partir do Plus</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="metricas"
-                  onClick={(e) => handleOpenFeature('metricas', e)}
+                  className="resource"
+                  data-resource="metricas"
+                  onClick={() => handleResourceNavigation('metricas')}
                 >
-                  <ChartNoAxesCombined aria-hidden="true" />
-                  <h3>Métricas claras</h3>
-                  <p>Entenda os cliques e os dados de vendas disponíveis.</p>
-                  <small>Conforme o plano ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <div className="metric-chips">
+                        <span>Cliques</span>
+                        <span>Integrações</span>
+                      </div>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Estatísticas</h3>
+                      <p>Acompanhe os dados disponíveis nas suas integrações.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>Conforme seu plano</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="busca"
-                  onClick={(e) => handleOpenFeature('busca', e)}
+                  className="resource"
+                  data-resource="busca"
+                  onClick={() => handleResourceNavigation('busca')}
                 >
-                  <Search aria-hidden="true" />
-                  <h3>Busca e comparação</h3>
-                  <p>Compare ofertas nas lojas conectadas.</p>
-                  <small>Exclusivo Ultimate ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <div className="search-piece">
+                        <span>Buscar nas lojas conectadas</span>
+                        <strong style={{ color: 'var(--cyan)' }}>↗</strong>
+                      </div>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Busca e comparação</h3>
+                      <p>Encontre ofertas nas lojas que você conectou.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>Exclusivo Ultimate</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  className="feature"
-                  data-feature="alertas"
-                  onClick={(e) => handleOpenFeature('alertas', e)}
+                  className="resource"
+                  data-resource="alertas"
+                  onClick={() => handleResourceNavigation('alertas')}
                 >
-                  <BellRing aria-hidden="true" />
-                  <h3>Alertas de preço</h3>
-                  <p>Acompanhe produtos e saiba quando o valor cair.</p>
-                  <small>Exclusivo Ultimate ↗</small>
+                  <div>
+                    <div className="mini-scene" aria-hidden="true">
+                      <div className="alert-piece">
+                        <span>Mudança acompanhada</span>
+                        <span className="alert-dot" />
+                      </div>
+                    </div>
+                    <div className="resource-copy">
+                      <h3>Alertas de preço</h3>
+                      <p>Acompanhe produtos e saiba quando o preço mudar.</p>
+                    </div>
+                  </div>
+                  <div className="resource-foot">
+                    <span>Exclusivo Ultimate</span>
+                    <strong>↗</strong>
+                  </div>
                 </button>
               </div>
             </div>

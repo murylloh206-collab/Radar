@@ -281,20 +281,23 @@ export async function getUserSubscription(userIdInput?: string): Promise<UserSub
 
 export async function ensureUserSubscription(
   userId: string,
-  options?: { referredBy?: string | null; customStatus?: SubscriptionStatus }
+  options?: { referredBy?: string | null; customStatus?: SubscriptionStatus; withoutTrial?: boolean }
 ): Promise<UserSubscriptionRecord> {
-  const trialEnd = new Date(
-    Date.now() + SAAS_TRIAL_CONFIG.trialDurationDays * 24 * 60 * 60 * 1000
-  ).toISOString();
+  const withoutTrial = Boolean(options?.withoutTrial);
+  const trialEnd = withoutTrial
+    ? null
+    : new Date(
+        Date.now() + SAAS_TRIAL_CONFIG.trialDurationDays * 24 * 60 * 60 * 1000
+      ).toISOString();
   const referralCode = generateReferralCode(userId);
 
   if (isSupabaseConfigured && supabase) {
     try {
       const initialRow = {
         user_id: userId,
-        plano: SAAS_TRIAL_CONFIG.defaultTrialPlan,
-        ciclo: 'anual',
-        status: options?.customStatus || 'trialing',
+        plano: withoutTrial ? 'impulse' : SAAS_TRIAL_CONFIG.defaultTrialPlan,
+        ciclo: withoutTrial ? 'mensal' : 'anual',
+        status: options?.customStatus || (withoutTrial ? 'canceled' : 'trialing'),
         trial_ate: trialEnd,
         referral_code: referralCode,
         referred_by: options?.referredBy || null,

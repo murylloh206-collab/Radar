@@ -1,182 +1,418 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
-import { Logo } from '@/components/Logo';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Mail } from 'lucide-react';
+import {
+  markKnownAccountPreference,
+  resolveIntentInfo,
+  sanitizeInternalRedirect,
+  SIGNUP_DRAFT_STORAGE_KEY,
+} from '@/lib/access-navigation';
+import '../radar-access.css';
 
-function sanitizeRedirectTarget(target?: string | null): string {
-  if (!target || typeof target !== 'string') return '/painel';
-  const trimmed = target.trim();
-  if (
-    !trimmed ||
-    trimmed === '/' ||
-    trimmed === '%2F' ||
-    trimmed.startsWith('/login') ||
-    trimmed.startsWith('/cadastro') ||
-    trimmed.startsWith('http://') ||
-    trimmed.startsWith('https://') ||
-    trimmed.startsWith('//')
-  ) {
-    return '/painel';
-  }
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-}
-
-function LoginForm() {
+function LoginContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const rawRedirect = searchParams.get('redirect');
-  const safeRedirect = sanitizeRedirectTarget(rawRedirect);
 
+  const rawRedirect = searchParams.get('redirect');
+  const rawRecurso = searchParams.get('recurso');
+  const rawExpired = searchParams.get('expired') === '1';
+  const rawPlano = searchParams.get('plano');
+  const rawPeriodo = searchParams.get('periodo');
+
+  const intent = useMemo(
+    () =>
+      resolveIntentInfo({
+        recurso: rawRecurso,
+        redirect: rawRedirect,
+      }),
+    [rawRecurso, rawRedirect]
+  );
+
+  const targetDestination = useMemo(() => {
+    if (intent?.route) return intent.route;
+    return sanitizeInternalRedirect(rawRedirect) || '/painel';
+  }, [intent, rawRedirect]);
+
+  const [view, setView] = useState<'login' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
-  const isExpired = searchParams.get('expired') === 'true';
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotNotice, setForgotNotice] = useState('');
+  const [forgotWarn, setForgotWarn] = useState(false);
 
-  // Se a sessão expirou ou o middleware mandou para login, limpa cookies obsoletos para evitar loops
+  // Se o usuário já possui sessão válida ativa, encaminha diretamente para o destino seguro
   useEffect(() => {
-    if (isExpired) {
-      document.cookie = 'radar_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;';
-      fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    }
-  }, [isExpired]);
+    let cancelled = false;
+    fetch('/api/auth/session?strict=1', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.hasCookieSession) {
+          markKnownAccountPreference();
+          router.replace(targetDestination);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [router, targetDestination]);
+
+  const preservedQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (rawRecurso) params.set('recurso', rawRecurso);
+    if (rawRedirect) params.set('redirect', rawRedirect);
+    if (rawPlano) params.set('plano', rawPlano);
+    if (rawPeriodo) params.set('periodo', rawPeriodo);
+    const str = params.toString();
+    return str ? `?${str}` : '';
+  }, [rawPeriodo, rawPlano, rawRecurso, rawRedirect]);
+
+  const signupHref = `/cadastro${preservedQuery}`;
+  const termosHref = `/termos?origem=login${preservedQuery ? `&${preservedQuery.slice(1)}` : ''}`;
+  const privacidadeHref = `/privacidade?origem=login${preservedQuery ? `&${preservedQuery.slice(1)}` : ''}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    setError('');
 
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError('Confira o e-mail informado para continuar.');
+      return;
+    }
+
+    if (!password) {
+      setError('Digite sua senha para entrar.');
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: cleanEmail, password }),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
-        setError(data.error || 'Falha ao autenticar. Verifique seus dados.');
+        setError(data.error || 'E-mail ou senha inválidos.');
+        setLoading(false);
         return;
       }
 
-      // Redireciona com navegação completa para o destino seguro validado
-      window.location.href = safeRedirect;
+      markKnownAccountPreference();
+      try {
+        window.sessionStorage.removeItem(SIGNUP_DRAFT_STORAGE_KEY);
+      } catch {}
+
+      router.push(targetDestination);
+      router.refresh();
     } catch {
-      setError('Erro de conexão ao tentar fazer login. Tente novamente.');
-    } finally {
+      setError('Não foi possível conectar ao servidor agora. Tente novamente.');
       setLoading(false);
     }
   };
 
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotNotice('');
+    setForgotWarn(false);
+
+    const cleanEmail = forgotEmail.trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setForgotWarn(true);
+      setForgotNotice('Informe um e-mail válido para continuar.');
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setForgotWarn(true);
+        setForgotNotice(
+          data.error ||
+            'Não foi possível solicitar a recuperação agora. Tente novamente ou fale com o suporte.'
+        );
+      } else {
+        setForgotWarn(false);
+        setForgotNotice(
+          data.message ||
+            'Se este e-mail estiver vinculado a uma conta, enviaremos as instruções de recuperação.'
+        );
+      }
+    } catch {
+      setForgotWarn(true);
+      setForgotNotice('Falha de conexão ao solicitar recuperação. Tente novamente.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {isExpired && !error && (
-        <div className="p-3.5 rounded-xl bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-xs font-semibold text-[#F59E0B] flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>Sua sessão expirou por segurança. Faça login novamente para continuar.</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="p-3.5 rounded-xl bg-[#F87171]/15 border border-[#F87171]/30 text-xs font-semibold text-[#F87171] flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <div>
-        <label className="text-xs font-semibold text-[#8EADC7] block mb-1.5">
-          E-mail de Acesso
-        </label>
-        <div className="relative">
-          <Mail className="w-4 h-4 text-[#8EADC7] absolute left-3.5 top-3.5" />
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="admin@radarofertas.com"
-            className="w-full min-h-[48px] bg-[#061225] border border-[#18334D] rounded-xl pl-10 pr-3 text-xs sm:text-sm text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2] transition-colors"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="text-xs font-semibold text-[#8EADC7] block mb-1.5">
-          Senha de Segurança
-        </label>
-        <div className="relative">
-          <Lock className="w-4 h-4 text-[#8EADC7] absolute left-3.5 top-3.5" />
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••••••"
-            className="w-full min-h-[48px] bg-[#061225] border border-[#18334D] rounded-xl pl-10 pr-3 text-xs sm:text-sm text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2] transition-colors"
-          />
-        </div>
-      </div>
-
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full min-h-[48px] rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-lg shadow-[#1CCAF2]/20 hover:opacity-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
-      >
-        <span>{loading ? 'Validando acesso...' : 'Entrar no Radar'}</span>
-        <ArrowRight className="w-4 h-4" />
-      </button>
-
-      <div className="text-center pt-2">
-        <p className="text-xs text-[#8EADC7]">
-          Ainda não tem conta?{' '}
-          <Link
-            href="/cadastro"
-            className="text-[#1CCAF2] font-semibold hover:underline transition-all"
-          >
-            Começar agora
+    <div id="radar-access" lang="pt-BR">
+      <div className="shell auth-shell">
+        <div className="auth-header">
+          <Link href="/" className="brand" aria-label="Voltar para a página inicial do Radar de Ofertas">
+            <span className="brand-mark" aria-hidden="true" />
+            <span>Radar de Ofertas</span>
           </Link>
-        </p>
+
+          {view === 'forgot' ? (
+            <button
+              type="button"
+              className="back-link"
+              onClick={() => {
+                setForgotNotice('');
+                setView('login');
+              }}
+            >
+              ← Voltar para o login
+            </button>
+          ) : (
+            <Link href="/" className="back-link">
+              ← Voltar para a página inicial
+            </Link>
+          )}
+        </div>
+
+        {view === 'login' ? (
+          <div className="auth-layout">
+            <aside className="auth-art" aria-label="Identidade do Radar de Ofertas">
+              <div>
+                <span className="overline">Sua operação em ordem</span>
+                <h2>Entre e continue de onde parou.</h2>
+                <p>
+                  Seus grupos, seus modelos e suas integrações ficam reunidos em um só painel.
+                </p>
+              </div>
+
+              <div className="brand-world" aria-hidden="true">
+                <span className="world-ring" />
+                <span className="floating-label top">Sua identidade</span>
+                <div className="floating-poster">
+                  <img
+                    src="/assets/camiseta-oversized-preta.webp"
+                    alt=""
+                    width={76}
+                    height={92}
+                  />
+                  <div>
+                    <small>Radar de Ofertas</small>
+                    <strong>Sua marca em destaque</strong>
+                    <span>Link da sua conta</span>
+                  </div>
+                </div>
+                <span className="floating-label bottom">Canais sob seu controle</span>
+              </div>
+
+              <p className="auth-footnote">
+                Acesse sua conta para abrir os recursos do seu plano.
+              </p>
+            </aside>
+
+            <div className="auth-form">
+              <span className="overline">Acesso à conta</span>
+              <h1>Bom ver você por aqui.</h1>
+              <p>Use o e-mail e a senha da sua conta para entrar no painel.</p>
+
+              {rawExpired && !error && (
+                <div className="form-message warn" role="status" aria-live="polite" style={{ marginTop: 16 }}>
+                  Sua sessão expirou. Entre novamente para continuar.
+                </div>
+              )}
+
+              {intent && (
+                <div className="intent" id="ra-login-intent">
+                  <span>
+                    Depois do acesso, você continuará em <strong>{intent.name}</strong>.
+                  </span>
+                </div>
+              )}
+
+              <form id="ra-login-form" onSubmit={handleSubmit} noValidate>
+                <div className="field">
+                  <label htmlFor="login-email">E-mail</label>
+                  <input
+                    id="login-email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="voce@exemplo.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <div className="form-row">
+                    <label htmlFor="login-password">Senha</label>
+                    <button
+                      type="button"
+                      className="inline-link"
+                      onClick={() => {
+                        setError('');
+                        setForgotNotice('');
+                        setForgotEmail(email);
+                        setView('forgot');
+                      }}
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
+                  <div className="password-wrap">
+                    <input
+                      id="login-password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="Digite sua senha"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="show-pass"
+                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                      onClick={() => setShowPassword((prev) => !prev)}
+                    >
+                      {showPassword ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="form-message warn" id="ra-login-msg" role="status" aria-live="polite">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="action primary wide-button"
+                  disabled={loading}
+                >
+                  {loading ? 'Entrando...' : 'Entrar no painel →'}
+                </button>
+              </form>
+
+              <div className="auth-switch">
+                <span>Primeira vez por aqui?</span>
+                <Link href={signupHref} className="inline-link">
+                  Criar minha conta
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="simple-auth">
+            <div className="mail-visual" aria-hidden="true">
+              <Mail width={26} height={26} />
+            </div>
+            <span className="overline">Recuperação de acesso</span>
+            <h1>Vamos ajudar você a voltar.</h1>
+            <p>
+              Informe o e-mail da sua conta para receber as instruções de redefinição de senha.
+            </p>
+
+            <form id="ra-forgot-form" onSubmit={handleForgotSubmit} noValidate>
+              <div className="field">
+                <label htmlFor="forgot-email">E-mail da conta</label>
+                <input
+                  id="forgot-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="voce@exemplo.com"
+                  required
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                />
+              </div>
+
+              {forgotNotice && (
+                <div
+                  className={`form-message${forgotWarn ? ' warn' : ''}`}
+                  id="ra-forgot-msg"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {forgotNotice}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="action primary wide-button"
+                disabled={forgotLoading}
+              >
+                {forgotLoading ? 'Enviando...' : 'Enviar instruções →'}
+              </button>
+            </form>
+
+            <div className="auth-switch">
+              <span>Lembrou a senha?</span>
+              <button
+                type="button"
+                className="inline-link"
+                onClick={() => {
+                  setForgotNotice('');
+                  setView('login');
+                }}
+              >
+                Voltar para o login
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="auth-bottom">
+          <span>Radar de Ofertas · Acesso seguro</span>
+          <div className="auth-bottom-links">
+            <Link href={termosHref}>Termos de uso</Link>
+            <Link href={privacidadeHref}>Privacidade</Link>
+            <a
+              href="https://wa.me/5519993812187"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Precisa de ajuda?
+            </a>
+          </div>
+        </div>
       </div>
-    </form>
+    </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-[#061225] flex flex-col items-center justify-center p-4 selection:bg-[#1CCAF2]/30 selection:text-[#F8FBFF]">
-      <div className="w-full max-w-md space-y-6">
-        {/* Logo e Cabeçalho */}
-        <div className="text-center space-y-2">
-          <div className="flex justify-center mb-3">
-            <Logo size="lg" />
-          </div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#F8FBFF] tracking-tight">
-            Acesso ao Painel Operacional
-          </h1>
-          <p className="text-xs sm:text-sm text-[#8EADC7]">
-            Radar de Ofertas — Gestão autônoma de ofertas e disparos WhatsApp
-          </p>
+    <Suspense
+      fallback={
+        <div id="radar-access" lang="pt-BR">
+          <div className="shell auth-shell" />
         </div>
-
-        {/* Card do Formulário */}
-        <div className="rounded-3xl bg-[#0D1B31] border border-[#18334D] p-6 sm:p-8 shadow-2xl space-y-5">
-          <Suspense fallback={<div className="text-xs text-[#8EADC7] text-center py-6">Carregando formulário seguro...</div>}>
-            <LoginForm />
-          </Suspense>
-
-          <div className="pt-3 border-t border-[#18334D] text-center">
-            <p className="text-[11px] text-[#8EADC7] flex items-center justify-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#20C997]" />
-              <span>Controle de acesso rigoroso com cookies seguros HTTP-Only.</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }
