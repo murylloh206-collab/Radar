@@ -9,6 +9,7 @@ export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled'
 
 export type PlanFeatureKey =
   | 'copier'
+  | 'instagram_pro'
   | 'whatsapp_connection'
   | 'watermark_default'
   | 'whatsapp_basic_metrics'
@@ -48,6 +49,7 @@ export interface PlanDefinition {
   badge?: string;
   popular?: boolean;
   dailyOfferLimit: number | null; // null = ilimitado
+  socialDailyPostLimit: number | null; // Instagram Pro + status do WhatsApp; 0 = sem acesso; null = ilimitado
   trialDays: number;
   pricing: PlanPricing;
   monthlyPrice: number;
@@ -117,6 +119,7 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
       'Métricas básicas do WhatsApp',
     ],
     dailyOfferLimit: 20,
+    socialDailyPostLimit: 0,
     trialDays: 0,
     pricing: {
       monthlyPrice: 29.9,
@@ -161,6 +164,7 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
     badge: 'Mais popular',
     popular: true,
     dailyOfferLimit: 100,
+    socialDailyPostLimit: 5,
     trialDays: 0,
     pricing: {
       monthlyPrice: 59.9,
@@ -200,6 +204,7 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
       'public_showcase',
       'auto_image_cards',
       'story_image_cards',
+      'instagram_pro',
       'telegram_posting',
       'post_scheduling',
     ],
@@ -217,6 +222,7 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
       'Vendas informadas pelas integrações',
     ],
     dailyOfferLimit: null, // Ilimitado
+    socialDailyPostLimit: null, // Ilimitado (respeitando o teto do próprio Instagram)
     trialDays: 0,
     pricing: {
       monthlyPrice: 119.9,
@@ -255,6 +261,7 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
       'public_showcase',
       'auto_image_cards',
       'story_image_cards',
+      'instagram_pro',
       'telegram_posting',
       'post_scheduling',
       'comparator_search',
@@ -364,6 +371,11 @@ export const FEATURE_METADATA: Record<
     label: 'Métricas Completas por Loja',
     minPlan: 'ultimate',
     description: 'Cliques, vendas convertidas, ticket médio e gráficos detalhados por loja e período.',
+  },
+  instagram_pro: {
+    label: 'Instagram Pro',
+    minPlan: 'plus',
+    description: 'Artes com a sua marca para story, feed e status do WhatsApp, com link pela bio e postagem automática com freio.',
   },
   price_drop_alert: {
     label: 'Alerta de Queda de Preço',
