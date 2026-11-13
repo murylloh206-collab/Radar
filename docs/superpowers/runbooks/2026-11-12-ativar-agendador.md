@@ -56,6 +56,12 @@ select status_code, left(content::text, 120) as resposta, created
 Esperado: 3 agendamentos ativos e respostas com `status_code` 200 (ou 202). Se aparecer 401, o `CRON_SECRET`
 da Vercel e o do Vault estão diferentes; 503 significa que a Vercel ainda não tem o `CRON_SECRET` (faça o redeploy).
 
+## Atenção: horas grátis do Render
+
+Manter o gateway acordado 24h consome cerca de 744 das 750 horas grátis por mês da conta do Render.
+Se houver **outro serviço grátis** na mesma conta do Render, as horas acabam antes do fim do mês e o gateway é suspenso.
+Mantenha só o gateway no plano grátis (ou passe o gateway para o plano pago, recomendado antes de vender).
+
 ## Desligar, se precisar
 
 ```sql

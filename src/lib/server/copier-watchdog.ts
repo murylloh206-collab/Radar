@@ -68,24 +68,37 @@ async function listWatchdogTargets(userId?: string): Promise<WatchdogTarget[]> {
  * 4. Busca as últimas mensagens dos grupos de origem ativos (recuperação pós-hibernação).
  * 5. Drena e processa qualquer mensagem pendente na fila (uma vez, ao final).
  */
-export async function runCopierWatchdog(forceRestart = false, options: { userId?: string } = {}): Promise<WatchdogReport> {
+export async function runCopierWatchdog(
+  forceRestart = false,
+  options: { userId?: string; connectionId?: string; budgetMs?: number } = {},
+): Promise<WatchdogReport> {
   const timestamp = new Date().toISOString();
-  const targets = await listWatchdogTargets(options.userId);
-  const results: Array<WatchdogConnectionResult & { gatewayStatus: number; gatewayUrl: string; alive: boolean; reason?: string }> = [];
-  for (const target of targets) {
-    if (!target.baseUrl || !target.apiKey || !target.instanceName) {
-      results.push({ connectionId: target.connectionId, instanceName: target.instanceName, state: 'unknown', restarted: false,
-        recoveredFromHistory: 0, error: 'Gateway não configurado', gatewayStatus: 0, gatewayUrl: target.baseUrl, alive: false });
-      continue;
-    }
+  // Orçamento de tempo das verificações: sobra tempo para drenar a fila dentro do limite de 60s da Vercel.
+  const budgetMs = options.budgetMs ?? 35000;
+  const deadline = Date.now() + budgetMs;
+  const targets = (await listWatchdogTargets(options.userId))
+    .filter(target => !options.connectionId || target.connectionId === options.connectionId);
+  type Result = WatchdogConnectionResult & { gatewayStatus: number; gatewayUrl: string; alive: boolean; reason?: string };
+  const failed = (target: WatchdogTarget, error: string): Result => ({ connectionId: target.connectionId, instanceName: target.instanceName,
+    state: 'unknown', restarted: false, recoveredFromHistory: 0, error, gatewayStatus: 0, gatewayUrl: target.baseUrl, alive: false });
+
+  // Todas as conexões em paralelo; uma conexão lenta não segura as demais nem a fila.
+  const results: Result[] = await Promise.all(targets.map(async target => {
+    if (!target.baseUrl || !target.apiKey || !target.instanceName) return failed(target, 'Gateway não configurado');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<Result>(resolve => {
+      timer = setTimeout(() => resolve(failed(target, 'Tempo esgotado ao verificar a conexão com o gateway.')), Math.max(deadline - Date.now(), 0));
+    });
     try {
-      results.push(await watchConnection(target, forceRestart, timestamp));
-    } catch (error) {
-      results.push({ connectionId: target.connectionId, instanceName: target.instanceName, state: 'unknown', restarted: false,
-        recoveredFromHistory: 0, error: error instanceof Error ? error.message : 'Falha ao verificar a conexão',
-        gatewayStatus: 0, gatewayUrl: target.baseUrl, alive: false });
+      return await Promise.race([
+        watchConnection(target, forceRestart, timestamp, deadline)
+          .catch(error => failed(target, error instanceof Error ? error.message : 'Falha ao verificar a conexão')),
+        timeout,
+      ]);
+    } finally {
+      clearTimeout(timer);
     }
-  }
+  }));
 
   // Drenagem e execução do ciclo de envios (uma vez para todas as conexões)
   const cycleRes = { processed: 0, dispatched: 0 };
@@ -104,7 +117,7 @@ export async function runCopierWatchdog(forceRestart = false, options: { userId?
 
   const first = results[0];
   return {
-    ok: results.length > 0 && results.every(result => result.alive),
+    ok: results.length > 0 && results.filter(result => result.error !== 'Gateway não configurado' || options.connectionId).every(result => result.alive),
     timestamp,
     gatewayPing: { status: first?.gatewayStatus || 0, url: (first?.gatewayUrl || '').replace(/\/+$/, ''), alive: !!first?.alive },
     connectionState: { instanceName: first?.instanceName, state: first?.state, restarted: first?.restarted, reason: first?.reason },
@@ -116,7 +129,7 @@ export async function runCopierWatchdog(forceRestart = false, options: { userId?
   };
 }
 
-async function watchConnection(target: WatchdogTarget, forceRestart: boolean, timestamp: string) {
+async function watchConnection(target: WatchdogTarget, forceRestart: boolean, timestamp: string, deadline: number) {
   const { baseUrl, apiKey, instanceName } = target;
   const connectionRow: Record<string, unknown> | null = isSupabaseConfigured && supabase
     ? (await supabase.from('whatsapp_connections').select('id,webhook_secret').eq('id', target.connectionId).maybeSingle()).data
@@ -241,6 +254,8 @@ async function watchConnection(target: WatchdogTarget, forceRestart: boolean, ti
       const twoHoursAgoSec = Math.floor((Date.now() - 2 * 60 * 60 * 1000) / 1000);
 
       for (const src of activeSources || []) {
+        // Sem tempo suficiente para mais uma busca de histórico: deixa para o próximo ciclo (5 min).
+        if (Date.now() > deadline - 10000) break;
         const sourceJid = String(src.source_jid || '');
         if (!sourceJid) continue;
         try {

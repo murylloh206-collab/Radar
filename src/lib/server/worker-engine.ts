@@ -5,6 +5,7 @@ import { processAutomationCampaigns } from './automation-engine';
 import { validateJobForDispatch } from './job-validator';
 import { getDailyOfferQuotaStatus } from './plan-guard';
 import { getBrandSettings } from './brand-settings';
+import { isSentToday } from './daily-sent-counter';
 
 export interface DispatchResult {
   jobId: string;
@@ -24,7 +25,9 @@ export interface WorkerCycleReport {
 function isWithinNightPause(startStr: string, endStr: string): boolean {
   try {
     const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const [hour, minute] = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .format(now).split(':').map(Number);
+    const currentMinutes = hour * 60 + minute;
 
     const [startH, startM] = startStr.split(':').map(Number);
     const [endH, endM] = endStr.split(':').map(Number);
@@ -216,9 +219,8 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
       };
     }
 
-    const todayDateStr = now.toISOString().split('T')[0];
     const sentTodayCount = db.jobs.filter(
-      (j) => j.status === 'enviado' && j.sentAt && j.sentAt.startsWith(todayDateStr)
+      (j) => (!db.settings.userId || j.userId === db.settings.userId) && isSentToday(j, now)
     ).length;
 
     if (sentTodayCount >= db.settings.maxDailyMessages) {

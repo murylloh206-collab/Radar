@@ -1263,7 +1263,7 @@ export async function processIncomingMessage(
   });
 
   // Trava de conteúdo: sem link exibido, sem preço ou com título inválido → revisão manual
-  const contentCheck = checkOfferContent({ messageText: formattedMessage, displayUrl: displayAffiliateUrl, title: productData.title });
+  const contentCheck = checkOfferContent({ messageText: formattedMessage, displayUrl: displayAffiliateUrl, title: productData.title, currentPrice: productData.currentPrice });
   const contentReviewReason = contentCheck.ok ? undefined : contentCheck.reason;
 
   const createdJobIds: string[] = [];

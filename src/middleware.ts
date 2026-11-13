@@ -126,6 +126,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/auth/') ||
     pathname === '/api/webhook/evolution' ||
     pathname === '/api/worker/poll' ||
+    pathname.startsWith('/api/cron/') || // a própria rota valida o CRON_SECRET
     pathname.startsWith('/api/comparator/search')
   ) {
     return NextResponse.next();

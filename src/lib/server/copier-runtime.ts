@@ -257,6 +257,12 @@ function currentMinute() {
   return minuteOfDay(parts);
 }
 
+/** Tentativas totais quando a sessão do WhatsApp oscila: 1 envio + 3 reenvios (20s, 60s, 180s). */
+const CONNECTION_CLOSED_MAX_ATTEMPTS = 4;
+export function shouldRetryConnectionClosed(attempts: number): boolean {
+  return attempts < CONNECTION_CLOSED_MAX_ATTEMPTS;
+}
+
 /** Espera antes de reenviar quando a sessão do WhatsApp oscila: 20s, 60s e depois 180s. */
 export function connectionClosedRetryDelayMs(attempts: number): number {
   return attempts <= 1 ? 20000 : attempts === 2 ? 60000 : 180000;
@@ -349,7 +355,7 @@ async function sendEntry(row: StoredJob) {
     let errBody = '';
     try { errBody = await response.text(); } catch {}
     const isConnectionClosed = /connection\s+closed|connection\s+terminated|socket\s+closed/i.test(errBody);
-    if (isConnectionClosed && row.attempts < (row.max_attempts || 3)) {
+    if (isConnectionClosed && shouldRetryConnectionClosed(row.attempts)) {
       try {
         await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/instance/connect/${encodeURIComponent(connection.instanceName)}`, {
           method: 'GET',
@@ -363,6 +369,7 @@ async function sendEntry(row: StoredJob) {
         locked_at: null,
         runtime_delivery: null,
         scheduled_for: new Date(Date.now() + connectionClosedRetryDelayMs(row.attempts)).toISOString(),
+        max_attempts: CONNECTION_CLOSED_MAX_ATTEMPTS,
         error_details: 'Sessão do WhatsApp oscilou (Connection Closed). Reconectando para reenvio automático.',
       });
     }

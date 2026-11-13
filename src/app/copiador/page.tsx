@@ -176,7 +176,7 @@ function CopierContent() {
   const handleReviveConnection = async () => {
     setReviving(true);
     try {
-      const res = await fetch('/api/copier/watchdog?restart=true', { method: 'POST' });
+      const res = await fetch('/api/copier/watchdog?restart=true' + (selectedConnectionId ? '&connectionId=' + encodeURIComponent(selectedConnectionId) : ''), { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
         setFeedback({

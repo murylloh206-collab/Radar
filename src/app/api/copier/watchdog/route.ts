@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
   }
   try {
     const forceRestart = req.nextUrl.searchParams.get('restart') === 'true';
-    const report = await runCopierWatchdog(forceRestart, session ? { userId: session.userId } : {});
+    const connectionId = req.nextUrl.searchParams.get('connectionId') || undefined;
+    const report = await runCopierWatchdog(forceRestart, session ? { userId: session.userId, connectionId } : { connectionId });
     return NextResponse.json(report, { headers: { 'Cache-Control': 'no-store, no-cache' } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Falha na execução do watchdog.';
