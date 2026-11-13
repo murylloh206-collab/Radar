@@ -257,6 +257,11 @@ function currentMinute() {
   return minuteOfDay(parts);
 }
 
+/** Espera antes de reenviar quando a sessão do WhatsApp oscila: 20s, 60s e depois 180s. */
+export function connectionClosedRetryDelayMs(attempts: number): number {
+  return attempts <= 1 ? 20000 : attempts === 2 ? 60000 : 180000;
+}
+
 async function updateJob(row: StoredJob, update: Record<string, unknown>) {
   const updated = checked(await database().from('publication_jobs').update({ ...update, updated_at: new Date().toISOString() })
     .eq('id', row.id).eq('runtime_token', row.runtime_token).eq('status', 'enviando').select('id'), 'Atualização da publicação');
@@ -357,9 +362,13 @@ async function sendEntry(row: StoredJob) {
         status: 'agendado',
         locked_at: null,
         runtime_delivery: null,
-        scheduled_for: new Date(Date.now() + 20000).toISOString(),
+        scheduled_for: new Date(Date.now() + connectionClosedRetryDelayMs(row.attempts)).toISOString(),
         error_details: 'Sessão do WhatsApp oscilou (Connection Closed). Reconectando para reenvio automático.',
       });
+    }
+    if (isConnectionClosed) {
+      return updateJob(row, { status: 'falha', runtime_delivery: 'rejected',
+        error_details: `Sessão do WhatsApp instável após ${row.attempts} tentativas (Connection Closed). Confira a conexão do gateway.` });
     }
     const briefErr = errBody ? `: ${errBody.slice(0, 120)}` : '';
     return updateJob(row, { status: 'falha', runtime_delivery: response.status >= 500 ? 'uncertain' : 'rejected', error_details: `Gateway retornou HTTP ${response.status}${briefErr}. Não houve repetição automática.` });
