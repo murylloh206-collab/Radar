@@ -22,6 +22,7 @@ import {
   Check,
   Sparkles,
   FlaskConical,
+  Camera,
 } from 'lucide-react';
 import { useWhatsAppWorkspace } from '@/components/WhatsAppWorkspaceProvider';
 import { usePlan } from '@/components/PlanProvider';
@@ -153,6 +154,7 @@ export function AppShell({ children }: AppShellProps) {
     if (pathname === '/painel') return 'Início';
     if (pathname.startsWith('/copiador')) return 'Copiador';
     if (pathname.startsWith('/criar-conteudo') || pathname.startsWith('/gerar-postagem') || pathname.startsWith('/mensagem-avulsa') || pathname.startsWith('/stories')) return 'Criar conteúdo';
+    if (pathname.startsWith('/instagram-pro')) return 'Instagram Pro';
     if (pathname.startsWith('/ofertas')) return 'Ofertas';
     if (pathname.startsWith('/envios') || pathname.startsWith('/agenda')) return 'Envios';
     if (pathname.startsWith('/estatisticas') || pathname.startsWith('/resultados') || pathname.startsWith('/analytics') || pathname.startsWith('/relatorios')) return 'Estatísticas';
@@ -268,6 +270,17 @@ export function AppShell({ children }: AppShellProps) {
               <PenTool className="w-3.5 h-3.5" />
             </span>
             Criar conteúdo
+          </Link>
+
+          <Link
+            href="/instagram-pro"
+            className={isCurrent('/instagram-pro') ? 'rdv3-active' : ''}
+            aria-current={isCurrent('/instagram-pro') ? 'page' : undefined}
+          >
+            <span className="nav-icon">
+              <Camera className="w-3.5 h-3.5" />
+            </span>
+            Instagram Pro
           </Link>
 
           <Link
