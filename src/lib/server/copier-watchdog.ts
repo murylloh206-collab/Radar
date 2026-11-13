@@ -37,7 +37,7 @@ const DEFAULT_INSTANCE_NAME = 'radar_00000000_4453f2';
  * 4. Busca ativamente na Evolution API as últimas mensagens dos grupos de origem ativos (recuperação pós-hibernação).
  * 5. Drena e processa qualquer mensagem pendente na fila.
  */
-export async function runCopierWatchdog(forceRestart = false): Promise<WatchdogReport> {
+export async function runCopierWatchdog(forceRestart = false, _options: { userId?: string } = {}): Promise<WatchdogReport> {
   const now = new Date();
   const timestamp = now.toISOString();
 
