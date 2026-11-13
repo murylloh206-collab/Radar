@@ -1,4 +1,5 @@
 import 'server-only';
+import { checkOfferContent } from './offer-content-guard';
 import { PublicationJob, StoreCredential, StoreName, WhatsAppGroup } from '../types';
 import { DatabaseSchema } from './storage';
 import { detectStoreFromUrl } from './url-resolver';
@@ -94,6 +95,12 @@ export function validateJobForDispatch(job: PublicationJob, db: DatabaseSchema):
       valid: false,
       error: 'Oferta com preço zerado (R$ 0,00) ou inconsistente. Envio bloqueado para revisão.',
     };
+  }
+
+  // Publicações de oferta (com link de afiliado) precisam ter link e preço no texto final
+  if (job.affiliateUrl) {
+    const content = checkOfferContent({ messageText: job.messageText });
+    if (!content.ok) return { valid: false, error: content.reason };
   }
 
   // 3.1 Exigência estrita de fotografia válida quando o envio requer imagem

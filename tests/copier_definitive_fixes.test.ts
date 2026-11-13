@@ -56,7 +56,7 @@ test('2. SEGURANÇA DE IMAGEM: NUNCA despachar oferta sem fotografia quando o fl
     userId: '00000000-0000-0000-0000-000000000001',
     originType: 'copiador',
     targetJid: '120363000@g.us',
-    messageText: '🔥 Oferta imperdível da Caixa de Som Bluetooth JBL Partybox!',
+    messageText: '🔥 Oferta imperdível da Caixa de Som Bluetooth JBL Partybox!\n🔥 *Por R$ 1.299,00*\nhttps://www.amazon.com.br/dp/B08X?tag=radar-20',
     mediaUrl: '',
     mediaType: 'image',
     affiliateUrl: 'https://www.amazon.com.br/dp/B08X?tag=radar-20',

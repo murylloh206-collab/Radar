@@ -25,6 +25,7 @@ import {
 import { isTestIsolationActive } from '../supabase';
 import { fetchProductRealData } from './product-fetcher';
 import { processRadarArt, selectBestProductPhoto } from './radar-art-engine';
+import { checkOfferContent, isJunkProductTitle } from './offer-content-guard';
 import { optimizeProductImageForWhatsApp } from './product-image-optimizer';
 import { runWorkerCycle } from './worker-engine';
 import { getDailyOfferQuotaStatus } from './plan-guard';
@@ -996,7 +997,7 @@ export async function processIncomingMessage(
     t.toLowerCase().startsWith('oferta ') ||
     t.toLowerCase() === 'oferta exclusiva' ||
     isPromotionalHookLine(t) ||
-    t.length < 5;
+    isJunkProductTitle(t);
 
   if (isGenericStoreTitle(productData.title)) {
     if (parsedFromWhatsApp.title && !isGenericStoreTitle(parsedFromWhatsApp.title)) {
@@ -1261,6 +1262,10 @@ export async function processIncomingMessage(
     watermarkText: db.settings.watermarkText,
   });
 
+  // Trava de conteúdo: sem link exibido, sem preço ou com título inválido → revisão manual
+  const contentCheck = checkOfferContent({ messageText: formattedMessage, displayUrl: displayAffiliateUrl, title: productData.title });
+  const contentReviewReason = contentCheck.ok ? undefined : contentCheck.reason;
+
   const createdJobIds: string[] = [];
 
   // Verificar limite diário do plano no servidor antes de agendar envio automático
@@ -1278,6 +1283,7 @@ export async function processIncomingMessage(
     !hasBlockedKeyword &&
     !requiresManualReviewDueToImage &&
     !planQuotaReached &&
+    contentCheck.ok &&
     Boolean(conversionResult.success && conversionResult.affiliateUrl && conversionResult.verificationStatus === 'verificado' && conversionResult.isAutoDispatchAllowed);
 
   const brandPrefs = await getBrandSettings(authorizedSource.userId);
@@ -1343,7 +1349,7 @@ export async function processIncomingMessage(
       originalUrl: primaryUrl,
       cleanUrl: conversionResult.cleanUrl,
       status: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? 'agendado' : 'aguardando_aprovacao',
-      errorDetails: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? undefined : (planQuotaReason || imageReviewReason || unverifiedReason),
+      errorDetails: (isAutomaticAllowed && !requiresManualReviewDueToImage) ? undefined : (contentReviewReason || planQuotaReason || imageReviewReason || unverifiedReason),
       scheduledFor: scheduledTime,
       attempts: 0,
       maxAttempts: 3,
