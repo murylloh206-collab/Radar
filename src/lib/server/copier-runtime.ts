@@ -38,7 +38,7 @@ function checked<T>(response: { data: T; error: unknown }, operation: string): T
   if (response.error) throw new CopierRuntimeError(`${operation} falhou. Confira a migração 06 e a conexão com o banco.`);
   return response.data;
 }
-const serviceSession = (userId: string): UserSession => ({ userId, role: 'user', email: '', createdAt: 0, expiresAt: 0 });
+export const serviceSession = (userId: string): UserSession => ({ userId, role: 'user', email: '', createdAt: 0, expiresAt: 0 });
 
 export async function acceptCopierEvent(payload: EvolutionWebhookPayload, suppliedSecret: string) {
   const client = database();

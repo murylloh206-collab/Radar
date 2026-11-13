@@ -1,7 +1,9 @@
 import 'server-only';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { acceptCopierEvent, runDurableCopierCycle } from './copier-runtime';
+import { acceptCopierEvent, runDurableCopierCycle, serviceSession } from './copier-runtime';
 import { extractUrlsFromText, extractWhatsAppMessageText } from './copier-service';
+import { copierConnections } from './copier-group-catalog';
+import { readDatabase } from './storage';
 
 export interface WatchdogReport {
   ok: boolean;
@@ -22,48 +24,103 @@ export interface WatchdogReport {
     processed: number;
     dispatched: number;
   };
+  connections: WatchdogConnectionResult[];
   error?: string;
 }
 
-const DEFAULT_GATEWAY_URL = 'https://radar-whatsapp-gateway.onrender.com';
-const DEFAULT_GATEWAY_KEY = 'radar_wa_key_88392104';
-const DEFAULT_INSTANCE_NAME = 'radar_00000000_4453f2';
+export interface WatchdogConnectionResult {
+  connectionId: string;
+  instanceName: string;
+  state: string;
+  restarted: boolean;
+  recoveredFromHistory: number;
+  error?: string;
+}
+
+type WatchdogTarget = { connectionId: string; userId: string; instanceName: string; baseUrl: string; apiKey: string };
+
+/** Lista as conexões a verificar, cada uma com as credenciais do próprio cadastro (nunca chaves embutidas). */
+async function listWatchdogTargets(userId?: string): Promise<WatchdogTarget[]> {
+  const userIds = new Set<string>();
+  if (userId) userIds.add(userId);
+  else if (isSupabaseConfigured && supabase) {
+    const { data } = await supabase.from('whatsapp_connections').select('user_id');
+    for (const row of data || []) if (row.user_id) userIds.add(String(row.user_id));
+  } else {
+    for (const connection of readDatabase().connections || []) if (connection.userId) userIds.add(connection.userId);
+  }
+  const targets: WatchdogTarget[] = [];
+  for (const id of userIds) {
+    const connections = await copierConnections(serviceSession(id)).catch(() => []);
+    for (const connection of connections) {
+      targets.push({ connectionId: connection.id, userId: id, instanceName: connection.instanceName,
+        baseUrl: connection.baseUrl, apiKey: connection.apiKey });
+    }
+  }
+  return targets;
+}
 
 /**
- * Watchdog Sentinela de Auto-Cura do Copiador:
- * 1. Pinga o servidor Render para mantê-lo 100% acordado (anti-sleep).
- * 2. Verifica a saúde do WebSocket Baileys da Evolution API (aguardando handshake caso esteja em 'connecting').
- * 3. Se detectar socket desconectado, reconecta/reinicia a instância automaticamente.
- * 4. Busca ativamente na Evolution API as últimas mensagens dos grupos de origem ativos (recuperação pós-hibernação).
- * 5. Drena e processa qualquer mensagem pendente na fila.
+ * Watchdog Sentinela de Auto-Cura do Copiador, para TODAS as conexões (ou só as do usuário informado):
+ * 1. Pinga o gateway para mantê-lo acordado (anti-sleep).
+ * 2. Verifica a saúde da sessão do WhatsApp (aguardando handshake caso esteja em 'connecting').
+ * 3. Se detectar sessão desconectada, reconecta/reinicia a instância automaticamente.
+ * 4. Busca as últimas mensagens dos grupos de origem ativos (recuperação pós-hibernação).
+ * 5. Drena e processa qualquer mensagem pendente na fila (uma vez, ao final).
  */
-export async function runCopierWatchdog(forceRestart = false, _options: { userId?: string } = {}): Promise<WatchdogReport> {
-  const now = new Date();
-  const timestamp = now.toISOString();
-
-  let baseUrl = process.env.EVOLUTION_BASE_URL || process.env.EVOLUTION_API_URL || DEFAULT_GATEWAY_URL;
-  let apiKey = process.env.EVOLUTION_API_KEY || DEFAULT_GATEWAY_KEY;
-  let instanceName = process.env.EVOLUTION_INSTANCE_NAME || DEFAULT_INSTANCE_NAME;
-  let connectionRow: Record<string, unknown> | null = null;
-
-  // 1. Tentar ler do Supabase as credenciais reais da conexão
-  if (isSupabaseConfigured && supabase) {
+export async function runCopierWatchdog(forceRestart = false, options: { userId?: string } = {}): Promise<WatchdogReport> {
+  const timestamp = new Date().toISOString();
+  const targets = await listWatchdogTargets(options.userId);
+  const results: Array<WatchdogConnectionResult & { gatewayStatus: number; gatewayUrl: string; alive: boolean; reason?: string }> = [];
+  for (const target of targets) {
+    if (!target.baseUrl || !target.apiKey || !target.instanceName) {
+      results.push({ connectionId: target.connectionId, instanceName: target.instanceName, state: 'unknown', restarted: false,
+        recoveredFromHistory: 0, error: 'Gateway não configurado', gatewayStatus: 0, gatewayUrl: target.baseUrl, alive: false });
+      continue;
+    }
     try {
-      const { data: waConns } = await supabase.from('whatsapp_connections').select('*').limit(1);
-      if (waConns?.[0]) {
-        connectionRow = waConns[0];
-        if (waConns[0].instance_name) instanceName = String(waConns[0].instance_name);
-        if (waConns[0].base_url) baseUrl = String(waConns[0].base_url);
-        if (waConns[0].api_key) apiKey = String(waConns[0].api_key);
-      }
-      const { data: legacy } = await supabase.from('integrations_whatsapp').select('*').limit(1);
-      if (legacy?.[0]) {
-        if (legacy[0].base_url) baseUrl = legacy[0].base_url;
-        if (legacy[0].api_key) apiKey = legacy[0].api_key;
-        if (!connectionRow && legacy[0].instance_name) instanceName = legacy[0].instance_name;
-      }
-    } catch {}
+      results.push(await watchConnection(target, forceRestart, timestamp));
+    } catch (error) {
+      results.push({ connectionId: target.connectionId, instanceName: target.instanceName, state: 'unknown', restarted: false,
+        recoveredFromHistory: 0, error: error instanceof Error ? error.message : 'Falha ao verificar a conexão',
+        gatewayStatus: 0, gatewayUrl: target.baseUrl, alive: false });
+    }
   }
+
+  // Drenagem e execução do ciclo de envios (uma vez para todas as conexões)
+  const cycleRes = { processed: 0, dispatched: 0 };
+  try {
+    const first = await runDurableCopierCycle();
+    cycleRes.processed += first.processed;
+    cycleRes.dispatched += first.dispatched;
+    if (first.processed > 0) {
+      const second = await runDurableCopierCycle();
+      cycleRes.processed += second.processed;
+      cycleRes.dispatched += second.dispatched;
+    }
+  } catch (cycleErr) {
+    console.error('[Watchdog] Erro ao executar ciclo:', cycleErr instanceof Error ? cycleErr.message : cycleErr);
+  }
+
+  const first = results[0];
+  return {
+    ok: results.length > 0 && results.every(result => result.alive),
+    timestamp,
+    gatewayPing: { status: first?.gatewayStatus || 0, url: (first?.gatewayUrl || '').replace(/\/+$/, ''), alive: !!first?.alive },
+    connectionState: { instanceName: first?.instanceName, state: first?.state, restarted: first?.restarted, reason: first?.reason },
+    recoveredFromHistory: results.reduce((sum, result) => sum + result.recoveredFromHistory, 0),
+    cycle: cycleRes,
+    connections: results.map(({ connectionId, instanceName, state, restarted, recoveredFromHistory, error }) =>
+      ({ connectionId, instanceName, state, restarted, recoveredFromHistory, ...(error ? { error } : {}) })),
+    ...(results.length === 0 ? { error: 'Nenhuma conexão de WhatsApp cadastrada.' } : {}),
+  };
+}
+
+async function watchConnection(target: WatchdogTarget, forceRestart: boolean, timestamp: string) {
+  const { baseUrl, apiKey, instanceName } = target;
+  const connectionRow: Record<string, unknown> | null = isSupabaseConfigured && supabase
+    ? (await supabase.from('whatsapp_connections').select('id,webhook_secret').eq('id', target.connectionId).maybeSingle()).data
+    : null;
 
   const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
   let gatewayAlive = false;
@@ -136,7 +193,7 @@ export async function runCopierWatchdog(forceRestart = false, _options: { userId
         await supabase
           .from('whatsapp_connections')
           .update({ last_ping_at: timestamp, status: 'connected' })
-          .eq('instance_name', instanceName);
+          .eq('id', target.connectionId);
       } catch {}
     }
   }
@@ -157,7 +214,7 @@ export async function runCopierWatchdog(forceRestart = false, _options: { userId
           await supabase
             .from('whatsapp_connections')
             .update({ last_ping_at: timestamp, status: 'connected' })
-            .eq('instance_name', instanceName);
+            .eq('id', target.connectionId);
         }
       }
     } catch (restartErr) {
@@ -229,36 +286,15 @@ export async function runCopierWatchdog(forceRestart = false, _options: { userId
     } catch {}
   }
 
-  // 6. Drenagem e Execução do Ciclo de Envios
-  let cycleRes = { processed: 0, dispatched: 0 };
-  try {
-    const first = await runDurableCopierCycle();
-    cycleRes.processed += first.processed;
-    cycleRes.dispatched += first.dispatched;
-    if (first.processed > 0) {
-      const second = await runDurableCopierCycle();
-      cycleRes.processed += second.processed;
-      cycleRes.dispatched += second.dispatched;
-    }
-  } catch (cycleErr) {
-    console.error('[Watchdog] Erro ao executar ciclo:', cycleErr);
-  }
-
   return {
-    ok: gatewayAlive,
-    timestamp,
-    gatewayPing: {
-      status: gatewayHttpStatus,
-      url: cleanBaseUrl,
-      alive: gatewayAlive,
-    },
-    connectionState: {
-      instanceName,
-      state: currentState,
-      restarted: didRestart,
-      reason: restartReason || undefined,
-    },
+    connectionId: target.connectionId,
+    instanceName,
+    state: currentState,
+    restarted: didRestart,
     recoveredFromHistory,
-    cycle: cycleRes,
+    reason: restartReason || undefined,
+    gatewayStatus: gatewayHttpStatus,
+    gatewayUrl: cleanBaseUrl,
+    alive: gatewayAlive,
   };
 }

@@ -10,10 +10,18 @@ type RegisteredConnection = WhatsAppConnection & { persistence: 'multi' | 'legac
 const catalogCache = new Map<string, { groups: WhatsAppGroup[]; expires: number; syncedAt: string }>();
 const pending = new Map<string, Promise<WhatsAppGroup[]>>();
 
+/** Gateway definido nas variáveis de ambiente do servidor; null quando não configurado. */
+export function resolveGatewayEnv(): { baseUrl: string; apiKey: string } | null {
+  const baseUrl = (process.env.EVOLUTION_BASE_URL || process.env.EVOLUTION_API_URL || process.env.WHATSAPP_GATEWAY_URL || '').trim();
+  const apiKey = (process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || '').trim();
+  return baseUrl && apiKey ? { baseUrl, apiKey } : null;
+}
+
 function environmentGateway() {
+  const gateway = resolveGatewayEnv();
   return {
-    baseUrl: (process.env.EVOLUTION_BASE_URL || process.env.EVOLUTION_API_URL || process.env.WHATSAPP_GATEWAY_URL || 'https://radar-whatsapp-gateway.onrender.com').trim(),
-    apiKey: (process.env.EVOLUTION_API_KEY || process.env.WHATSAPP_GATEWAY_KEY || 'radar_wa_key_88392104').trim(),
+    baseUrl: gateway?.baseUrl || '',
+    apiKey: gateway?.apiKey || '',
     instanceName: (process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_GATEWAY_INSTANCE || 'radar_00000000_4453f2').trim(),
   };
 }
