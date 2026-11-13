@@ -681,12 +681,25 @@ export async function convertToAffiliateLink(
     } else if (store === 'amazon') {
       const tag = storeCreds.affiliateTag?.trim();
       if (!tag) throw new Error('Tag de associado Amazon não configurada.');
-      const u = new URL(cleanUrl);
-      u.searchParams.set('tag', tag);
-      generatedAffiliateUrl = u.toString();
-      verificationStatus = 'nao_verificado';
-      isAutoDispatchAllowed = false;
-      verificationReason = 'Tag de associado Amazon aplicada na URL. Exige revisão manual.';
+      const asin = productId && /^[A-Z0-9]{10}$/i.test(productId) ? productId.toUpperCase() : null;
+      const tagValida = /^[a-z0-9][a-z0-9-]{1,60}-2[0-9]$/i.test(tag);
+      if (asin && tagValida) {
+        // Link oficial curto da Amazon, só com a tag do dono da conta (descarta tags e parâmetros de terceiros).
+        const host = new URL(cleanUrl).hostname.toLowerCase().endsWith('amazon.com') ? 'www.amazon.com' : 'www.amazon.com.br';
+        generatedAffiliateUrl = `https://${host}/dp/${asin}?tag=${encodeURIComponent(tag)}`;
+        verificationStatus = 'verificado';
+        isAutoDispatchAllowed = true;
+        verificationReason = 'Link oficial da Amazon com a tag de associado da conta.';
+      } else {
+        const u = new URL(cleanUrl);
+        u.searchParams.set('tag', tag);
+        generatedAffiliateUrl = u.toString();
+        verificationStatus = 'nao_verificado';
+        isAutoDispatchAllowed = false;
+        verificationReason = asin
+          ? 'Tag de associado Amazon em formato inválido (ex.: seunome-20). Exige revisão manual.'
+          : 'Produto da Amazon sem código (ASIN) identificável. Exige revisão manual.';
+      }
     } else if (store === 'aliexpress') {
       const tag = storeCreds.affiliateTag?.trim();
       if (!tag) throw new Error('Tracking ID do AliExpress não configurado.');
