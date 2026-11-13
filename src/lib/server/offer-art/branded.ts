@@ -25,7 +25,8 @@ async function loadImage(source: string): Promise<Buffer> {
   const local = source.startsWith('/') && !fs.existsSync(source) ? path.join(process.cwd(), 'public', source) : source;
   const resolved = path.resolve(local);
   // Arquivos locais: só dentro do projeto (public/) ou da pasta temporária do sistema
-  const allowed = [path.resolve(process.cwd(), 'public'), path.resolve(os.tmpdir())];
+  // Em produção só a pasta public/; a pasta temporária é aceita apenas em desenvolvimento e testes
+  const allowed = [path.resolve(process.cwd(), 'public'), ...(process.env.NODE_ENV === 'production' ? [] : [path.resolve(os.tmpdir())])];
   if (!allowed.some(dir => resolved.startsWith(dir + path.sep)) || !fs.existsSync(resolved)) {
     throw new Error('Imagem do produto não encontrada.');
   }

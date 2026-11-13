@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { checkPlanFeatureAccess, resolveCurrentUserId } from '@/lib/server/plan-guard';
+import { ADMIN_UUID } from '@/lib/server/auth';
 import { saveBrandSettings } from '@/lib/server/brand-settings';
 import {
   PublicPageConfig,
   getPublicPageFilePath,
   loadPublicStorefrontConfig,
+  validateStorefrontSlug,
 } from '@/lib/server/public-storefront';
 
 export async function GET(req: NextRequest) {
@@ -39,12 +41,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const current = await loadPublicStorefrontConfig(userId);
 
-    const cleanSlug = (body.slug || current.slug || 'radar-ofertas')
+    // Endereço da bio: único por loja; clientes não herdam o endereço reservado da plataforma.
+    const fallbackSlug = userId === ADMIN_UUID ? 'radar-ofertas' : `loja-${userId.replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase()}`;
+    const requestedSlug = body.slug || (current.slug && (current.slug !== 'radar-ofertas' || userId === ADMIN_UUID) ? current.slug : fallbackSlug);
+    const cleanSlug = String(requestedSlug)
       .toLowerCase()
       .replace(/^@+/, '')
       .replace(/[^a-z0-9-_]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
+    const slugError = await validateStorefrontSlug(userId, cleanSlug);
+    if (slugError) {
+      return NextResponse.json({ ok: false, error: slugError }, { status: 409 });
+    }
 
     const next: PublicPageConfig = {
       title: body.title ?? current.title,

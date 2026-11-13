@@ -29,6 +29,9 @@ export async function PUT(req: NextRequest) {
     const settings = body.autopost ? await saveAutopostSettings(session.userId, body.autopost) : await getAutopostSettings(session.userId);
     if (body.identity) {
       const id = body.identity;
+      if (typeof id.panelLogoUrl === 'string' && id.panelLogoUrl.trim() && !/^https:\/\//i.test(id.panelLogoUrl.trim())) {
+        return NextResponse.json({ ok: false, error: 'O link do logo precisa começar com https://' }, { status: 400 });
+      }
       const handle = typeof id.watermarkHandle === 'string' ? id.watermarkHandle.trim() : undefined;
       const logo = typeof id.panelLogoUrl === 'string' ? id.panelLogoUrl.trim() : undefined;
       await saveBrandSettings(session.userId, {

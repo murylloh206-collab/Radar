@@ -87,14 +87,14 @@ export function buildArtTheme(accentHex: string, background: ArtBackground): Art
 
   if (background === 'light') {
     const bg = { top: hsl(h, sat * 0.55, 0.975), mid: hsl(h, sat * 0.5, 0.95), bottom: hsl(h, sat * 0.45, 0.91) };
-    const text = ensureContrast(hsl(h, sat * 0.5, 0.12), bg.mid, 4.5, 'darker');
+    const text = ensureContrast(hsl(h, sat * 0.5, 0.12), bg.bottom, 4.5, 'darker');
     return {
       mode: 'light', background: bg,
       stage: { top: '#FFFFFF', bottom: hsl(h, sat * 0.3, 0.985), shadow: `rgba(0,0,0,0.12)` },
       text,
-      textMuted: ensureContrast(hsl(h, sat * 0.2, 0.42), bg.mid, 4.5, 'darker'),
+      textMuted: ensureContrast(hsl(h, sat * 0.2, 0.42), bg.bottom, 4.5, 'darker'),
       accent, onAccent,
-      accentText: ensureContrast(accent, bg.mid, 3, 'darker'),
+      accentText: ensureContrast(accent, bg.bottom, 3, 'darker'),
       divider: 'rgba(0,0,0,0.10)',
     };
   }
@@ -105,9 +105,9 @@ export function buildArtTheme(accentHex: string, background: ArtBackground): Art
     mode: 'dark', background: bg,
     stage: { top: '#FFFFFF', bottom: hsl(h, sat * 0.35, 0.95), shadow: `rgba(${r},${g},${b},0.28)` },
     text: '#FFFFFF',
-    textMuted: ensureContrast(hsl(h, sat * 0.25, 0.75), bg.mid, 4.5, 'lighter'),
+    textMuted: ensureContrast(hsl(h, sat * 0.25, 0.75), bg.top, 4.5, 'lighter'),
     accent, onAccent,
-    accentText: ensureContrast(accent, bg.mid, 3, 'lighter'),
+    accentText: ensureContrast(accent, bg.top, 3, 'lighter'),
     divider: 'rgba(255,255,255,0.14)',
   };
 }

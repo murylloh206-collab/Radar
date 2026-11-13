@@ -21,7 +21,7 @@ async function handlePoll(req: NextRequest) {
   let social: unknown = null;
   const remaining = 50000 - (Date.now() - started);
   if (remaining > 5000) {
-    try { social = await runSocialAutopostCycle({ budgetMs: Math.min(15000, remaining - 3000) }); }
+    try { social = await runSocialAutopostCycle({ budgetMs: Math.min(15000, remaining - 3000), deadlineAt: started + 55000 }); }
     catch { social = { error: 'Ciclo de posts automáticos não concluído.' }; }
   }
   if (copierError) return NextResponse.json({ ok: false, error: copierError, social }, { status: 500 });

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS public.social_posts (
   channel text NOT NULL CHECK (channel IN ('instagram_story', 'instagram_feed', 'whatsapp_status')),
   connection_id uuid,
   art_url text,
-  status text NOT NULL CHECK (status IN ('publicado', 'falha', 'incerto')),
+  status text NOT NULL CHECK (status IN ('publicado', 'falha', 'incerto', 'pendente')),
   error text,
   external_id text,
   origin text NOT NULL DEFAULT 'manual' CHECK (origin IN ('manual', 'automatico')),
@@ -67,15 +67,45 @@ CREATE OR REPLACE FUNCTION public.social_next_offer_number(
 DECLARE existing public.social_offers; next_number integer; created public.social_offers;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtext('social_offers:' || p_user::text));
-  IF p_job IS NOT NULL THEN
-    SELECT * INTO existing FROM social_offers WHERE user_id = p_user AND source_job_id = p_job;
-    IF FOUND THEN RETURN existing; END IF;
-  END IF;
+  -- A mesma oferta (mesmo link de afiliado, enviada a vários grupos) reaproveita o número
+  SELECT * INTO existing FROM social_offers
+    WHERE user_id = p_user AND ((p_job IS NOT NULL AND source_job_id = p_job) OR affiliate_url = p_affiliate)
+    ORDER BY created_at DESC LIMIT 1;
+  IF FOUND THEN RETURN existing; END IF;
   SELECT coalesce(max(offer_number), 0) + 1 INTO next_number FROM social_offers WHERE user_id = p_user;
   INSERT INTO social_offers(user_id, offer_number, source_job_id, title, store, image_url, price_current, price_original, discount_pct, coupon, affiliate_url)
   VALUES (p_user, next_number, p_job, p_title, p_store, p_image, p_price, p_original, p_discount, p_coupon, p_affiliate)
   RETURNING * INTO created;
   RETURN created;
+END $$;
+
+-- Reserva atômica de uma vaga na cota diária (registro 'pendente'); NULL quando o limite acabou
+CREATE OR REPLACE FUNCTION public.social_reserve_post(
+  p_user uuid, p_offer uuid, p_channel text, p_origin text, p_limit integer, p_since timestamptz
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE used integer; created uuid;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtext('social_posts:' || p_user::text));
+  IF NOT EXISTS (SELECT 1 FROM social_offers WHERE id = p_offer AND user_id = p_user) THEN RETURN NULL; END IF;
+  IF p_limit IS NOT NULL THEN
+    SELECT count(*) INTO used FROM social_posts
+      WHERE user_id = p_user AND created_at >= p_since AND status IN ('publicado', 'incerto', 'pendente');
+    IF used >= p_limit THEN RETURN NULL; END IF;
+  END IF;
+  INSERT INTO social_posts(user_id, social_offer_id, channel, status, origin)
+    VALUES (p_user, p_offer, p_channel, 'pendente', p_origin) RETURNING id INTO created;
+  RETURN created;
+END $$;
+
+REVOKE ALL ON FUNCTION public.social_reserve_post(uuid, uuid, text, text, integer, timestamptz) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.social_reserve_post(uuid, uuid, text, text, integer, timestamptz) TO service_role;
+
+-- Endereço da página da bio único por loja (só cria se não houver duplicatas antigas; o painel também valida)
+DO $$ BEGIN
+  IF to_regclass('public.public_storefronts') IS NOT NULL
+     AND NOT EXISTS (SELECT lower(slug) FROM public.public_storefronts WHERE slug IS NOT NULL GROUP BY lower(slug) HAVING count(*) > 1) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS public_storefronts_slug_unique ON public.public_storefronts (lower(slug));
+  END IF;
 END $$;
 
 REVOKE ALL ON FUNCTION public.social_next_offer_number(uuid, uuid, text, text, text, numeric, numeric, integer, text, text) FROM PUBLIC, anon, authenticated;

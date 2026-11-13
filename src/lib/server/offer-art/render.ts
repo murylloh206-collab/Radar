@@ -53,6 +53,71 @@ function initialOf(name: string): string {
   return (letter || 'R').toUpperCase();
 }
 
+export interface ArtLayout {
+  stageTop: number; stageH: number;
+  titleLines: string[]; titleSize: number; titleY: number;
+  oldPriceY: number | null; priceY: number; priceSize: number; currencySize: number; currencyW: number; priceBottom: number;
+  coupon: { text: string; size: number; x: number; y: number; w: number; h: number; right: number; bottom: number } | null;
+  dividerY: number; footerY: number;
+}
+
+/** Calcula as posições da arte: a foto encolhe o necessário para que nada se sobreponha. */
+export function computeArtLayout(p: { format: 'story' | 'feed'; title: string; current: number; original?: number | null; coupon?: string }): ArtLayout {
+  const story = p.format === 'story';
+  const H = story ? 1920 : 1350;
+  const pad = 72;
+  const headerY = story ? 150 : 64;
+  const logoSize = story ? 104 : 88;
+  const stageTop = headerY + logoSize + (story ? 90 : 48);
+  const titleSize = story ? 50 : 42;
+  const titleLines = wrapText(p.title || 'Oferta', { size: titleSize, weight: 700, maxWidth: W - pad * 2, maxLines: story ? 3 : 2 });
+  const priceSize = story ? 132 : 104;
+  const currencySize = story ? 48 : 40;
+  const currencyW = measureText('R$', currencySize, 800);
+  const valueW = measureText(money(p.current), priceSize, 800, -2);
+  const hasOld = Boolean(p.original && p.original > p.current);
+
+  // alturas relativas ao fim do palco
+  const titleRel = story ? 96 : 76;
+  let y = titleRel + titleLines.length * titleSize * 1.22 + (story ? 34 : 20);
+  const oldPriceRel = hasOld ? y : null;
+  if (hasOld) y += story ? 26 : 20;
+  const priceRel = y + priceSize * 0.82;
+  let contentBottomRel = priceRel + priceSize * 0.24;
+
+  let couponRel: { text: string; size: number; x: number; yRel: number; w: number; h: number } | null = null;
+  if (p.coupon && p.coupon.trim()) {
+    const size = story ? 32 : 28;
+    const [text] = wrapText(`CUPOM ${p.coupon.toUpperCase().trim()}`, { size, weight: 700, maxWidth: W - pad * 2 - 60, maxLines: 1 });
+    const w = measureText(text, size, 700, 1) + 48;
+    const h = size + 36;
+    const fitsRight = pad + currencyW + 14 + valueW + 40 + w <= W - pad;
+    const x = fitsRight ? W - pad - w : pad;
+    const yRel = fitsRight ? priceRel - priceSize * 0.38 - h / 2 : priceRel + priceSize * 0.24 + (story ? 28 : 20);
+    couponRel = { text, size, x, yRel, w, h };
+    contentBottomRel = Math.max(contentBottomRel, yRel + h);
+  }
+
+  const dividerGap = story ? 44 : 30;
+  const footerGap = story ? 64 : 54;
+  const maxFooter = story ? H - 230 : H - 74;
+  const maxStage = story ? 860 : 560;
+  const minStage = story ? 520 : 360;
+  const available = maxFooter - footerGap - dividerGap - contentBottomRel - stageTop;
+  const stageH = Math.max(minStage, Math.min(maxStage, Math.floor(available)));
+  const base = stageTop + stageH;
+  const naturalDivider = base + contentBottomRel + dividerGap;
+  const footerY = story ? Math.min(maxFooter, Math.max(naturalDivider + footerGap, 1640)) : maxFooter;
+  const coupon = couponRel ? { text: couponRel.text, size: couponRel.size, x: couponRel.x, y: base + couponRel.yRel, w: couponRel.w, h: couponRel.h,
+    right: couponRel.x + couponRel.w, bottom: base + couponRel.yRel + couponRel.h } : null;
+  return {
+    stageTop, stageH, titleLines, titleSize, titleY: base + titleRel,
+    oldPriceY: oldPriceRel === null ? null : base + oldPriceRel,
+    priceY: base + priceRel, priceSize, currencySize, currencyW, priceBottom: base + priceRel + priceSize * 0.24,
+    coupon, dividerY: footerY - footerGap, footerY,
+  };
+}
+
 export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
   const story = input.format === 'story';
   const H = story ? 1920 : 1350;
@@ -94,10 +159,12 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
     svg.push(textPath(handle || '', { x: nameX, y: headerY + logoSize / 2 + (story ? 38 : 33), size: story ? 28 : 24, weight: 500, fill: t.textMuted }).svg);
   }
 
+  // ---- Posições calculadas antes de desenhar (a foto encolhe para caber título, preços, cupom e rodapé)
+  const L = computeArtLayout({ format: input.format, title: input.product.title, current: input.pricing.current, original: input.pricing.original, coupon: input.coupon });
+  const { stageTop, stageH } = L;
+
   // ---- Palco da foto
-  const stageTop = headerY + logoSize + (story ? 90 : 48);
   const stageW = W - pad * 2;
-  const stageH = story ? 860 : 560;
   const stageX = pad;
   svg.push(`<ellipse cx="${W / 2}" cy="${stageTop + stageH / 2}" rx="${stageW * 0.62}" ry="${stageH * 0.62}" fill="url(#glow)"/>`);
   svg.push(`<rect x="${stageX + 30}" y="${stageTop + 40}" width="${stageW - 60}" height="${stageH - 20}" rx="56" fill="${t.stage.shadow}" filter="url(#soft)"/>`);
@@ -106,11 +173,10 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
   // área do produto deixa espaço para o selo de desconto no canto superior esquerdo
   const chipReserve = story ? 120 : 100;
   const productBoxW = stageW - 200;
-  const productBoxH = stageH - chipReserve - (story ? 90 : 60);
+  const productBoxH = Math.max(stageH - chipReserve - (story ? 90 : 60), 160);
   const product = await prepareProduct(input.product.image, productBoxW, productBoxH);
   const productLeft = Math.round(W / 2 - product.width / 2);
   const productTop = Math.round(stageTop + chipReserve + (stageH - chipReserve - product.height) / 2 - (story ? 10 : 6));
-  // sombra de contato sob o produto
   svg.push(`<ellipse cx="${W / 2}" cy="${productTop + product.height - 6}" rx="${Math.max(product.width * 0.38, 60)}" ry="${story ? 22 : 16}" fill="#000" fill-opacity="0.16" filter="url(#contact)"/>`);
   composites.push({ input: product.buffer, left: productLeft, top: productTop });
 
@@ -128,49 +194,31 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
   }
 
   // ---- Título
-  let y = stageTop + stageH + (story ? 96 : 76);
-  const titleSize = story ? 50 : 42;
-  const titleLines = wrapText(input.product.title || 'Oferta', { size: titleSize, weight: 700, maxWidth: W - pad * 2, maxLines: story ? 3 : 2 });
-  for (const line of titleLines) {
-    svg.push(textPath(line, { x: pad, y, size: titleSize, weight: 700, fill: t.text }).svg);
-    y += titleSize * 1.22;
-  }
+  L.titleLines.forEach((line, i) => {
+    svg.push(textPath(line, { x: pad, y: L.titleY + i * L.titleSize * 1.22, size: L.titleSize, weight: 700, fill: t.text }).svg);
+  });
 
   // ---- Preços
-  y += story ? 34 : 20;
-  if (input.pricing.original && input.pricing.original > input.pricing.current) {
+  if (L.oldPriceY !== null && input.pricing.original) {
     const oldText = `R$ ${money(input.pricing.original)}`;
     const oldSize = story ? 36 : 30;
     const oldW = measureText(oldText, oldSize, 500);
-    svg.push(textPath(oldText, { x: pad, y, size: oldSize, weight: 500, fill: t.textMuted }).svg);
-    svg.push(`<rect x="${pad - 4}" y="${y - oldSize * 0.36}" width="${oldW + 8}" height="${story ? 4 : 3}" rx="2" fill="${t.textMuted}"/>`);
-    y += story ? 26 : 20;
+    svg.push(textPath(oldText, { x: pad, y: L.oldPriceY, size: oldSize, weight: 500, fill: t.textMuted }).svg);
+    svg.push(`<rect x="${pad - 4}" y="${L.oldPriceY - oldSize * 0.36}" width="${oldW + 8}" height="${story ? 4 : 3}" rx="2" fill="${t.textMuted}"/>`);
   }
-  const priceSize = story ? 132 : 104;
-  const currencySize = story ? 48 : 40;
-  y += priceSize * 0.82;
-  const currency = textPath('R$', { x: pad, y: y - priceSize * 0.42, size: currencySize, weight: 800, fill: t.accentText });
-  svg.push(currency.svg);
-  const value = textPath(money(input.pricing.current), { x: pad + currency.width + 14, y, size: priceSize, weight: 800, fill: t.text, letterSpacing: -2 });
-  svg.push(value.svg);
+  svg.push(textPath('R$', { x: pad, y: L.priceY - L.priceSize * 0.42, size: L.currencySize, weight: 800, fill: t.accentText }).svg);
+  svg.push(textPath(money(input.pricing.current), { x: pad + L.currencyW + 14, y: L.priceY, size: L.priceSize, weight: 800, fill: t.text, letterSpacing: -2 }).svg);
 
-  // cupom (à direita do preço quando couber; senão abaixo)
-  if (input.coupon) {
-    const couponText = `CUPOM ${input.coupon.toUpperCase().trim()}`;
-    const couponSize = story ? 32 : 28;
-    const cw = measureText(couponText, couponSize, 700, 1) + 48;
-    const ch = couponSize + 36;
-    const fitsRight = pad + currency.width + 14 + value.width + 40 + cw <= W - pad;
-    const cx = fitsRight ? W - pad - cw : pad;
-    const cy = fitsRight ? y - priceSize * 0.38 - ch / 2 : y + (story ? 40 : 28);
-    svg.push(`<rect x="${cx}" y="${cy}" width="${cw}" height="${ch}" rx="14" fill="none" stroke="${t.accentText}" stroke-width="3" stroke-dasharray="10 8"/>`);
-    svg.push(textPath(couponText, { x: cx + cw / 2, y: cy + ch / 2 + couponSize * 0.36, size: couponSize, weight: 700, fill: t.accentText, anchor: 'middle', letterSpacing: 1 }).svg);
+  // cupom (à direita do preço quando couber; senão abaixo; encurtado se for longo)
+  if (L.coupon) {
+    const c = L.coupon;
+    svg.push(`<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="14" fill="none" stroke="${t.accentText}" stroke-width="3" stroke-dasharray="10 8"/>`);
+    svg.push(textPath(c.text, { x: c.x + c.w / 2, y: c.y + c.h / 2 + c.size * 0.36, size: c.size, weight: 700, fill: t.accentText, anchor: 'middle', letterSpacing: 1 }).svg);
   }
 
   // ---- Rodapé: Oferta #N · link na bio
-  // story: rodapé logo abaixo do conteúdo, acima da barra de resposta do Instagram
-  const footerY = story ? Math.min(Math.max(y + 215, 1640), H - 230) : H - 74;
-  svg.push(`<rect x="${pad}" y="${footerY - (story ? 64 : 54)}" width="${W - pad * 2}" height="2" fill="${t.divider}"/>`);
+  const footerY = L.footerY;
+  svg.push(`<rect x="${pad}" y="${L.dividerY}" width="${W - pad * 2}" height="2" fill="${t.divider}"/>`);
   const footSize = story ? 34 : 30;
   if (input.offerNumber) {
     const label = textPath('Oferta ', { x: pad, y: footerY, size: footSize, weight: 500, fill: t.textMuted });

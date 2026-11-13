@@ -16,7 +16,7 @@ import { extractOfferDetailsFromWhatsAppText, extractProductTitleFromFormattedMe
  */
 
 export type SocialChannel = 'instagram_story' | 'instagram_feed' | 'whatsapp_status';
-export type SocialPostStatus = 'publicado' | 'falha' | 'incerto';
+export type SocialPostStatus = 'publicado' | 'falha' | 'incerto' | 'pendente';
 
 export interface SocialOfferSnapshot {
   title?: string;
@@ -64,6 +64,8 @@ export interface SocialPostRecord {
 }
 
 const ELIGIBLE_WINDOW_HOURS = 48;
+/** Status que contam na cota e marcam a oferta como já divulgada (pendente = publicação em andamento ou interrompida). */
+const COUNTED: SocialPostStatus[] = ['publicado', 'incerto', 'pendente'];
 
 // ---------------------------------------------------------------- armazenamento local (dev/testes)
 type LocalSocial = { offers: SocialOffer[]; posts: SocialPostRecord[]; settings: Record<string, unknown> };
@@ -169,14 +171,14 @@ export async function ensureSocialOffer(userId: string, jobId: string): Promise<
   if (useDb()) {
     const { data, error } = await supabase!.rpc('social_next_offer_number', {
       p_user: userId, p_job: jobId, p_title: candidate.title, p_store: candidate.store, p_image: candidate.imageUrl,
-      p_price: candidate.priceCurrent, p_original: candidate.priceOriginal, p_discount: candidate.discountPct,
+      p_price: candidate.priceCurrent, p_original: candidate.priceOriginal, p_discount: candidate.discountPct === null ? null : Math.round(candidate.discountPct),
       p_coupon: candidate.coupon, p_affiliate: candidate.affiliateUrl,
     });
     if (error || !data) throw new Error('Não foi possível registrar a oferta. Confira se a migração 09 foi aplicada.');
     return mapOffer(Array.isArray(data) ? data[0] : data);
   }
   const local = readLocalSocial();
-  const existing = local.offers.find(o => o.userId === userId && o.sourceJobId === jobId);
+  const existing = local.offers.find(o => o.userId === userId && (o.sourceJobId === jobId || o.affiliateUrl === candidate.affiliateUrl));
   if (existing) return existing;
   const offerNumber = Math.max(0, ...local.offers.filter(o => o.userId === userId).map(o => o.offerNumber)) + 1;
   const { jobId: _job, sentAt: _sent, ...rest } = candidate;
@@ -260,11 +262,11 @@ async function postsToday(userId: string): Promise<{ count: number; lastAt: stri
   const since = startOfTodaySaoPaulo().toISOString();
   if (useDb()) {
     const { data, count, error } = await supabase!.from('social_posts').select('created_at', { count: 'exact' })
-      .eq('user_id', userId).in('status', ['publicado', 'incerto']).gte('created_at', since).order('created_at', { ascending: false }).limit(1);
+      .eq('user_id', userId).in('status', COUNTED).gte('created_at', since).order('created_at', { ascending: false }).limit(1);
     if (error) throw new Error('Não foi possível consultar a cota de publicações.');
     return { count: count || 0, lastAt: data?.[0]?.created_at || null };
   }
-  const posts = readLocalSocial().posts.filter(p => p.userId === userId && p.status !== 'falha' && p.createdAt >= since)
+  const posts = readLocalSocial().posts.filter(p => p.userId === userId && COUNTED.includes(p.status) && p.createdAt >= since)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return { count: posts.length, lastAt: posts[0]?.createdAt || null };
 }
@@ -279,14 +281,59 @@ export async function lastSocialPostAt(userId: string): Promise<string | null> {
   return posts[0]?.createdAt || null;
 }
 
+let localLock: Promise<unknown> = Promise.resolve();
+function withLocalLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = localLock.then(fn, fn);
+  localLock = run.catch(() => undefined);
+  return run;
+}
+
+async function quotaLimit(userId: string): Promise<number | null> {
+  if (userId === ADMIN_UUID) return null;
+  const sub = await getUserSubscription(userId);
+  return (PLANS_CONFIG[sub.effectivePlan] || PLANS_CONFIG.impulse).socialDailyPostLimit;
+}
+
+/** Reserva uma vaga na cota de forma atômica (registro 'pendente'). Retorna null se o limite do dia acabou. */
+export async function reserveSocialPost(userId: string, post: { socialOfferId: string; channel: SocialChannel; origin: 'manual' | 'automatico' }): Promise<string | null> {
+  const limit = await quotaLimit(userId);
+  if (limit === 0) return null;
+  const since = startOfTodaySaoPaulo().toISOString();
+  if (useDb()) {
+    const { data, error } = await supabase!.rpc('social_reserve_post', {
+      p_user: userId, p_offer: post.socialOfferId, p_channel: post.channel, p_origin: post.origin, p_limit: limit, p_since: since,
+    });
+    if (error) throw new Error('Não foi possível reservar a publicação. Confira se a migração 09 foi aplicada.');
+    return data ? String(data) : null;
+  }
+  return withLocalLock(async () => {
+    const local = readLocalSocial();
+    const used = local.posts.filter(p => p.userId === userId && COUNTED.includes(p.status) && p.createdAt >= since).length;
+    if (limit !== null && used >= limit) return null;
+    const record: SocialPostRecord = { id: randomUUID(), userId, socialOfferId: post.socialOfferId, channel: post.channel, status: 'pendente', origin: post.origin, createdAt: new Date().toISOString() };
+    local.posts.push(record);
+    writeLocalSocial(local);
+    return record.id;
+  });
+}
+
+export async function finalizeSocialPost(userId: string, postId: string, result: { status: Exclude<SocialPostStatus, 'pendente'>; artUrl?: string | null; error?: string | null; externalId?: string | null; connectionId?: string | null }) {
+  if (useDb()) {
+    await supabase!.from('social_posts').update({ status: result.status, art_url: result.artUrl || null, error: result.error || null,
+      external_id: result.externalId || null, connection_id: result.connectionId || null }).eq('id', postId).eq('user_id', userId);
+    return;
+  }
+  await withLocalLock(async () => {
+    const local = readLocalSocial();
+    const post = local.posts.find(p => p.id === postId && p.userId === userId);
+    if (post) Object.assign(post, { status: result.status, artUrl: result.artUrl || null, error: result.error || null, externalId: result.externalId || null, connectionId: result.connectionId || null });
+    writeLocalSocial(local);
+  });
+}
+
 export async function getSocialQuota(userId: string): Promise<{ limit: number | null; usedToday: number; allowed: boolean; reason?: string }> {
   const { count } = await postsToday(userId);
-  let limit: number | null;
-  if (userId === ADMIN_UUID) limit = null;
-  else {
-    const sub = await getUserSubscription(userId);
-    limit = (PLANS_CONFIG[sub.effectivePlan] || PLANS_CONFIG.impulse).socialDailyPostLimit;
-  }
+  const limit = await quotaLimit(userId);
   if (limit === 0) return { limit, usedToday: count, allowed: false, reason: 'O Instagram Pro está disponível a partir do plano Plus.' };
   if (limit !== null && count >= limit) {
     return { limit, usedToday: count, allowed: false, reason: `Limite diário do seu plano atingido (${count} de ${limit} publicações hoje). Ele renova à meia-noite.` };
@@ -360,33 +407,42 @@ export async function publishSocialPost(userId: string, request: { jobId: string
   catch (error) { throw new SocialPublishError(error instanceof Error ? error.message : 'Oferta não encontrada.', 404); }
   if (!offer.imageUrl) throw new SocialPublishError('Esta oferta não tem foto do produto para gerar a arte.', 422);
 
-  const { renderBrandedOfferArt } = await import('./offer-art/branded');
-  const { getBrandSettings } = await import('./brand-settings');
-  const art = await renderBrandedOfferArt(userId, {
-    format: request.channel === 'instagram_feed' ? 'feed' : 'story',
-    title: offer.title, imagePathOrUrl: offer.imageUrl, priceCurrent: offer.priceCurrent, priceOriginal: offer.priceOriginal,
-    discountPct: offer.discountPct, coupon: offer.coupon || undefined, offerNumber: offer.offerNumber,
-  });
-  const artUrl = await uploadArt(userId, art);
-  const brand = await getBrandSettings(userId);
-  const caption = buildSocialCaption(offer, request.channel, brand.watermarkHandle);
-
-  let result: { status: SocialPostStatus; connectionId?: string; externalId?: string; error?: string };
-  if (request.channel === 'whatsapp_status') {
-    try { result = await sendWhatsAppStatus(userId, request.connectionId, artUrl, caption); }
-    catch (error) { result = { status: 'falha', error: error instanceof Error ? error.message : 'Falha ao enviar o status.' }; }
-  } else {
-    const meta = await import('./meta-graph-service');
-    const published = request.channel === 'instagram_story'
-      ? await meta.publishStoryToInstagram(userId, { imageUrl: artUrl })
-      : await meta.publishFeedPostToInstagram(userId, { imageUrl: artUrl, caption });
-    result = published.ok ? { status: 'publicado', externalId: published.mediaId } : { status: 'falha', error: published.error || 'O Instagram recusou a publicação.' };
+  const postId = await reserveSocialPost(userId, { socialOfferId: offer.id, channel: request.channel, origin: request.origin || 'manual' });
+  if (!postId) {
+    const latest = await getSocialQuota(userId);
+    throw new SocialPublishError(latest.reason || 'Limite diário do seu plano atingido.', latest.limit === 0 ? 403 : 429);
   }
 
-  const post = await recordSocialPost(userId, {
-    socialOfferId: offer.id, channel: request.channel, connectionId: result.connectionId || null, artUrl,
-    status: result.status, error: result.error || null, externalId: result.externalId || null, origin: request.origin || 'manual',
-  });
+  let artUrl: string | null = null;
+  let result: { status: Exclude<SocialPostStatus, 'pendente'>; connectionId?: string; externalId?: string; error?: string };
+  try {
+    const { renderBrandedOfferArt } = await import('./offer-art/branded');
+    const { getBrandSettings } = await import('./brand-settings');
+    const art = await renderBrandedOfferArt(userId, {
+      format: request.channel === 'instagram_feed' ? 'feed' : 'story',
+      title: offer.title, imagePathOrUrl: offer.imageUrl, priceCurrent: offer.priceCurrent, priceOriginal: offer.priceOriginal,
+      discountPct: offer.discountPct, coupon: offer.coupon || undefined, offerNumber: offer.offerNumber,
+    });
+    artUrl = await uploadArt(userId, art);
+    const brand = await getBrandSettings(userId);
+    const caption = buildSocialCaption(offer, request.channel, brand.watermarkHandle);
+    if (request.channel === 'whatsapp_status') {
+      try { result = await sendWhatsAppStatus(userId, request.connectionId, artUrl, caption); }
+      catch (error) { result = { status: 'falha', error: error instanceof Error ? error.message : 'Falha ao enviar o status.' }; }
+    } else {
+      const meta = await import('./meta-graph-service');
+      const published = request.channel === 'instagram_story'
+        ? await meta.publishStoryToInstagram(userId, { imageUrl: artUrl })
+        : await meta.publishFeedPostToInstagram(userId, { imageUrl: artUrl, caption });
+      result = published.ok ? { status: 'publicado', externalId: published.mediaId } : { status: 'falha', error: published.error || 'O Instagram recusou a publicação.' };
+    }
+  } catch (error) {
+    result = { status: 'falha', error: error instanceof Error ? error.message : 'Não foi possível gerar a arte.' };
+  }
+
+  await finalizeSocialPost(userId, postId, { ...result, artUrl, connectionId: result.connectionId || null });
+  const post: SocialPostRecord = { id: postId, userId, socialOfferId: offer.id, channel: request.channel, connectionId: result.connectionId || null,
+    artUrl, status: result.status, error: result.error || null, externalId: result.externalId || null, origin: request.origin || 'manual', createdAt: new Date().toISOString() };
   return { offer, post, artUrl };
 }
 
@@ -486,45 +542,58 @@ async function usersWithAutopost(): Promise<Array<{ userId: string; settings: Au
     .filter(entry => entry.settings.enabled);
 }
 
-/** Jobs (ofertas) que já foram postados nas redes por este cliente — o automático não repete. */
-async function alreadyPostedJobIds(userId: string): Promise<Set<string>> {
+/** Histórico recente do automático por oferta (link de afiliado): já divulgadas e com falhas repetidas. */
+async function socialHistory(userId: string): Promise<{ posted: Set<string>; failedTwice: Set<string>; lastAttemptAt: string | null }> {
+  const since = new Date(Date.now() - ELIGIBLE_WINDOW_HOURS * 3600e3).toISOString();
+  let rows: Array<{ affiliate: string; status: SocialPostStatus; createdAt: string }> = [];
   if (useDb()) {
-    const since = new Date(Date.now() - ELIGIBLE_WINDOW_HOURS * 3600e3).toISOString();
-    const { data } = await supabase!.from('social_offers').select('source_job_id, social_posts!inner(status)').eq('user_id', userId)
-      .in('social_posts.status', ['publicado', 'incerto']).gte('created_at', since);
-    return new Set((data || []).map(row => String(row.source_job_id)));
+    const { data } = await supabase!.from('social_posts').select('status, created_at, social_offers!inner(affiliate_url)')
+      .eq('user_id', userId).gte('created_at', since).order('created_at', { ascending: false }).limit(500);
+    rows = (data || []).map((row: any) => ({ affiliate: String(row.social_offers?.affiliate_url || ''), status: row.status, createdAt: row.created_at }));
+  } else {
+    const local = readLocalSocial();
+    const offers = new Map(local.offers.filter(o => o.userId === userId).map(o => [o.id, o.affiliateUrl]));
+    rows = local.posts.filter(p => p.userId === userId && p.createdAt >= since)
+      .map(p => ({ affiliate: offers.get(p.socialOfferId) || '', status: p.status, createdAt: p.createdAt }))
+      .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
   }
-  const local = readLocalSocial();
-  const posted = new Set(local.posts.filter(p => p.userId === userId && p.status !== 'falha').map(p => p.socialOfferId));
-  return new Set(local.offers.filter(o => o.userId === userId && posted.has(o.id) && o.sourceJobId).map(o => String(o.sourceJobId)));
+  const posted = new Set(rows.filter(r => COUNTED.includes(r.status)).map(r => r.affiliate));
+  const failures = new Map<string, number>();
+  for (const r of rows) if (r.status === 'falha') failures.set(r.affiliate, (failures.get(r.affiliate) || 0) + 1);
+  return { posted, failedTwice: new Set([...failures].filter(([, n]) => n >= 2).map(([a]) => a)), lastAttemptAt: rows[0]?.createdAt || null };
 }
 
 /**
  * Publica no máximo UMA oferta por cliente por execução, respeitando horário, intervalo mínimo,
  * desconto mínimo e a cota do plano. Erros de um cliente nunca afetam os demais nem o copiador.
  */
-export async function runSocialAutopostCycle(options: { budgetMs?: number } = {}): Promise<{ checked: number; published: number; errors: number }> {
-  const deadline = Date.now() + (options.budgetMs ?? 15000);
+/** Tempo mínimo livre para começar uma publicação (arte + envio) sem estourar o limite da função. */
+const PUBLISH_TIME_NEEDED_MS = 35000;
+
+export async function runSocialAutopostCycle(options: { budgetMs?: number; deadlineAt?: number } = {}): Promise<{ checked: number; published: number; errors: number }> {
+  const hardDeadline = options.deadlineAt ?? Date.now() + 60000;
+  const deadline = Math.min(Date.now() + (options.budgetMs ?? 15000), hardDeadline);
+  const canStartPublish = () => Date.now() + PUBLISH_TIME_NEEDED_MS <= hardDeadline;
   const report = { checked: 0, published: 0, errors: 0 };
   let entries: Array<{ userId: string; settings: AutopostSettings }> = [];
   try { entries = await usersWithAutopost(); } catch { return report; }
   for (const { userId, settings } of entries) {
-    if (Date.now() > deadline) break;
+    if (Date.now() > deadline || !canStartPublish()) break;
     report.checked++;
     try {
       const now = new Date();
       if (!insideWindow(now, settings.windowStart, settings.windowEnd)) continue;
-      const last = await lastSocialPostAt(userId);
-      if (last && Date.now() - Date.parse(last) < settings.minIntervalMinutes * 60e3) continue;
+      // o intervalo conta qualquer tentativa (inclusive falha): nada de repetir em rajada
+      const history = await socialHistory(userId);
+      if (history.lastAttemptAt && Date.now() - Date.parse(history.lastAttemptAt) < settings.minIntervalMinutes * 60e3) continue;
       if (!(await getSocialQuota(userId)).allowed) continue;
-      const posted = await alreadyPostedJobIds(userId);
       const offer = (await listEligibleOffers(userId))
-        .filter(o => !posted.has(o.jobId) && o.imageUrl && (o.discountPct || 0) >= settings.minDiscountPct)
+        .filter(o => !history.posted.has(o.affiliateUrl) && !history.failedTwice.has(o.affiliateUrl) && o.imageUrl && (o.discountPct || 0) >= settings.minDiscountPct)
         .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0) || b.sentAt.localeCompare(a.sentAt))[0];
       if (!offer) continue;
       let publishedAny = false;
       for (const channel of settings.channels) {
-        if (Date.now() > deadline || !(await getSocialQuota(userId)).allowed) break;
+        if (!canStartPublish() || !(await getSocialQuota(userId)).allowed) break;
         try {
           const result = await publishSocialPost(userId, { jobId: offer.jobId, channel, connectionId: settings.connectionId || undefined, origin: 'automatico' });
           if (result.post.status !== 'falha') publishedAny = true; else report.errors++;

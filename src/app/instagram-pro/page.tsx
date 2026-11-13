@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, CheckCircle2, Clock, Image as ImageIcon, Loader2, MessageCircle, Palette, Send, Settings2, X, Zap } from 'lucide-react';
 import { PlanGateCard } from '@/components/PlanGateCard';
 
@@ -46,6 +46,7 @@ export default function InstagramProPage() {
   const [dialog, setDialog] = useState<{ offer: Offer; channel: Channel } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const previewRequest = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,15 +70,18 @@ export default function InstagramProPage() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
 
   const openDialog = async (offer: Offer, channel: Channel) => {
+    const ticket = ++previewRequest.current;
     setDialog({ offer, channel });
     setPreview(null);
     try {
       const res = await fetch('/api/social/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: offer.jobId, format: channel === 'instagram_feed' ? 'feed' : 'story' }) });
       const data = await res.json();
+      if (ticket !== previewRequest.current) return; // outra prévia foi aberta depois desta
       if (!res.ok) throw new Error(data.error);
       setPreview(data.image);
     } catch (e) {
+      if (ticket !== previewRequest.current) return;
       setDialog(null);
       setToast({ type: 'erro', text: e instanceof Error ? e.message : 'Não foi possível gerar a prévia.' });
     }
@@ -209,7 +213,7 @@ export default function InstagramProPage() {
           <div className="rp-panel" style={{ maxWidth: 420, width: '100%', maxHeight: '92vh', overflow: 'auto', margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <h2 style={{ margin: 0 }}>{CHANNELS.find(c => c.id === dialog.channel)?.label}</h2>
-              <button type="button" className="rp-btn" onClick={() => setDialog(null)} aria-label="Fechar"><X className="w-4 h-4" /></button>
+              <button type="button" className="rp-btn" onClick={() => { previewRequest.current++; setDialog(null); }} aria-label="Fechar"><X className="w-4 h-4" /></button>
             </div>
             <div style={{ borderRadius: 12, overflow: 'hidden', background: '#0b0f1a', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {preview ? <img src={preview} alt="Prévia da arte" style={{ width: '100%' }} /> : <Loader2 className="w-6 h-6 animate-spin" />}

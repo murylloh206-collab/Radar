@@ -61,7 +61,7 @@ test('busca da foto recusa arquivo grande demais', async () => {
   const original = global.fetch;
   global.fetch = (async () => new Response(new Uint8Array(9 * 1024 * 1024), { status: 200, headers: { 'content-type': 'image/jpeg' } })) as typeof fetch;
   try {
-    await assert.rejects(fetchProductImage('https://http2.mlstatic.com/produto.jpg'), /grande/i);
+    await assert.rejects(fetchProductImage('https://http2.mlstatic.com/produto.jpg', { lookup: async () => ['93.184.216.34'] }), /grande/i);
   } finally {
     global.fetch = original;
   }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/server/auth';
-import { previewSocialArt, SocialPublishError } from '@/lib/server/social-posts';
+import { getSocialQuota, previewSocialArt, SocialPublishError } from '@/lib/server/social-posts';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -12,6 +12,8 @@ export async function POST(req: NextRequest) {
   let body: { jobId?: unknown; format?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'Requisição inválida.' }, { status: 400 }); }
   if (typeof body.jobId !== 'string') return NextResponse.json({ ok: false, error: 'Informe a oferta.' }, { status: 400 });
+  const quota = await getSocialQuota(session.userId);
+  if (quota.limit === 0) return NextResponse.json({ ok: false, error: quota.reason }, { status: 403 });
   try {
     const art = await previewSocialArt(session.userId, { jobId: body.jobId, format: body.format === 'feed' ? 'feed' : 'story' });
     return NextResponse.json({ ok: true, image: `data:image/jpeg;base64,${art.toString('base64')}` }, { headers: { 'Cache-Control': 'no-store' } });
