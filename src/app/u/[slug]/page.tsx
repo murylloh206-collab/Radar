@@ -1,7 +1,9 @@
 import React from 'react';
 import { headers } from 'next/headers';
 import { ArrowRight, ShoppingBag, ExternalLink, Sparkles } from 'lucide-react';
-import { loadPublicStorefrontConfig } from '@/lib/server/public-storefront';
+import { notFound } from 'next/navigation';
+import { loadPublicStorefrontConfig, resolveStorefrontUserId } from '@/lib/server/public-storefront';
+import { getBioOffers } from '@/lib/server/social-posts';
 import { getDatabase, readDatabase } from '@/lib/server/storage';
 import { ADMIN_UUID } from '@/lib/server/auth';
 import { evaluateRealDealBadge } from '@/lib/server/price-history';
@@ -12,6 +14,7 @@ export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ n?: string }>;
 }
 
 function buildTrackedRedirectHref(
@@ -43,7 +46,7 @@ function formatBRL(val: number): string {
   });
 }
 
-export default async function PublicBioLinkPage({ params }: Props) {
+export default async function PublicBioLinkPage({ params, searchParams }: Props) {
   const hdrs = await headers();
   const dummyReq = new Request('http://localhost/u', { headers: hdrs });
   const rateLimit = checkPublicRouteRateLimit(dummyReq, 'storefront', 60);
@@ -63,7 +66,12 @@ export default async function PublicBioLinkPage({ params }: Props) {
   const { slug: rawSlug } = await params;
   const cleanSlug = decodeURIComponent(rawSlug || '').replace(/^@+/, '').toLowerCase();
 
-  const config = await loadPublicStorefrontConfig(ADMIN_UUID);
+  const ownerId = await resolveStorefrontUserId(cleanSlug);
+  if (!ownerId) notFound();
+  const config = await loadPublicStorefrontConfig(ownerId);
+  const query = searchParams ? await searchParams : {};
+  const wantedNumber = Number(String(query?.n || '').replace(/\D/g, '')) || null;
+  const bio = await getBioOffers(ownerId, wantedNumber);
 
   let db;
   try {
@@ -72,8 +80,8 @@ export default async function PublicBioLinkPage({ params }: Props) {
     db = readDatabase();
   }
 
-  // Ofertas reais do catálogo com link de afiliado válido (sem dados falsos!)
-  const realOffers = (db.products || [])
+  // Vitrine antiga do catálogo: só para a conta dona enquanto não houver ofertas divulgadas pelo Instagram Pro
+  const realOffers = (ownerId === ADMIN_UUID && bio.offers.length === 0 ? db.products || [] : [])
     .filter((p) => p.affiliateUrl && p.currentPrice > 0)
     .slice(0, 12);
 
@@ -196,7 +204,64 @@ export default async function PublicBioLinkPage({ params }: Props) {
           </div>
         )}
 
+        {/* Ofertas divulgadas no Instagram/status: busca pelo número que aparece no post */}
+        <div className="mt-8 w-full text-left">
+          <form method="get" className="flex gap-2">
+            <input
+              name="n"
+              inputMode="numeric"
+              defaultValue={wantedNumber || ''}
+              placeholder="Digite o número da oferta (ex.: 128)"
+              aria-label="Número da oferta"
+              className="flex-1 rounded-xl bg-white/5 border border-white/15 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-white/40"
+            />
+            <button type="submit" className="rounded-xl px-4 py-3 text-sm font-bold text-white" style={{ backgroundColor: accentColor }}>
+              Buscar
+            </button>
+          </form>
+          {bio.notFoundNumber && (
+            <p className="mt-3 text-xs text-amber-300">
+              A oferta #{bio.notFoundNumber} não está mais disponível aqui. Veja as mais recentes abaixo.
+            </p>
+          )}
+          {bio.offers.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {[...(bio.highlighted ? [bio.highlighted] : []), ...bio.offers.filter(o => o.offerNumber !== bio.highlighted?.offerNumber)].map((offer) => {
+                const isHighlighted = bio.highlighted?.offerNumber === offer.offerNumber;
+                return (
+                  <a
+                    key={offer.offerNumber}
+                    href={offer.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex gap-3 items-center rounded-2xl border bg-black/35 p-3 transition-all hover:border-white/30"
+                    style={{ borderColor: isHighlighted ? accentColor : 'rgba(255,255,255,0.12)' }}
+                  >
+                    <div className="w-20 h-20 shrink-0 rounded-xl bg-white p-1.5 flex items-center justify-center overflow-hidden">
+                      {offer.imageUrl ? <img src={offer.imageUrl} alt="" className="max-h-full max-w-full object-contain" /> : null}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white mb-1" style={{ backgroundColor: accentColor }}>
+                        Oferta #{offer.offerNumber}
+                      </span>
+                      <h3 className="text-xs font-bold text-white line-clamp-2 leading-snug">{offer.title}</h3>
+                      <div className="mt-1 flex items-baseline gap-2">
+                        {offer.priceOriginal ? <span className="text-[10px] text-slate-400 line-through">R$ {formatBRL(offer.priceOriginal)}</span> : null}
+                        <strong className="text-sm font-extrabold text-white">R$ {formatBRL(offer.priceCurrent)}</strong>
+                        {offer.coupon ? <span className="text-[10px] text-slate-300">· cupom {offer.coupon}</span> : null}
+                      </div>
+                      {offer.stale && <p className="mt-1 text-[10px] text-amber-300">Publicada há mais de 2 dias — confira a disponibilidade.</p>}
+                    </div>
+                    <ExternalLink className="w-4 h-4 shrink-0 text-slate-300" />
+                  </a>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Vitrine de Ofertas do Dia (Links rastreados via /r/[code]) */}
+        {(offersWithBadges.length > 0 || bio.offers.length === 0) && (
         <div className="mt-8 w-full text-left">
           <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
@@ -274,6 +339,7 @@ export default async function PublicBioLinkPage({ params }: Props) {
             </div>
           )}
         </div>
+        )}
 
         <div className="mt-8 text-[11px] text-slate-400">
           🎯 Vitrine verificada • Links protegidos via redirecionador oficial

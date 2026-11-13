@@ -1,4 +1,5 @@
 import 'server-only';
+import { ADMIN_UUID } from './auth';
 import fs from 'node:fs';
 import path from 'node:path';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -128,3 +129,20 @@ export async function savePublicStorefrontConfig(
   return updated;
 }
 
+
+/** Descobre de qual cliente é a página da bio pelo endereço (/u/<slug>). O endereço padrão é da conta dona. */
+export async function resolveStorefrontUserId(rawSlug: string): Promise<string | null> {
+  const slug = decodeURIComponent(rawSlug || '').replace(/^@+/, '').trim().toLowerCase();
+  if (!slug || !/^[a-z0-9._-]{2,40}$/.test(slug)) return null;
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data } = await supabase.from('public_storefronts').select('user_id').ilike('slug', slug).limit(2);
+      if (data?.length === 1) return String(data[0].user_id);
+      if (data && data.length > 1) return null; // endereço ambíguo: não arrisca mostrar a loja errada
+    } catch {}
+  }
+  const matches = Array.from(localStorefrontMemory.entries()).filter(([, config]) => (config.slug || '').toLowerCase() === slug);
+  if (matches.length === 1) return matches[0][0];
+  if (slug === DEFAULT_PUBLIC_PAGE_CONFIG.slug) return ADMIN_UUID;
+  return null;
+}

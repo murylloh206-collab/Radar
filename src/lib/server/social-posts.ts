@@ -194,15 +194,48 @@ export async function getSocialOffer(userId: string, socialOfferId: string): Pro
   return readLocalSocial().offers.find(o => o.userId === userId && o.id === socialOfferId) || null;
 }
 
-/** Ofertas já divulgadas nas redes (para a página da bio), mais recentes primeiro. */
+/** Ofertas já divulgadas com sucesso nas redes (para a página da bio), mais recentes primeiro. */
 export async function listPublishedOffers(userId: string, days = 7): Promise<SocialOffer[]> {
   const since = new Date(Date.now() - days * 86400e3).toISOString();
   if (useDb()) {
-    const { data } = await supabase!.from('social_offers').select('*').eq('user_id', userId).gte('created_at', since)
+    const { data } = await supabase!.from('social_offers').select('*, social_posts!inner(status)').eq('user_id', userId)
+      .in('social_posts.status', ['publicado', 'incerto']).gte('created_at', since)
       .order('offer_number', { ascending: false }).limit(60);
     return (data || []).map(mapOffer);
   }
-  return readLocalSocial().offers.filter(o => o.userId === userId && o.createdAt >= since).sort((a, b) => b.offerNumber - a.offerNumber);
+  const local = readLocalSocial();
+  const posted = new Set(local.posts.filter(p => p.userId === userId && p.status !== 'falha').map(p => p.socialOfferId));
+  return local.offers.filter(o => o.userId === userId && o.createdAt >= since && posted.has(o.id)).sort((a, b) => b.offerNumber - a.offerNumber);
+}
+
+export interface BioOffer {
+  offerNumber: number;
+  title: string;
+  imageUrl: string | null;
+  priceCurrent: number;
+  priceOriginal: number | null;
+  coupon: string | null;
+  href: string;
+  stale: boolean;
+}
+
+/** Link rastreado (/r/...) para o link de afiliado do próprio cliente. */
+function trackedHref(affiliateUrl: string, title: string, store: string | null, offerNumber: number): string {
+  const encoded = Buffer.from(affiliateUrl.trim(), 'utf8').toString('base64url');
+  const qs = new URLSearchParams({ src: 'bio', title: title.slice(0, 100), n: String(offerNumber) });
+  if (store) qs.set('store', store);
+  return `/r/${encoded}?${qs.toString()}`;
+}
+
+export async function getBioOffers(userId: string, highlightNumber?: number | null): Promise<{ offers: BioOffer[]; highlighted: BioOffer | null; notFoundNumber: number | null }> {
+  const staleBefore = Date.now() - ELIGIBLE_WINDOW_HOURS * 3600e3;
+  const offers: BioOffer[] = (await listPublishedOffers(userId)).map(o => ({
+    offerNumber: o.offerNumber, title: o.title, imageUrl: o.imageUrl, priceCurrent: o.priceCurrent, priceOriginal: o.priceOriginal,
+    coupon: o.coupon, href: trackedHref(o.affiliateUrl, o.title, o.store, o.offerNumber), stale: Date.parse(o.createdAt) < staleBefore,
+  }));
+  const wanted = highlightNumber && Number.isInteger(highlightNumber) && highlightNumber > 0 ? highlightNumber : null;
+  const highlighted = wanted ? offers.find(o => o.offerNumber === wanted) || null : null;
+  return { offers, highlighted, notFoundNumber: wanted && !highlighted ? wanted : null };
 }
 
 // ---------------------------------------------------------------- posts e cota
