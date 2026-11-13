@@ -463,3 +463,75 @@ export async function saveAutopostSettings(userId: string, partial: Partial<Auto
   writeLocalSocial(local);
   return next;
 }
+
+// ---------------------------------------------------------------- automático com freio
+function minuteOfDaySaoPaulo(now: Date): number {
+  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .format(now).split(':').map(Number);
+  return h * 60 + m;
+}
+function insideWindow(now: Date, start: string, end: string): boolean {
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const [s, e, n] = [toMin(start), toMin(end), minuteOfDaySaoPaulo(now)];
+  return s === e || (s < e ? n >= s && n <= e : n >= s || n <= e);
+}
+
+async function usersWithAutopost(): Promise<Array<{ userId: string; settings: AutopostSettings }>> {
+  if (useDb()) {
+    const { data } = await supabase!.from('social_autopost_settings').select('user_id').eq('enabled', true).limit(500);
+    return Promise.all((data || []).map(async row => ({ userId: String(row.user_id), settings: await getAutopostSettings(String(row.user_id)) })));
+  }
+  const local = readLocalSocial();
+  return Object.keys(local.settings).map(userId => ({ userId, settings: normalizeAutopost(local.settings[userId] as Partial<AutopostSettings>) }))
+    .filter(entry => entry.settings.enabled);
+}
+
+/** Jobs (ofertas) que já foram postados nas redes por este cliente — o automático não repete. */
+async function alreadyPostedJobIds(userId: string): Promise<Set<string>> {
+  if (useDb()) {
+    const since = new Date(Date.now() - ELIGIBLE_WINDOW_HOURS * 3600e3).toISOString();
+    const { data } = await supabase!.from('social_offers').select('source_job_id, social_posts!inner(status)').eq('user_id', userId)
+      .in('social_posts.status', ['publicado', 'incerto']).gte('created_at', since);
+    return new Set((data || []).map(row => String(row.source_job_id)));
+  }
+  const local = readLocalSocial();
+  const posted = new Set(local.posts.filter(p => p.userId === userId && p.status !== 'falha').map(p => p.socialOfferId));
+  return new Set(local.offers.filter(o => o.userId === userId && posted.has(o.id) && o.sourceJobId).map(o => String(o.sourceJobId)));
+}
+
+/**
+ * Publica no máximo UMA oferta por cliente por execução, respeitando horário, intervalo mínimo,
+ * desconto mínimo e a cota do plano. Erros de um cliente nunca afetam os demais nem o copiador.
+ */
+export async function runSocialAutopostCycle(options: { budgetMs?: number } = {}): Promise<{ checked: number; published: number; errors: number }> {
+  const deadline = Date.now() + (options.budgetMs ?? 15000);
+  const report = { checked: 0, published: 0, errors: 0 };
+  let entries: Array<{ userId: string; settings: AutopostSettings }> = [];
+  try { entries = await usersWithAutopost(); } catch { return report; }
+  for (const { userId, settings } of entries) {
+    if (Date.now() > deadline) break;
+    report.checked++;
+    try {
+      const now = new Date();
+      if (!insideWindow(now, settings.windowStart, settings.windowEnd)) continue;
+      const last = await lastSocialPostAt(userId);
+      if (last && Date.now() - Date.parse(last) < settings.minIntervalMinutes * 60e3) continue;
+      if (!(await getSocialQuota(userId)).allowed) continue;
+      const posted = await alreadyPostedJobIds(userId);
+      const offer = (await listEligibleOffers(userId))
+        .filter(o => !posted.has(o.jobId) && o.imageUrl && (o.discountPct || 0) >= settings.minDiscountPct)
+        .sort((a, b) => (b.discountPct || 0) - (a.discountPct || 0) || b.sentAt.localeCompare(a.sentAt))[0];
+      if (!offer) continue;
+      let publishedAny = false;
+      for (const channel of settings.channels) {
+        if (Date.now() > deadline || !(await getSocialQuota(userId)).allowed) break;
+        try {
+          const result = await publishSocialPost(userId, { jobId: offer.jobId, channel, connectionId: settings.connectionId || undefined, origin: 'automatico' });
+          if (result.post.status !== 'falha') publishedAny = true; else report.errors++;
+        } catch { report.errors++; }
+      }
+      if (publishedAny) report.published++;
+    } catch { report.errors++; }
+  }
+  return report;
+}
