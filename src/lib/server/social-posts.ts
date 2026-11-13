@@ -260,3 +260,173 @@ export async function getSocialQuota(userId: string): Promise<{ limit: number | 
   }
   return { limit, usedToday: count, allowed: true };
 }
+
+// ---------------------------------------------------------------- arte, envio e publicação
+async function uploadArt(userId: string, buffer: Buffer): Promise<string> {
+  const fileName = `${Date.now()}_${randomUUID().slice(0, 8)}.jpg`;
+  if (useDb()) {
+    const storagePath = `${userId}/social/${fileName}`;
+    const { error } = await supabase!.storage.from('radar-media').upload(storagePath, buffer, { contentType: 'image/jpeg', upsert: true });
+    if (!error) {
+      const { data } = supabase!.storage.from('radar-media').getPublicUrl(storagePath);
+      if (data?.publicUrl) return data.publicUrl;
+    }
+  }
+  const dir = path.join(process.cwd(), 'public', 'generated-media', userId, 'social');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, fileName), buffer);
+  const root = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '');
+  return `${root}/generated-media/${encodeURIComponent(userId)}/social/${fileName}`;
+}
+
+const money = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export function buildSocialCaption(offer: SocialOffer, channel: SocialChannel, handle?: string): string {
+  const lines = [offer.title, ''];
+  lines.push(offer.priceOriginal ? `💰 De R$ ${money(offer.priceOriginal)} por R$ ${money(offer.priceCurrent)}` : `💰 R$ ${money(offer.priceCurrent)}`);
+  if (offer.coupon) lines.push(`🎟️ Cupom: ${offer.coupon}`);
+  lines.push('');
+  if (channel === 'whatsapp_status') lines.push(`🛒 Oferta #${offer.offerNumber}: ${offer.affiliateUrl}`);
+  else lines.push(`🔗 Oferta #${offer.offerNumber} — link na bio${handle ? ` (${handle})` : ''}`);
+  return lines.join('\n');
+}
+
+export class SocialPublishError extends Error {
+  constructor(message: string, public status: number) { super(message); }
+}
+
+async function sendWhatsAppStatus(userId: string, connectionId: string | undefined, artUrl: string, caption: string) {
+  const { copierConnection } = await import('./copier-group-catalog');
+  const session = { userId, role: 'user' as const, email: '', createdAt: 0, expiresAt: 0 };
+  const { connection } = await copierConnection(session, connectionId);
+  const response = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/sendStatus/${encodeURIComponent(connection.instanceName)}`, {
+    method: 'POST',
+    headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'image', content: artUrl, caption, allContacts: true }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) {
+    return { status: 'falha' as const, connectionId: connection.id, error: `O WhatsApp recusou o status (HTTP ${response.status}).` };
+  }
+  const data = await response.json().catch(() => null) as { key?: { id?: string } } | null;
+  return data?.key?.id
+    ? { status: 'publicado' as const, connectionId: connection.id, externalId: data.key.id }
+    : { status: 'incerto' as const, connectionId: connection.id, error: 'O gateway não confirmou o envio do status.' };
+}
+
+/** Gera a arte com a marca do cliente e publica no canal escolhido. Nunca usa dados de outro cliente. */
+export async function publishSocialPost(userId: string, request: { jobId: string; channel: SocialChannel; connectionId?: string; origin?: 'manual' | 'automatico' }) {
+  if (!['instagram_story', 'instagram_feed', 'whatsapp_status'].includes(request.channel)) {
+    throw new SocialPublishError('Canal de publicação inválido.', 400);
+  }
+  const quota = await getSocialQuota(userId);
+  if (!quota.allowed) throw new SocialPublishError(quota.reason || 'Publicação não permitida.', quota.limit === 0 ? 403 : 429);
+
+  let offer: SocialOffer;
+  try { offer = await ensureSocialOffer(userId, request.jobId); }
+  catch (error) { throw new SocialPublishError(error instanceof Error ? error.message : 'Oferta não encontrada.', 404); }
+  if (!offer.imageUrl) throw new SocialPublishError('Esta oferta não tem foto do produto para gerar a arte.', 422);
+
+  const { renderBrandedOfferArt } = await import('./offer-art/branded');
+  const { getBrandSettings } = await import('./brand-settings');
+  const art = await renderBrandedOfferArt(userId, {
+    format: request.channel === 'instagram_feed' ? 'feed' : 'story',
+    title: offer.title, imagePathOrUrl: offer.imageUrl, priceCurrent: offer.priceCurrent, priceOriginal: offer.priceOriginal,
+    discountPct: offer.discountPct, coupon: offer.coupon || undefined, offerNumber: offer.offerNumber,
+  });
+  const artUrl = await uploadArt(userId, art);
+  const brand = await getBrandSettings(userId);
+  const caption = buildSocialCaption(offer, request.channel, brand.watermarkHandle);
+
+  let result: { status: SocialPostStatus; connectionId?: string; externalId?: string; error?: string };
+  if (request.channel === 'whatsapp_status') {
+    try { result = await sendWhatsAppStatus(userId, request.connectionId, artUrl, caption); }
+    catch (error) { result = { status: 'falha', error: error instanceof Error ? error.message : 'Falha ao enviar o status.' }; }
+  } else {
+    const meta = await import('./meta-graph-service');
+    const published = request.channel === 'instagram_story'
+      ? await meta.publishStoryToInstagram(userId, { imageUrl: artUrl })
+      : await meta.publishFeedPostToInstagram(userId, { imageUrl: artUrl, caption });
+    result = published.ok ? { status: 'publicado', externalId: published.mediaId } : { status: 'falha', error: published.error || 'O Instagram recusou a publicação.' };
+  }
+
+  const post = await recordSocialPost(userId, {
+    socialOfferId: offer.id, channel: request.channel, connectionId: result.connectionId || null, artUrl,
+    status: result.status, error: result.error || null, externalId: result.externalId || null, origin: request.origin || 'manual',
+  });
+  return { offer, post, artUrl };
+}
+
+// ---------------------------------------------------------------- prévia e configurações do automático
+export async function previewSocialArt(userId: string, request: { jobId: string; format: 'story' | 'feed' }): Promise<Buffer> {
+  const job = await findOwnJob(userId, request.jobId);
+  const candidate = job && job.status === 'enviado' ? toCandidate(job) : null;
+  if (!candidate) throw new SocialPublishError('Oferta não encontrada entre as enviadas por esta conta.', 404);
+  if (!candidate.imageUrl) throw new SocialPublishError('Esta oferta não tem foto do produto para gerar a arte.', 422);
+  const existing = useDb()
+    ? (await supabase!.from('social_offers').select('offer_number').eq('user_id', userId).eq('source_job_id', request.jobId).maybeSingle()).data?.offer_number
+    : readLocalSocial().offers.find(o => o.userId === userId && o.sourceJobId === request.jobId)?.offerNumber;
+  const { renderBrandedOfferArt } = await import('./offer-art/branded');
+  return renderBrandedOfferArt(userId, {
+    format: request.format, title: candidate.title, imagePathOrUrl: candidate.imageUrl, priceCurrent: candidate.priceCurrent,
+    priceOriginal: candidate.priceOriginal, discountPct: candidate.discountPct, coupon: candidate.coupon || undefined,
+    offerNumber: existing || undefined,
+  });
+}
+
+export interface AutopostSettings {
+  enabled: boolean;
+  channels: SocialChannel[];
+  minIntervalMinutes: number;
+  windowStart: string;
+  windowEnd: string;
+  minDiscountPct: number;
+  connectionId: string | null;
+}
+
+export const DEFAULT_AUTOPOST: AutopostSettings = {
+  enabled: false, channels: ['instagram_story'], minIntervalMinutes: 60, windowStart: '09:00', windowEnd: '22:00', minDiscountPct: 30, connectionId: null,
+};
+
+export function normalizeAutopost(input: Partial<AutopostSettings>, base: AutopostSettings = DEFAULT_AUTOPOST): AutopostSettings {
+  const time = (value: unknown, fallback: string) => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
+  const channels = Array.isArray(input.channels)
+    ? input.channels.filter((c): c is SocialChannel => ['instagram_story', 'instagram_feed', 'whatsapp_status'].includes(String(c)))
+    : base.channels;
+  return {
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : base.enabled,
+    channels: channels.length ? Array.from(new Set(channels)) : base.channels,
+    minIntervalMinutes: Number.isFinite(input.minIntervalMinutes) ? Math.min(1440, Math.max(15, Math.round(Number(input.minIntervalMinutes)))) : base.minIntervalMinutes,
+    windowStart: time(input.windowStart, base.windowStart),
+    windowEnd: time(input.windowEnd, base.windowEnd),
+    minDiscountPct: Number.isFinite(input.minDiscountPct) ? Math.min(95, Math.max(0, Math.round(Number(input.minDiscountPct)))) : base.minDiscountPct,
+    connectionId: input.connectionId === null || typeof input.connectionId === 'string' ? (input.connectionId || null) : base.connectionId,
+  };
+}
+
+export async function getAutopostSettings(userId: string): Promise<AutopostSettings> {
+  if (useDb()) {
+    const { data } = await supabase!.from('social_autopost_settings').select('*').eq('user_id', userId).maybeSingle();
+    if (!data) return { ...DEFAULT_AUTOPOST };
+    return normalizeAutopost({ enabled: data.enabled, channels: data.channels, minIntervalMinutes: data.min_interval_minutes,
+      windowStart: data.window_start, windowEnd: data.window_end, minDiscountPct: data.min_discount_pct, connectionId: data.connection_id });
+  }
+  return normalizeAutopost((readLocalSocial().settings[userId] as Partial<AutopostSettings>) || {});
+}
+
+export async function saveAutopostSettings(userId: string, partial: Partial<AutopostSettings>): Promise<AutopostSettings> {
+  const next = normalizeAutopost(partial, await getAutopostSettings(userId));
+  if (useDb()) {
+    const { error } = await supabase!.from('social_autopost_settings').upsert({
+      user_id: userId, enabled: next.enabled, channels: next.channels, min_interval_minutes: next.minIntervalMinutes,
+      window_start: next.windowStart, window_end: next.windowEnd, min_discount_pct: next.minDiscountPct,
+      connection_id: next.connectionId, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    if (error) throw new Error('Não foi possível salvar as configurações. Confira se a migração 09 foi aplicada.');
+    return next;
+  }
+  const local = readLocalSocial();
+  local.settings[userId] = next;
+  writeLocalSocial(local);
+  return next;
+}
