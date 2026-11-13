@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isSentToday, startOfTodaySaoPaulo } from '@/lib/server/daily-sent-counter';
 import { getDatabase, readDatabase } from '@/lib/server/storage';
 import { PublicationJob } from '@/lib/types';
 import {
@@ -100,13 +101,11 @@ export async function GET(req: NextRequest) {
     const totalAttempted = totalSent + totalFailed;
     const successRate = totalAttempted > 0 ? Math.round((totalSent / totalAttempted) * 100) : 100;
 
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfToday = startOfTodaySaoPaulo(now);
     const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonth = new Date(startOfToday.getTime() - (Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', day: 'numeric' }).format(now)) - 1) * 24 * 60 * 60 * 1000);
 
-    const sentToday = jobs.filter(
-      (j) => j.status === 'enviado' && new Date(j.sentAt || j.createdAt) >= startOfToday
-    ).length;
+    const sentToday = jobs.filter((j) => isSentToday(j, now)).length;
     const sentWeek = jobs.filter(
       (j) => j.status === 'enviado' && new Date(j.sentAt || j.createdAt) >= startOfWeek
     ).length;

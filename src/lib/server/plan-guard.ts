@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { ADMIN_UUID, SESSION_COOKIE_NAME, isValidUuid, verifySession } from './auth';
-import { readDatabase } from './storage';
+import { countSentToday } from './daily-sent-counter';
 import {
   BillingCycle,
   FEATURE_METADATA,
@@ -387,49 +387,13 @@ export async function getDailyOfferQuotaStatus(userIdInput?: string): Promise<Da
   const userId = userIdInput || ADMIN_UUID;
   const sub = await getUserSubscription(userId);
   const planDef: PlanDefinition = PLANS_CONFIG[sub.effectivePlan] || PLANS_CONFIG.impulse;
-  const dailyLimit = planDef.dailyOfferLimit;
+  // A conta dona do sistema não tem limite de plano (continua valendo max_daily_messages das configurações).
+  const dailyLimit = userId === ADMIN_UUID ? null : planDef.dailyOfferLimit;
 
-  // Início do dia no fuso de Brasília (America/Sao_Paulo)
-  const now = new Date();
-  const brtFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const todayDateStr = brtFormatter.format(now); // YYYY-MM-DD
-  const startOfDayIso = `${todayDateStr}T00:00:00.000-03:00`;
-  const startOfDayMs = new Date(startOfDayIso).getTime();
-
+  // Regra única: status 'enviado' e sent_at desde a meia-noite de Brasília.
   let postedToday = 0;
-
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { count, error } = await supabase
-        .from('publication_jobs')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('status', 'enviado')
-        .gte('created_at', new Date(startOfDayMs).toISOString());
-
-      if (!error && typeof count === 'number') {
-        postedToday = count;
-      }
-    } catch {}
-  }
-
-  // Fallback / complemento com banco em memória/local para precisão imediata
   try {
-    const db = readDatabase();
-    const localSentToday = (db.jobs || []).filter((j) => {
-      if (j.userId !== userId) return false;
-      if (j.status !== 'enviado') return false;
-      const t = new Date(j.sentAt || j.createdAt).getTime();
-      return !isNaN(t) && t >= startOfDayMs;
-    }).length;
-    if (localSentToday > postedToday) {
-      postedToday = localSentToday;
-    }
+    postedToday = await countSentToday(userId);
   } catch {}
 
   const remainingToday = dailyLimit === null ? null : Math.max(0, dailyLimit - postedToday);

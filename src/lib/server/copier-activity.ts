@@ -1,9 +1,10 @@
 import 'server-only';
 import { supabase } from '@/lib/supabase';
+import { startOfTodaySaoPaulo } from './daily-sent-counter';
 
 export async function copierActivity(userId: string, connectionId: string) {
   if (!supabase) throw new Error('Banco indisponível.');
-  const start = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) + 'T00:00:00-03:00';
+  const start = startOfTodaySaoPaulo().toISOString();
   const inboxQuery = () => supabase!.from('copier_inbox').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('connection_id', connectionId);
   const jobsQuery = () => supabase!.from('publication_jobs').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('connection_id', connectionId).not('runtime_payload', 'is', null);
   const replies = await Promise.all([

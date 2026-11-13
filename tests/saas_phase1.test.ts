@@ -15,7 +15,7 @@ import {
   getProductPriceHistory,
 } from '../src/lib/server/price-history';
 
-const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
+const TEST_USER_ID = '00000000-0000-0000-0000-0000000000c1';
 
 test('Fase 1: Configuração central de planos, preços e limites diários', async () => {
   // Impulse
