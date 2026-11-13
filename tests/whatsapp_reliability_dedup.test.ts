@@ -4,7 +4,7 @@ import { isDuplicateOfferJob } from '../src/lib/server/copier-service';
 
 const dest = '120363000000000002@g.us';
 const now = new Date().toISOString();
-const sentJob = (over: Record<string, unknown>) => ({
+const sentJob = (over: Record<string, unknown>): any => ({
   targetJid: dest, status: 'enviado', sentAt: now, createdAt: now, runtimeDelivery: 'accepted', ...over,
 });
 
