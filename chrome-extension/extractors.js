@@ -2,16 +2,30 @@
    Usados pelo popup e pelos testes automatizados. Nunca clicam em nada. */
 
 const CLIENT_RE = /^[A-Za-z0-9]{20,64}$/;
+const TOKEN_RE = /\b[A-Za-z0-9]{20,64}\b/;
+const firstToken = v => (String(v || '').match(TOKEN_RE) || [])[0] || '';
 
 export function extractRakutenCredentials(table) {
   const headers = (table?.headers || []).map(h => String(h || '').trim().toLowerCase());
-  const idCol = headers.findIndex(h => h === 'client id');
-  const secretCol = headers.findIndex(h => h === 'client secret');
+  const idCol = headers.findIndex(h => h.includes('client id'));
+  const secretCol = headers.findIndex(h => h.includes('client secret') || (h.includes('secret') && !h.includes('id')));
   if (idCol < 0 || secretCol < 0) return null;
   for (const row of table?.rows || []) {
-    const clientId = String(row?.[idCol] || '').trim();
-    const clientSecret = String(row?.[secretCol] || '').trim();
-    if (CLIENT_RE.test(clientId) && CLIENT_RE.test(clientSecret)) return { clientId, clientSecret };
+    const clientId = firstToken(row?.[idCol]);
+    const clientSecret = firstToken(row?.[secretCol]);
+    if (CLIENT_RE.test(clientId) && CLIENT_RE.test(clientSecret) && clientId !== clientSecret) return { clientId, clientSecret };
+  }
+  return null;
+}
+
+/** Reserva: sem tabela no DOM, usa o texto — a linha logo após "Client ID … Client Secret" com dois códigos longos. */
+export function extractRakutenCredentialsFromText(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const h = lines.findIndex(l => /client id/i.test(l) && /client secret/i.test(l));
+  if (h < 0) return null;
+  for (const line of lines.slice(h + 1, h + 6)) {
+    const tokens = line.match(/\b[A-Za-z0-9]{20,64}\b/g) || [];
+    if (tokens.length >= 2 && tokens[0] !== tokens[1]) return { clientId: tokens[0], clientSecret: tokens[1] };
   }
   return null;
 }

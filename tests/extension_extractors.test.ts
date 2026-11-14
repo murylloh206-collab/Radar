@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   extractRakutenCredentials,
   extractRakutenSid,
+  extractRakutenCredentialsFromText,
   extractAmazonTag,
   extractShopeeCredentials,
   detectStorePage,
@@ -59,4 +60,17 @@ test('reconhece as 5 páginas das lojas', () => {
   assert.equal(detectStorePage('https://www.mercadolivre.com.br/afiliados'), 'mercadolivre');
   assert.equal(detectStorePage('https://www.google.com/'), null);
   assert.equal(detectStorePage('https://evil.com/associados.amazon.com.br/home'), null);
+});
+
+test('Rakuten: cabeçalho com ícone/maiúsculas e célula com texto de botão ainda funcionam', () => {
+  assert.deepEqual(
+    extractRakutenCredentials({ headers: ['NAME', 'CLIENT ID ⓘ', 'Client Secret 🔒', 'ACTIONS'], rows: [['Radar', `${ID}\nCopiar`, `${SECRET} Copy`, 'Generate Token']] }),
+    { clientId: ID, clientSecret: SECRET }
+  );
+});
+
+test('Rakuten: sem tabela, lê pelo texto da página (linha de cabeçalho + linha do app)', () => {
+  const text = `Applications\nAPI Credentials\nAdd Application\nOAuth 2.0\nName\tClient ID\tClient Secret\tActions\nRadar de Ofertas\t${ID}\t${SECRET}\tGenerate Token\nEditDelete`;
+  assert.deepEqual(extractRakutenCredentialsFromText(text), { clientId: ID, clientSecret: SECRET });
+  assert.equal(extractRakutenCredentialsFromText('Faça login'), null);
 });

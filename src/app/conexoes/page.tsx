@@ -451,86 +451,8 @@ function ConexoesContent() {
         {activeTab === 'lojas' && (
           <div data-panel="lojas" role="tabpanel">
             <StoreHealthPanel onChange={setHealthStores} />
-            {/* Botão de Restaurar Guia (Aparece quando a dica é ocultada) */}
-            {hideGuide && (
-              <div className="cc-guide-return">
-                <button type="button" onClick={handleRestoreGuide}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  Mostrar guia de instalação
-                </button>
-              </div>
-            )}
-
-            {/* Bloco Onboard Aprovado: Dica de instalação ocultável */}
-            {!hideGuide && (
-              <section className="cc-onboard" aria-label="Primeiros passos do conector">
-                <div className="cc-onboard-top">
-                  <div>
-                    <span className="cc-kicker">COMECE POR AQUI</span>
-                    <h2>Seu navegador, conectado ao Radar.</h2>
-                    <p className="cc-sub">
-                      Instale o conector para vincular as lojas compatíveis. As demais integrações são configuradas aqui no painel.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="cc-dismiss-guide"
-                    onClick={handleDismissGuide}
-                    aria-label="Ocultar dica de instalação"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                    Ocultar dica
-                  </button>
-                </div>
-
-                <div className="cc-steps-mini">
-                  <div>
-                    <span className="cc-number">1</span>
-                    <span>
-                      Instale a extensão
-                      <br />
-                      <small>Veja o passo a passo</small>
-                    </span>
-                  </div>
-                  <div>
-                    <span className="cc-number">2</span>
-                    <span>
-                      Entre na sua loja
-                      <br />
-                      <small>Use sua conta de afiliado</small>
-                    </span>
-                  </div>
-                  <div>
-                    <span className="cc-number">3</span>
-                    <span>
-                      Vincule ao Radar
-                      <br />
-                      <small>Confirme pelo conector</small>
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="rp-btn rp-quiet"
-                  onClick={() => setShowTutorialModal(true)}
-                  style={{ marginTop: 14, paddingLeft: 0, color: '#39bee6' }}
-                >
-                  Como instalar
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <line x1="7" y1="17" x2="17" y2="7"></line>
-                    <polyline points="7 7 17 7 17 17"></polyline>
-                  </svg>
-                </button>
-              </section>
-            )}
+            {/* Guia antigo removido: o cartão "Suas lojas" acima tem os links diretos e o download da extensão. */}
+            <h3 className="cc-sub" style={{ margin: '4px 0 10px' }}>Configuração manual (alternativa à extensão)</h3>
 
             {/* Grid dos Cards de Lojas Inteiros Clicáveis */}
             <div className="cc-stores-grid" role="region" aria-label="Lojas e afiliados disponíveis">

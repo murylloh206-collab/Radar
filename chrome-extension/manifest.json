@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Radar Conector",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Conector oficial do Radar de Ofertas: conecta suas lojas de afiliado com um clique, direto da página da loja.",
   "icons": {
     "16": "icons/icon16.png",

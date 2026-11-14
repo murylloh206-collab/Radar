@@ -7,125 +7,56 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <article class="cc-popup" aria-label="Extensão Radar Conector">
-    <!-- Cabeçalho Radar Conector -->
-    <header class="cc-popup-header">
-      <div class="cc-brand">
-        <span class="cc-radar" aria-hidden="true"></span>
-        <div>
-          <strong>Radar Conector</strong>
-          <small>Suas lojas, mais perto.</small>
-        </div>
+  <main class="rc" aria-label="Radar Conector">
+    <header class="rc-head">
+      <span class="rc-sweep" aria-hidden="true"></span>
+      <div class="rc-brand">
+        <strong>Radar Conector</strong>
+        <span id="linkState" class="rc-link-state">Verificando…</span>
       </div>
-      <button type="button" class="cc-button cc-quiet" id="btnHelp" aria-label="Ajuda de instalação" title="Tutorial de instalação">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-      </button>
+      <a href="#" id="openPanel" class="rc-icon-link" title="Abrir o painel">Painel ↗</a>
     </header>
 
-    <!-- Conteúdo Principal -->
-    <div class="cc-popup-content">
-      <!-- Status do Painel Vinculado -->
-      <div class="cc-paired">
-        <span class="cc-dot" id="panelDot"></span>
-        <span id="pairedText">Painel vinculado</span>
-        <button type="button" class="cc-button cc-quiet" id="btnManagePanel">
-          Gerenciar
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="7" y1="17" x2="17" y2="7"></line>
-            <polyline points="7 7 17 7 17 17"></polyline>
-          </svg>
-        </button>
+    <!-- Vínculo: só aparece quando a extensão ainda não conhece a conta -->
+    <section id="pairBox" class="rc-pair" hidden>
+      <p class="rc-pair-title">Entre no painel para vincular</p>
+      <p class="rc-muted">Com o painel aberto e logado neste navegador, a extensão se vincula sozinha.</p>
+      <div class="rc-row-actions">
+        <a href="#" id="openLogin" class="rc-btn rc-btn-main">Abrir o painel</a>
+        <button type="button" id="retryPair" class="rc-btn">Já entrei</button>
       </div>
-
-      <!-- Vínculo com a conta do painel -->
-      <section class="cc-connect-box" id="pairBox" hidden>
-        <div class="cc-connect-heading"><h3>Vincular ao seu painel</h3></div>
-        <p>No painel, abra <b>Conexões → Lojas</b> e clique em <b>Conectar extensão</b>. Cole aqui o código de 8 letras.</p>
-        <input class="cc-input" id="pairCode" maxlength="12" autocomplete="off" placeholder="EX.: K7MP4QZ2" aria-label="Código do painel">
-        <button type="button" class="cc-button cc-primary" id="btnPair"><span>Vincular</span></button>
-      </section>
-
-      <div id="storeArea" hidden>
-      <!-- Seletor de 4 Lojas -->
-      <div class="cc-shop-picker" role="radiogroup" aria-label="Escolher loja">
-        <button type="button" role="radio" data-store="mercadolivre" aria-checked="true" aria-pressed="true">
-          <span class="cc-mark">
-            <img src="brands/mercadolivre-original.png" alt="Mercado Livre">
-          </span>
-          Mercado Livre
-        </button>
-        <button type="button" role="radio" data-store="shopee" aria-checked="false" aria-pressed="false">
-          <span class="cc-mark">
-            <img src="brands/shopee-original.png" alt="Shopee">
-          </span>
-          Shopee
-        </button>
-        <button type="button" role="radio" data-store="amazon" aria-checked="false" aria-pressed="false">
-          <span class="cc-mark">
-            <img src="brands/amazon-original.png" alt="Amazon">
-          </span>
-          Amazon
-        </button>
-        <button type="button" role="radio" data-store="netshoes" aria-checked="false" aria-pressed="false">
-          <span class="cc-mark">
-            <img src="brands/netshoes-original.png" alt="Netshoes">
-          </span>
-          Netshoes
-        </button>
-      </div>
-
-      <!-- Seção de Ação Contextual da Loja Selecionada -->
-      <section class="cc-connect-box" aria-live="polite">
-        <div class="cc-connect-heading">
-          <h3 id="storeTitle">Mercado Livre</h3>
-          <span class="cc-pill" id="storeMethod">Pelo navegador</span>
+      <details class="rc-code">
+        <summary>Tenho um código do painel</summary>
+        <div class="rc-code-row">
+          <input id="pairCode" maxlength="12" autocomplete="off" placeholder="K7MP4QZ2" aria-label="Código do painel">
+          <button type="button" id="btnPair" class="rc-btn">Vincular</button>
         </div>
-        <p id="storeCopy">Entre na sua conta de afiliado neste navegador. Depois, autorize a vinculação ao Radar.</p>
-        <button type="button" class="cc-button cc-primary" id="btnStoreAction">
-          <svg id="btnStoreIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-          </svg>
-          <span id="btnStoreLabel">Conectar</span>
-        </button>
-        <p class="cc-status" id="storeStatus"></p>
-        <div class="cc-fields" id="manualFields" hidden></div>
-      </section>
+      </details>
+    </section>
+
+    <!-- Faixa contextual: aparece quando a aba atual é a página de uma loja -->
+    <section id="here" class="rc-here" hidden aria-live="polite">
+      <div>
+        <p id="hereTitle" class="rc-here-title"></p>
+        <p id="hereHint" class="rc-muted"></p>
       </div>
+      <button type="button" id="hereConnect" class="rc-btn rc-btn-main">Conectar agora</button>
+    </section>
 
-      <!-- Aviso de Segurança Oficial -->
-      <p class="cc-secure">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-          <polyline points="9 12 11 14 15 10"></polyline>
-        </svg>
-        <span>Sua senha é informada somente na loja.</span>
-      </p>
+    <section id="stores" class="rc-stores" hidden aria-label="Suas lojas"></section>
 
-      <!-- Feedback / Mensagem -->
-      <div class="cc-toast" id="popupToast" role="status" aria-live="polite"></div>
+    <div id="manualFields" class="rc-manual" hidden></div>
 
-      <!-- Opção de Ambiente / Servidor (Discreto, no rodapé interno) -->
-      <div class="cc-server-opt" style="margin-top: auto; padding-top: 14px;">
-        <span>Servidor do painel:</span>
-        <select id="selectDashboardUrl" aria-label="Endereço do painel">
-          <option value="https://painel-de-ofertas.vercel.app">Produção (Vercel)</option>
-          <option value="http://localhost:3000">Desenvolvimento (Localhost)</option>
-        </select>
-      </div>
-    </div>
+    <div id="toast" class="rc-toast" role="status" aria-live="polite" hidden></div>
 
-    <!-- Rodapé -->
-    <footer class="cc-popup-foot">
-      <span>Radar de Ofertas</span>
-      <span>Conector v2.2</span>
+    <footer class="rc-foot">
+      <span>Suas senhas ficam só na loja.</span>
+      <select id="selectDashboardUrl" aria-label="Servidor do painel">
+        <option value="https://painel-de-ofertas.vercel.app">Produção</option>
+        <option value="http://localhost:3000">Local</option>
+      </select>
     </footer>
-  </article>
-
+  </main>
   <script type="module" src="popup.js"></script>
 </body>
 </html>
