@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runCopierWatchdog } from '@/lib/server/copier-watchdog';
 import { checkCronSecret } from '@/lib/server/cron-auth';
+import { runRepostCycle } from '@/lib/server/copier-repost';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -14,10 +15,13 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
   try {
     const forceRestart = req.nextUrl.searchParams.get('restart') === 'true';
+    // Repostagem: ofertas que falharam por erro corrigível voltam para a fila antes do ciclo do copiador.
+    const repost = await runRepostCycle().catch(() => ({ requeued: 0 }));
     const watchdogReport = await runCopierWatchdog(forceRestart);
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
+      repost,
       watchdog: watchdogReport,
       cycle: watchdogReport.cycle,
     }, { headers: { 'Cache-Control': 'no-store, no-cache' } });
