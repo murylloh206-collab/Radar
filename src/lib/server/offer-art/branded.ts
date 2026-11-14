@@ -53,7 +53,7 @@ export async function renderBrandedOfferArt(userId: string, request: BrandedArtR
           current: request.priceCurrent,
           original: request.priceOriginal ?? null,
           discountPct: request.discountPct ?? null,
-          coupon: request.coupon || null,
+          coupon: couponForFormat(request.format, request.coupon) || null,
           offerNumber: request.offerNumber ?? null,
         });
       }
@@ -73,8 +73,13 @@ export async function renderBrandedOfferArt(userId: string, request: BrandedArtR
     brand: { name: brand.panelName || 'Minha loja', handle, logo },
     product: { title: request.title, image: await loadImage(request.imagePathOrUrl) },
     pricing: { current: request.priceCurrent, original: request.priceOriginal ?? null, discountPct: request.discountPct ?? null },
-    coupon: request.coupon || undefined,
+    coupon: couponForFormat(request.format, request.coupon),
     offerNumber: request.offerNumber,
     footerCta: request.footerCta,
   });
+}
+
+/** Stories não mostram cupom (decisão do dono); o feed continua mostrando. */
+export function couponForFormat(format: 'story' | 'feed', coupon?: string | null): string | undefined {
+  return format === 'story' ? undefined : coupon || undefined;
 }

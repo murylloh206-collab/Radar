@@ -67,3 +67,9 @@ test('template mostra "De", "Por", cupom e "Oferta #N · link na bio"', async ()
   assert.equal(sem.coupon, null);
   assert.equal(sem.footer, 'link na bio');
 });
+
+test('story não mostra cupom (template e arte padrão); feed continua mostrando', async () => {
+  const { couponForFormat } = await import('../src/lib/server/offer-art/branded');
+  assert.equal(couponForFormat('story', 'ACHADO'), undefined);
+  assert.equal(couponForFormat('feed', 'ACHADO'), 'ACHADO');
+});
