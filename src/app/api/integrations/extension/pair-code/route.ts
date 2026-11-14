@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkApiAuth } from '@/lib/server/auth';
-import { generatePairingCode } from '@/lib/server/pairing-vault';
+import { getStrictSession } from '@/lib/server/auth';
+import { createPairingCode } from '@/lib/server/extension-auth';
 
+export const dynamic = 'force-dynamic';
+
+/** Painel logado gera o código de 8 caracteres que a extensão usa para se vincular a esta conta. */
 export async function GET(req: NextRequest) {
-  const auth = checkApiAuth(req);
-  if (!auth.authorized || !auth.session) {
-    return auth.response || NextResponse.json({ ok: false, error: 'Não autorizado', code: 'UNAUTHORIZED' }, { status: 401 });
+  const session = getStrictSession(req);
+  if (!session?.userId) {
+    return NextResponse.json({ ok: false, error: 'Faça login no painel.', code: 'UNAUTHORIZED' }, { status: 401 });
   }
-
-  const result = generatePairingCode(auth.session.userId, auth.session.email);
-
-  return NextResponse.json({
-    ok: true,
-    code: result.code,
-    expiresInSeconds: result.expiresInSeconds,
-    userId: auth.session.userId,
-    userEmail: auth.session.email,
-  });
+  const { code, expiresAt } = await createPairingCode(session.userId);
+  return NextResponse.json({ ok: true, code, expiresAt }, { headers: { 'Cache-Control': 'no-store' } });
 }

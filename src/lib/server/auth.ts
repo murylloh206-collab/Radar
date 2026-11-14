@@ -191,6 +191,12 @@ export async function authenticate(
 /**
  * Extrai a sessão do usuário a partir de cookies ou cabeçalho Authorization
  */
+/** Sessão do painel SEM fallback para o administrador: sem login válido devolve null. */
+export function getStrictSession(req: NextRequest | Request): UserSession | null {
+  const inspection = inspectRequestSession(req);
+  return inspection.valid && inspection.session ? inspection.session : null;
+}
+
 export function getSessionFromRequest(req: NextRequest | Request): UserSession | null {
   const inspection = inspectRequestSession(req);
   if (inspection.valid && inspection.session) {
