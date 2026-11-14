@@ -10,6 +10,8 @@ import MetaConnectionPanel from '@/components/MetaConnectionPanel';
 import WatermarkAndSafeDispatchPanel from '@/components/WatermarkAndSafeDispatchPanel';
 import ChannelsConnectionPanel from '@/components/ChannelsConnectionPanel';
 import { UltimateIntelligenceHub } from '@/components/UltimateIntelligenceHub';
+import StoreHealthPanel from '@/components/StoreHealthPanel';
+import type { StoreStatusViewLike } from '@/lib/store-status-labels';
 
 interface StoreConfigForm {
   appId: string;
@@ -46,6 +48,7 @@ function ConexoesContent() {
 
   // Status real das lojas no cofre
   const [vaultStores, setVaultStores] = useState<SafeVaultStatus[]>([]);
+  const [healthStores, setHealthStores] = useState<StoreStatusViewLike[]>([]);
 
   // Preferência da dica de instalação (persistida no localStorage)
   const [hideGuide, setHideGuide] = useState<boolean>(false);
@@ -124,6 +127,13 @@ function ConexoesContent() {
 
   // Verificar se uma loja está realmente conectada e com credenciais completas
   const getStoreConnectionState = useCallback((storeName: StoreName): 'conectado' | 'incompleto' | 'desconectado' => {
+    // Status real (testado) tem prioridade sobre o "salvo no cofre".
+    const health = healthStores.find((h) => h.store === storeName);
+    if (health) {
+      if (health.status === 'ok' || health.status === 'sem_teste') return 'conectado';
+      if (health.status === 'falhou') return 'incompleto';
+      return 'desconectado';
+    }
     const found = vaultStores.find((s) => s.storeName === storeName);
     if (!found || found.connectionStatus !== 'conectado') return 'desconectado';
 
@@ -157,7 +167,7 @@ function ConexoesContent() {
     }
 
     return 'conectado';
-  }, [vaultStores]);
+  }, [vaultStores, healthStores]);
 
   const isStoreConnected = useCallback((storeName: StoreName): boolean => {
     return getStoreConnectionState(storeName) === 'conectado';
@@ -440,6 +450,7 @@ function ConexoesContent() {
         {/* Aba 2: Lojas e afiliados (Desenho Aprovado Atualizado) */}
         {activeTab === 'lojas' && (
           <div data-panel="lojas" role="tabpanel">
+            <StoreHealthPanel onChange={setHealthStores} />
             {/* Botão de Restaurar Guia (Aparece quando a dica é ocultada) */}
             {hideGuide && (
               <div className="cc-guide-return">
