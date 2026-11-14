@@ -10,7 +10,7 @@ import {
   type ShopeeShortLinkResponse,
 } from './affiliate-converter';
 import { getRakutenAccessToken, findNetshoesAdvertiserId, RakutenAuthError, type RakutenCredentials } from './rakuten-auth';
-import { recordStoreHealth, supabaseStoreHealthRepo, memoryStoreHealthRepo, type StoreHealth, type StoreHealthRepo } from './store-health';
+import { recordStoreHealth, defaultStoreHealthRepo, type StoreHealth, type StoreHealthRepo } from './store-health';
 import { getStoreCredentialsMapWithSecrets, saveStoreCredentials } from './credentials-vault';
 
 export const ML_TEST_PRODUCT = 'https://www.mercadolivre.com.br/p/MLB39016247';
@@ -33,7 +33,7 @@ export interface StoreCheckDeps {
 
 export function defaultStoreCheckDeps(): StoreCheckDeps {
   return {
-    repo: isSupabaseConfigured ? supabaseStoreHealthRepo() : memoryStoreHealthRepo(),
+    repo: defaultStoreHealthRepo(),
     getCredentials: userId => getStoreCredentialsMapWithSecrets(userId) as any,
     async saveNetshoesAdvertiserId(userId, id) {
       const current = (await getStoreCredentialsMapWithSecrets(userId)).netshoes as any;

@@ -67,10 +67,12 @@ export function supabaseStoreHealthRepo(): StoreHealthRepo {
 }
 
 let defaultRepo: StoreHealthRepo | null = null;
-function repoOrDefault(repo?: StoreHealthRepo): StoreHealthRepo {
-  if (repo) return repo;
+export function defaultStoreHealthRepo(): StoreHealthRepo {
   if (!defaultRepo) defaultRepo = isSupabaseConfigured ? supabaseStoreHealthRepo() : memoryStoreHealthRepo();
   return defaultRepo;
+}
+function repoOrDefault(repo?: StoreHealthRepo): StoreHealthRepo {
+  return repo || defaultStoreHealthRepo();
 }
 
 export async function recordStoreHealth(
