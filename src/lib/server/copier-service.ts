@@ -309,7 +309,7 @@ async function shortenUrlForWhatsApp(url: string): Promise<string> {
   // Se já for um link curto nativo (Shopee s.shopee.com.br / shope.ee, Mercado Livre /sec/ ou meli.la, is.gd, tinyurl), mantém como está
   if (
     url.length <= 45 ||
-    /s\.shopee\.com\.br|shope\.ee|meli\.la|mercadolivre\.com\.br\/sec\/|is\.gd\/|tinyurl\.com\//i.test(url)
+    /s\.shopee\.com\.br|shope\.ee|meli\.la|mercadolivre\.com\.br\/sec\/|is\.gd\/|tinyurl\.com\/|amazon\.com(\.br)?\/dp\/|amzn\.to\//i.test(url)
   ) {
     return url;
   }
