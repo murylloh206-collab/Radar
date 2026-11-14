@@ -71,7 +71,13 @@ export const DEFAULT_TEMPLATE = `\
 
 {marca_dagua}`;
 
+// Marcadores: cupom e link entram no texto só no fim, depois das trocas (ex.: cupom "ACHADO" não vira "ofertas").
+const COUPON_MARK = '@@RADAR_CUPOM@@';
+const LINK_MARK = '@@RADAR_LINK@@';
+
 export function buildWhatsAppMessage(options: FormatMessageOptions): string {
+  let protectedCouponLine = '';
+  let protectedLink = '';
   const {
     templateText = DEFAULT_TEMPLATE,
     title,
@@ -208,10 +214,11 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
     const cleanCoupon = couponCode.trim().toUpperCase();
     const discountSuffix = couponDiscount ? ` (${couponDiscount})` : '';
     const couponLine = `🎟️ Cupom: *${cleanCoupon}*${discountSuffix}`;
+    protectedCouponLine = couponLine;
     if (message.includes('{cupom}')) {
-      message = message.replace('{cupom}', couponLine);
+      message = message.replace('{cupom}', COUPON_MARK);
     } else {
-      message = message.replace(/(\n+🛒|\n+👉)/, `\n\n${couponLine}$1`);
+      message = message.replace(/(\n+🛒|\n+👉)/, `\n\n${COUPON_MARK}$1`);
     }
   } else {
     message = message.replace(/^[^\n]*\{cupom\}[^\n]*\n?/gm, '');
@@ -222,7 +229,8 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
   const finalAffiliateUrl = trimmedUrl.startsWith('/r/')
     ? appendChannelSrcParam(trimmedUrl, options.channelOrigin || 'whatsapp')
     : stripChannelSrcParam(trimmedUrl);
-  message = message.replace('{link}', finalAffiliateUrl);
+  protectedLink = finalAffiliateUrl;
+  message = message.replace('{link}', LINK_MARK);
 
   // 11. Assinatura Discreta da Marca (🎯 Radar de Ofertas)
   let cleanSignature = watermarkText.replace(/—\s*Produtos que valem a pena!/gi, '').trim();
@@ -237,5 +245,7 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
   message = message.replace(/[ \t]+$/gm, '');
   message = message.replace(/\n{3,}/g, '\n\n').trim();
 
+  // Cupom e link exatamente como vieram.
+  message = message.split(COUPON_MARK).join(protectedCouponLine).split(LINK_MARK).join(protectedLink);
   return message;
 }

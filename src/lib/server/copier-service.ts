@@ -1,4 +1,5 @@
 import 'server-only';
+import { fetchSourceImageUrl } from './source-image';
 import { runtimeDatabase } from './copier-runtime-context';
 import {
   CopySource,
@@ -953,6 +954,18 @@ export async function processIncomingMessage(
   const productData = await fetchProductRealData(conversionResult.cleanUrl, conversionResult.store);
   if ((!productData.imageUrl || !productData.imageUrl.startsWith('http')) && conversionResult.meta?.extractedImageUrl) {
     productData.imageUrl = conversionResult.meta.extractedImageUrl;
+  }
+  // Reserva: lojas que bloqueiam a leitura da página (Amazon, Netshoes) → usa a foto da própria mensagem de origem.
+  if ((!productData.imageUrl || !productData.imageUrl.startsWith('http')) && !isSimulation) {
+    const evo = getActiveEvolutionConfig(db.whatsapp);
+    const fromSource = await fetchSourceImageUrl({
+      baseUrl: evo.baseUrl || '',
+      apiKey: evo.apiKey || '',
+      instanceName: evo.instanceName || instanceName,
+      messageData: data,
+      messageId,
+    });
+    if (fromSource) productData.imageUrl = fromSource;
   }
   const parsedFromWhatsApp = extractOfferDetailsFromWhatsAppText(rawText, conversionResult.store);
 
