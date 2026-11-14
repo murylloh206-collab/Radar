@@ -37,6 +37,26 @@ async function loadImage(source: string): Promise<Buffer> {
 
 /** Gera a arte da oferta com a identidade (nome, logo, cor e fundo) do cliente. */
 export async function renderBrandedOfferArt(userId: string, request: BrandedArtRequest): Promise<Buffer> {
+  // Ultimate com fundo próprio de story: template (fundo do cliente + cartão branco com a oferta).
+  if (request.format === 'story') {
+    const { checkPlanFeatureAccess } = await import('../plan-guard');
+    const access = await checkPlanFeatureAccess('story_template', userId).catch(() => null);
+    if (access?.allowed) {
+      const { loadStoryBackground } = await import('../brand-assets');
+      const background = await loadStoryBackground(userId);
+      if (background) {
+        const { renderStoryTemplate } = await import('./story-template');
+        return renderStoryTemplate({
+          background,
+          product: await loadImage(request.imagePathOrUrl),
+          title: request.title,
+          current: request.priceCurrent,
+          original: request.priceOriginal ?? null,
+          discountPct: request.discountPct ?? null,
+        });
+      }
+    }
+  }
   const brand = await getBrandSettings(userId);
   let logo: Buffer | null = null;
   if (brand.panelLogoUrl) {

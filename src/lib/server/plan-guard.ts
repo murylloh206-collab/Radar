@@ -442,7 +442,8 @@ export async function checkPlanFeatureAccess(
 }> {
   const userId = userIdInput || ADMIN_UUID;
   const sub = await getUserSubscription(userId);
-  const allowed = planHasFeature(sub.effectivePlan, feature);
+  // Conta do dono do sistema: todos os recursos liberados (como já acontece com os limites diários).
+  const allowed = userId === ADMIN_UUID || planHasFeature(sub.effectivePlan, feature);
   const meta = FEATURE_METADATA[feature];
   const requiredPlan = meta?.minPlan || 'ultimate';
   const requiredPlanName = PLANS_CONFIG[requiredPlan].name;

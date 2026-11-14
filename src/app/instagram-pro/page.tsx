@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, CheckCircle2, Clock, Image as ImageIcon, Loader2, MessageCircle, Palette, Send, Settings2, X, Zap } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, Image as ImageIcon, Layers, Loader2, MessageCircle, Palette, Send, Settings, Settings2, X, Zap } from 'lucide-react';
+import ImageDropZone from '@/components/ImageDropZone';
 import { PlanGateCard } from '@/components/PlanGateCard';
 
 type Channel = 'instagram_story' | 'instagram_feed' | 'whatsapp_status';
@@ -35,7 +36,7 @@ function timeAgo(iso: string) {
 }
 
 export default function InstagramProPage() {
-  const [tab, setTab] = useState<'ofertas' | 'identidade' | 'automatico'>('ofertas');
+  const [settingsTab, setSettingsTab] = useState<null | 'identidade' | 'story' | 'automatico'>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [quota, setQuota] = useState<Quota | null>(null);
   const [autopost, setAutopost] = useState<Autopost | null>(null);
@@ -140,23 +141,24 @@ export default function InstagramProPage() {
           <h1>Posts com a sua marca</h1>
           <p>Escolha uma oferta que o copiador já enviou e publique no story, no feed ou no status do WhatsApp. Cada post sai numerado (ex.: “Oferta #128 · link na bio”) e a oferta aparece na sua página da bio com o link certo.</p>
         </div>
-        {quota && !locked && <span className={`rp-tag ${quota.allowed ? 'rp-good' : 'rp-warn'}`}>{quotaLabel}</span>}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {quota && !locked && <span className={`rp-tag ${quota.allowed ? 'rp-good' : 'rp-warn'}`}>{quotaLabel}</span>}
+          {!locked && (
+            <button type="button" className="rp-btn" onClick={() => setSettingsTab('identidade')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Settings className="w-4 h-4" /> Configurações
+            </button>
+          )}
+        </div>
       </div>
 
       {locked ? (
         <PlanGateCard feature="instagram_pro" title="Instagram Pro" description="Artes profissionais com a sua marca para story, feed e status do WhatsApp, link pela bio e postagem automática com freio. Disponível a partir do plano Plus." />
       ) : (
         <>
-          <div className="rp-tabs" role="tablist">
-            {([['ofertas', 'Ofertas'], ['identidade', 'Identidade visual'], ['automatico', 'Automático']] as const).map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
-            ))}
-          </div>
-
           {loading && <div className="rp-panel" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>}
           {error && <div className="rp-panel rp-warn" role="alert">{error}</div>}
 
-          {!loading && !error && tab === 'ofertas' && (
+          {!loading && !error && (
             offers.length === 0 ? (
               <div className="rp-panel rp-empty">
                 <h2>Nenhuma oferta nas últimas 48 horas</h2>
@@ -192,13 +194,6 @@ export default function InstagramProPage() {
             )
           )}
 
-          {!loading && !error && tab === 'identidade' && identity && (
-            <IdentityForm identity={identity} busy={busy} onSave={next => saveSettings({ identity: next })} />
-          )}
-
-          {!loading && !error && tab === 'automatico' && autopost && (
-            <AutopostForm settings={autopost} busy={busy} onSave={next => saveSettings({ autopost: next })} />
-          )}
 
           <div className="rp-panel" style={{ fontSize: 12, opacity: 0.85 }}>
             <strong>Importante:</strong> o Instagram não permite publicar link clicável em stories por automação — por isso os posts indicam “link na bio” com o número da oferta.
@@ -227,6 +222,31 @@ export default function InstagramProPage() {
         </div>
       )}
 
+      {settingsTab && (
+        <div role="dialog" aria-modal="true" aria-label="Configurações do Instagram Pro" onClick={e => { if (e.target === e.currentTarget) setSettingsTab(null); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(6,12,16,.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+          <div className="rp-panel" style={{ maxWidth: 680, width: '100%', maxHeight: '92vh', overflow: 'auto', margin: 0, borderRadius: 20, padding: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 22px 0' }}>
+              <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Settings className="w-5 h-5" /> Configurações</h2>
+              <button type="button" className="rp-btn" onClick={() => setSettingsTab(null)} aria-label="Fechar"><X className="w-4 h-4" /></button>
+            </div>
+            <div role="tablist" style={{ display: 'flex', gap: 6, padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,.08)', flexWrap: 'wrap' }}>
+              {([['identidade', 'Identidade visual', Palette], ['story', 'Template do story', Layers], ['automatico', 'Automático', Zap]] as const).map(([id, label, Icon]) => (
+                <button key={id} role="tab" type="button" aria-selected={settingsTab === id} onClick={() => setSettingsTab(id)} className="rp-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 999, ...(settingsTab === id ? { background: '#45d3c7', color: '#0d2a2d', borderColor: '#45d3c7' } : {}) }}>
+                  <Icon className="w-4 h-4" /> {label}
+                </button>
+              ))}
+            </div>
+            <div style={{ padding: 22 }}>
+              {settingsTab === 'identidade' && identity && <IdentityForm identity={identity} busy={busy} onSave={next => saveSettings({ identity: next })} />}
+              {settingsTab === 'story' && <StoryTemplatePanel sampleJobId={offers.find(o => o.imageUrl)?.jobId || null} />}
+              {settingsTab === 'automatico' && autopost && <AutopostForm settings={autopost} busy={busy} onSave={next => saveSettings({ autopost: next })} />}
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="rp-toast" role="status" style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 60, display: 'flex', gap: 8, alignItems: 'center' }}>
           {toast.type === 'ok' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <X className="w-4 h-4 text-rose-400" />} {toast.text}
@@ -239,8 +259,8 @@ export default function InstagramProPage() {
 function IdentityForm({ identity, busy, onSave }: { identity: Identity; busy: boolean; onSave: (next: Identity) => void }) {
   const [form, setForm] = useState<Identity>(identity);
   return (
-    <div className="rp-panel">
-      <h2 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Palette className="w-4 h-4" /> Identidade das artes</h2>
+    <div>
+      <h3 style={{ margin: '0 0 4px' }}>Identidade das artes</h3>
       <p style={{ fontSize: 13, opacity: 0.75 }}>Escolha uma cor e o fundo; o sistema monta o restante da paleta e garante que o texto fique legível.</p>
       <div className="rp-grid">
         <label className="rp-field">Nome da loja
@@ -249,12 +269,13 @@ function IdentityForm({ identity, busy, onSave }: { identity: Identity; busy: bo
         <label className="rp-field">@ do Instagram
           <input value={form.watermarkHandle} maxLength={40} onChange={e => setForm({ ...form, watermarkHandle: e.target.value })} />
         </label>
-        <label className="rp-field">Link do logo (https://… opcional)
-          <input value={form.panelLogoUrl || ''} placeholder="Sem logo, usamos a inicial da loja" onChange={e => setForm({ ...form, panelLogoUrl: e.target.value || null })} />
-        </label>
         <label className="rp-field">Cor da marca
           <input type="color" value={form.accentColor} onChange={e => setForm({ ...form, accentColor: e.target.value })} style={{ height: 44 }} />
         </label>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <ImageDropZone kind="logo" label="Logo da loja" hint="PNG, JPG ou WebP até 8 MB. Sem logo, usamos a inicial da loja."
+          currentUrl={form.panelLogoUrl} onUploaded={url => setForm({ ...form, panelLogoUrl: url })} />
       </div>
       <fieldset style={{ border: 0, padding: 0, margin: '12px 0', display: 'flex', gap: 10 }}>
         <legend style={{ fontSize: 13, marginBottom: 6 }}>Fundo das artes</legend>
@@ -266,7 +287,7 @@ function IdentityForm({ identity, busy, onSave }: { identity: Identity; busy: bo
         ))}
       </fieldset>
       <button type="button" className="rp-btn rp-primary" disabled={busy} onClick={() => onSave(form)}>Salvar identidade</button>
-      <p style={{ fontSize: 12, opacity: 0.65, marginTop: 8 }}>Dica: abra a prévia de qualquer oferta na aba “Ofertas” para ver o resultado.</p>
+      <p style={{ fontSize: 12, opacity: 0.65, marginTop: 8 }}>Dica: abra a prévia de qualquer oferta para ver o resultado.</p>
     </div>
   );
 }
@@ -275,8 +296,8 @@ function AutopostForm({ settings, busy, onSave }: { settings: Autopost; busy: bo
   const [form, setForm] = useState<Autopost>(settings);
   const toggleChannel = (id: Channel) => setForm(f => ({ ...f, channels: f.channels.includes(id) ? f.channels.filter(c => c !== id) : [...f.channels, id] }));
   return (
-    <div className="rp-panel">
-      <h2 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Zap className="w-4 h-4" /> Automático com freio</h2>
+    <div>
+      <h3 style={{ margin: '0 0 4px' }}>Automático com freio</h3>
       <p style={{ fontSize: 13, opacity: 0.75 }}>Posta poucas e boas, espalhadas pelo dia: no máximo uma oferta por vez, respeitando o intervalo, o horário e o desconto mínimo. Nunca repete a mesma oferta.</p>
       <label className="rp-check" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '10px 0' }}>
         <input type="checkbox" checked={form.enabled} onChange={e => setForm({ ...form, enabled: e.target.checked })} />
@@ -306,6 +327,65 @@ function AutopostForm({ settings, busy, onSave }: { settings: Autopost; busy: bo
       <button type="button" className="rp-btn rp-primary" disabled={busy || form.channels.length === 0} onClick={() => onSave(form)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <Settings2 className="w-4 h-4" /> Salvar automático
       </button>
+    </div>
+  );
+}
+
+function StoryTemplatePanel({ sampleJobId }: { sampleJobId: string | null }) {
+  const [state, setState] = useState<{ allowed: boolean; message: string | null; url: string | null } | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  const refreshPreview = useCallback(async () => {
+    if (!sampleJobId) return;
+    setPreviewing(true);
+    const res = await fetch('/api/social/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: sampleJobId, format: 'story' }) }).catch(() => null);
+    const data = res ? await res.json().catch(() => null) : null;
+    setPreview(data?.image || null);
+    setPreviewing(false);
+  }, [sampleJobId]);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch('/api/brand-assets', { cache: 'no-store' }).catch(() => null);
+      const data = res ? await res.json().catch(() => null) : null;
+      setState({ allowed: Boolean(data?.storyTemplateAllowed), message: data?.storyTemplateMessage || null, url: data?.storyBackgroundUrl || null });
+      if (data?.storyTemplateAllowed && data?.storyBackgroundUrl) void refreshPreview();
+    })();
+  }, [refreshPreview]);
+
+  if (!state) return <p style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</p>;
+  if (!state.allowed) {
+    return (
+      <div>
+        <h3 style={{ margin: '0 0 4px' }}>Template do story <span className="rp-tag">Ultimate</span></h3>
+        <p style={{ fontSize: 13, opacity: 0.8 }}>Use um fundo seu nos stories, com a oferta num cartão no centro. {state.message}</p>
+        <a href="/planos" className="rp-btn rp-primary" style={{ display: 'inline-block', marginTop: 8 }}>Ver o plano Ultimate</a>
+      </div>
+    );
+  }
+  const remove = async () => {
+    await fetch('/api/brand-assets?kind=story_background', { method: 'DELETE' }).catch(() => null);
+    setState({ ...state, url: null });
+    setPreview(null);
+  };
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 4px' }}>Template do story</h3>
+      <p style={{ fontSize: 13, opacity: 0.8, marginTop: 0 }}>
+        Envie um fundo vertical (ideal 1080×1920) com o seu logo no topo e o centro livre: a oferta entra num cartão branco no meio.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 18, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <ImageDropZone kind="story_background" label="Fundo do story" aspect="9 / 16" hint="PNG, JPG ou WebP até 8 MB."
+            currentUrl={state.url} onUploaded={url => { setState({ ...state, url }); void refreshPreview(); }} />
+          {state.url && <button type="button" className="rp-btn" onClick={remove} style={{ justifySelf: 'start' }}>Remover fundo e voltar à arte padrão</button>}
+          {!sampleJobId && <p style={{ fontSize: 12, opacity: 0.7 }}>A prévia aparece quando houver uma oferta enviada com foto.</p>}
+        </div>
+        <div style={{ aspectRatio: '9 / 16', borderRadius: 14, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {previewing ? <Loader2 className="w-5 h-5 animate-spin" /> : preview ? <img src={preview} alt="Prévia do story com o seu fundo" style={{ width: '100%' }} /> : <span style={{ fontSize: 12, opacity: 0.6, padding: 12, textAlign: 'center' }}>Prévia do story</span>}
+        </div>
+      </div>
     </div>
   );
 }
