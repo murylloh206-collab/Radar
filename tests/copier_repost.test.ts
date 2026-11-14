@@ -5,7 +5,7 @@ import { isRetryableFailure, selectRepostCandidates, MAX_REPOST_ATTEMPTS } from 
 const NOW = new Date('2026-11-14T14:30:00Z').getTime();
 const ts = (minAgo: number) => Math.floor((NOW - minAgo * 60e3) / 1000);
 const row = (over: any = {}) => ({
-  id: 'i1', status: 'completed',
+  id: 'i1', status: 'processed',
   payload: { data: { key: { id: 'M1' }, messageTimestamp: ts(30) } },
   result: { reason: 'Oferta bloqueada — não foi possível confirmar link próprio de afiliado (AMAZON): Credenciais de afiliado não configuradas ou inativas para AMAZON.' },
   jobs: [] as any[],

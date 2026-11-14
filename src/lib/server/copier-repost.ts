@@ -44,7 +44,7 @@ function messageTimeMs(row: RepostRow): number {
 
 export function selectRepostCandidates(rows: RepostRow[], now = Date.now()): RepostRow[] {
   return rows.filter(r => {
-    if (r.status !== 'completed') return false;
+    if (r.status !== 'processed') return false;
     const t = messageTimeMs(r);
     if (!t || now - t > REPOST_MAX_AGE_MS) return false;
     if (Number(r.payload?.radarRepostCount || 0) >= MAX_REPOST_ATTEMPTS) return false;
@@ -67,7 +67,7 @@ export async function requeueForRepost(rows: RepostRow[]): Promise<number> {
       .from('copier_inbox')
       .update({ status: 'pending', attempts: 0, available_at: new Date().toISOString(), lease_until: null, lease_token: null, last_error: null, payload })
       .eq('id', r.id)
-      .eq('status', 'completed');
+      .eq('status', 'processed');
     if (!error) n++;
   }
   return n;
@@ -80,7 +80,7 @@ export async function runRepostCycle(limit = 10): Promise<{ requeued: number }> 
   const { data: inbox } = await supabase
     .from('copier_inbox')
     .select('id,status,payload,result')
-    .eq('status', 'completed')
+    .eq('status', 'processed')
     .gte('received_at', since)
     .order('received_at', { ascending: true })
     .limit(200);
