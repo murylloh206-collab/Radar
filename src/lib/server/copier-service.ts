@@ -523,7 +523,8 @@ export function extractOfferDetailsFromWhatsAppText(
   // Fallback para Preço Por: "De ... por ..." na mesma linha
   if (!currentPrice) {
     const dePorMatch = rawText.match(
-      /de:?\s*(?:r\$\s*)?~?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~?\s*(?:\||por:?|->|-|\n)+\s*(?:por(?:\s+apenas)?:?\s*)?(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)/i
+      // Aceita marcação do WhatsApp (*negrito*, _itálico_, ~riscado~) em volta de "Por" e do valor: "De R$409 | Por *R$227*"
+      /de:?\s*(?:r\$\s*)?~?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)~?\s*(?:\||por:?|->|-|\n)+\s*[*_~]*\s*(?:por(?:\s+apenas)?:?\s*)?[*_~]*\s*(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)/i
     );
     if (dePorMatch) {
       const p1 = parseBRLNumber(dePorMatch[1]);
