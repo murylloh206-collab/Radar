@@ -4,6 +4,8 @@ import { StoreCredential, StoreName } from '../types';
 import { detectStoreFromUrl, resolveUrlSafely } from './url-resolver';
 import { registerLinkEvidence } from './link-evidence';
 import { DEFAULT_USER_ID } from './storage';
+import { rakutenFetch, type RakutenCredentials } from './rakuten-auth';
+import { recordStoreHealth } from './store-health';
 
 export type AffiliateVerificationStatus = 'verificado' | 'nao_verificado' | 'rejeitado';
 export type LinkState = 'gerado' | 'confirmado_pela_integracao' | 'apto_para_envio';
@@ -307,9 +309,18 @@ export async function tryGenerateMercadoLivreMeliLaLink(
   tag: string,
   cookies?: string
 ): Promise<string | null> {
+  return (await generateMercadoLivreMeliLaDetailed(productUrl, tag, cookies)).link;
+}
+
+/** Gera meli.la e informa se o Mercado Livre recusou a sessão (401/403) — distinto de erro de rede. */
+export async function generateMercadoLivreMeliLaDetailed(
+  productUrl: string,
+  tag: string,
+  cookies?: string
+): Promise<{ link: string | null; unauthorized: boolean }> {
   const cookieString = (cookies || process.env.MERCADOLIVRE_COOKIE || process.env.ML_COOKIE || '').trim();
   if (!cookieString || cookieString.length < 15) {
-    return null;
+    return { link: null, unauthorized: true };
   }
 
   try {
@@ -364,18 +375,23 @@ export async function tryGenerateMercadoLivreMeliLaLink(
     });
     clearTimeout(timeout);
 
+    if (res.status === 401 || res.status === 403) {
+      return { link: null, unauthorized: true };
+    }
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       if (data?.short_url && typeof data.short_url === 'string' && data.short_url.includes('meli.la/')) {
-        return data.short_url.trim();
+        return { link: data.short_url.trim(), unauthorized: false };
       }
     }
   } catch (err) {
-    console.warn('[MercadoLivre meli.la generator] Falha ao contatar stripe/user/links:', err);
+    console.warn('[MercadoLivre meli.la generator] Falha ao contatar stripe/user/links:', (err as Error)?.message);
   }
 
-  return null;
+  return { link: null, unauthorized: false };
 }
+
+export const ML_SESSION_EXPIRED_REASON = 'Sessão do Mercado Livre expirou. Reconecte pela extensão.';
 
 async function fetchShopeeProductImageByItemId(
   itemId: string,
@@ -416,23 +432,27 @@ async function fetchShopeeProductImageByItemId(
   }
 }
 
-async function tryGenerateRakutenDeepLink(
+/** Campos do cofre para Rakuten: appId = Client ID, appSecret = Client Secret, affiliateTag = SID. */
+export function rakutenCredentialsFrom(c: { appId?: string | null; appSecret?: string | null; affiliateTag?: string | null } | null | undefined): RakutenCredentials {
+  return {
+    clientId: String(c?.appId || '').trim(),
+    clientSecret: String(c?.appSecret || '').trim(),
+    sid: String(c?.affiliateTag || '').trim(),
+  };
+}
+
+export async function tryGenerateRakutenDeepLink(
   originalUrl: string,
   advertiserId: string,
-  bearerToken: string
+  credentials: RakutenCredentials
 ): Promise<string | null> {
   try {
     const numAdvertiserId = parseInt(advertiserId, 10);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
-    const res = await fetch('https://api.linksynergy.com/v1/links/deep_links', {
+    const res = await rakutenFetch(credentials, 'https://api.linksynergy.com/v1/links/deep_links', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
       body: JSON.stringify({
         url: originalUrl,
         advertiser_id: isNaN(numAdvertiserId) ? advertiserId : numAdvertiserId,
@@ -558,28 +578,23 @@ export async function convertToAffiliateLink(
         process.env.MERCADOLIVRE_COOKIE ||
         process.env.ML_COOKIE;
 
-      let meliLaLink: string | null = null;
-      if (cookieString) {
-        meliLaLink = await tryGenerateMercadoLivreMeliLaLink(cleanUrl, tag, String(cookieString));
-      }
-
-      if (meliLaLink) {
-        generatedAffiliateUrl = meliLaLink;
-        verificationStatus = 'verificado';
-        isAutoDispatchAllowed = true;
-        verificationReason = 'Link meli.la oficial gerado via sessão do Mercado Livre Afiliados.';
-      } else {
-        const u = new URL(cleanUrl);
-        if (toolId) {
-          u.searchParams.set('matt_tool', toolId);
+      void toolId;
+      const meli = await generateMercadoLivreMeliLaDetailed(cleanUrl, tag, cookieString ? String(cookieString) : '');
+      if (!meli.link) {
+        // Só meli.la: sem fallback para link longo ou encurtador de terceiros.
+        if (meli.unauthorized) {
+          const userId = (storeCreds as any)?.userId;
+          if (userId) {
+            await recordStoreHealth(userId, 'mercadolivre', { status: 'falhou', reason: ML_SESSION_EXPIRED_REASON }).catch(() => {});
+          }
+          throw new Error(ML_SESSION_EXPIRED_REASON);
         }
-        u.searchParams.set('matt_word', tag);
-        generatedAffiliateUrl = u.toString();
-
-        verificationStatus = 'verificado';
-        isAutoDispatchAllowed = true;
-        verificationReason = 'Parâmetros oficiais matt_tool e matt_word aplicados.';
+        throw new Error('Não foi possível gerar o meli.la agora. A oferta não será enviada sem o link oficial.');
       }
+      generatedAffiliateUrl = meli.link;
+      verificationStatus = 'verificado';
+      isAutoDispatchAllowed = true;
+      verificationReason = 'Link meli.la oficial gerado via sessão do Mercado Livre Afiliados.';
     } else if (store === 'shopee') {
       const subId = storeCreds.affiliateTag?.trim();
       const hasApiCreds = Boolean(storeCreds.appId && storeCreds.appSecret && storeCreds.appSecret.trim().length > 10);
@@ -639,38 +654,25 @@ export async function convertToAffiliateLink(
           'Parâmetro sub_id aplicado manualmente. Sem credenciais de API Open GraphQL para validação em tempo real; oferta mantida em revisão manual.';
       }
     } else if (store === 'netshoes') {
-      const siteId = storeCreds.affiliateTag?.trim();
-      const merchantId = storeCreds.appId?.trim();
-      const token = storeCreds.userToken?.trim();
-
-      if (!siteId || !merchantId) {
-        throw new Error('Credenciais da Netshoes incompletas (Rakuten Site ID e Merchant ID são obrigatórios).');
+      const rakuten = rakutenCredentialsFrom(storeCreds);
+      const advertiserId = String((storeCreds as any)?.sessionData?.netshoesAdvertiserId || '').trim();
+      const missing = [
+        !rakuten.clientId && 'Client ID',
+        !rakuten.clientSecret && 'Client Secret',
+        !rakuten.sid && 'SID',
+        !advertiserId && 'código da Netshoes',
+      ].filter(Boolean);
+      if (missing.length) {
+        throw new Error(`Conecte a Rakuten pela extensão (faltando: ${missing.join(', ')}).`);
       }
-
-      if (token && token.length > 15) {
-        // Testar via Rakuten Deep Links API oficial
-        const deepLinkResult = await tryGenerateRakutenDeepLink(cleanUrl, merchantId, token);
-        if (deepLinkResult) {
-          generatedAffiliateUrl = deepLinkResult;
-          verificationStatus = 'verificado';
-          isAutoDispatchAllowed = true;
-          verificationReason = 'Deep link oficial gerado e autenticado via Rakuten Advertising Deep Links API.';
-        } else {
-          // Fallback montado com aviso explícito
-          generatedAffiliateUrl = `https://click.linksynergy.com/deeplink?id=${encodeURIComponent(siteId)}&mid=${encodeURIComponent(merchantId)}&murl=${encodeURIComponent(cleanUrl)}`;
-          verificationStatus = 'nao_verificado';
-          isAutoDispatchAllowed = false;
-          verificationReason =
-            'Deep Link Rakuten montado localmente. A API Rakuten não confirmou a geração deste link específico; mantido em revisão manual.';
-        }
-      } else {
-        // Montado com parâmetros oficiais Rakuten Advertising / LinkSynergy
-        generatedAffiliateUrl = `https://click.linksynergy.com/deeplink?id=${encodeURIComponent(siteId)}&mid=${encodeURIComponent(merchantId)}&murl=${encodeURIComponent(cleanUrl)}`;
-        verificationStatus = 'verificado';
-        isAutoDispatchAllowed = true;
-        verificationReason =
-          'Deep link oficial Rakuten Advertising gerado com Site ID e Merchant ID validados.';
+      const deepLinkResult = await tryGenerateRakutenDeepLink(cleanUrl, advertiserId, rakuten);
+      if (!deepLinkResult) {
+        throw new Error('A Rakuten não gerou o link da Netshoes agora. A oferta não será enviada sem o link oficial.');
       }
+      generatedAffiliateUrl = deepLinkResult;
+      verificationStatus = 'verificado';
+      isAutoDispatchAllowed = true;
+      verificationReason = 'Deep link oficial gerado e autenticado via Rakuten Advertising Deep Links API.';
     } else if (store === 'magalu') {
       const tag = storeCreds.affiliateTag?.trim();
       if (!tag) throw new Error('ID de afiliado do Magazine Luiza não configurado.');

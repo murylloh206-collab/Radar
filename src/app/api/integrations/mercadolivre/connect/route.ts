@@ -1,92 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest, isValidUuid, ADMIN_UUID } from '@/lib/server/auth';
-import { saveStoreCredentials } from '@/lib/server/credentials-vault';
-import { readDatabase, writeDatabase } from '@/lib/server/storage';
+import { getStrictSession } from '@/lib/server/auth';
+import { resolveExtensionUser } from '@/lib/server/extension-auth';
+import { connectStore, ConnectError } from '@/lib/server/store-connect';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-requested-with',
-};
+export const dynamic = 'force-dynamic';
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
-}
-
+/**
+ * Conexão do Mercado Livre (sessão do navegador). Exige login no painel ou extensão pareada:
+ * nunca grava na conta de outra pessoa.
+ */
 export async function POST(req: NextRequest) {
-  try {
-    const session = getSessionFromRequest(req);
-    const userId = session?.userId && isValidUuid(session.userId) ? session.userId : ADMIN_UUID;
-
-    const body = await req.json().catch(() => ({}));
-    const { affiliateTag, appId, accountName, verifiedAt, cookies, cookieString } = body;
-    const cleanCookie = (cookieString || cookies || '').trim();
-
-    const cleanTag = (affiliateTag && typeof affiliateTag === 'string' && affiliateTag.trim().length > 0)
-      ? affiliateTag.trim()
-      : 'michelhenrique1';
-
-    const cleanToolId = (appId && String(appId).trim().length > 0)
-      ? String(appId).trim()
-      : '77625408';
-
-    const now = verifiedAt || new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    const vaultRecord = await saveStoreCredentials(
-      userId,
-      {
-        storeName: 'mercadolivre',
-        appId: cleanToolId,
-        affiliateTag: cleanTag,
-        tagIdentified: cleanTag,
-        userToken: cleanCookie || undefined,
-        authType: 'extension_session',
-        connectionStatus: 'conectado',
-        sessionData: {
-          accountName: accountName || `Afiliado ML (${cleanTag})`,
-          connectedVia: 'chrome_extension_1click',
-          hasCookies: Boolean(cleanCookie),
-          connectedAt: now,
-          expiresAt,
-        },
-        isActive: true,
-        lastVerifiedAt: now,
-        expiresAt,
-      },
-      req
-    );
-
-    // Atualiza também no banco de dados operacional local/nuvem
-    try {
-      const db = readDatabase();
-      const ml = db.stores.find((s) => s.storeName === 'mercadolivre');
-      if (ml) {
-        ml.affiliateTag = cleanTag;
-        ml.appId = cleanToolId;
-        ml.isActive = true;
-        ml.isValidated = true;
-        ml.lastValidatedAt = now;
-        writeDatabase(db);
-      }
-    } catch {}
-
+  const userId = getStrictSession(req)?.userId || (await resolveExtensionUser(req));
+  if (!userId) {
     return NextResponse.json(
-      {
-        ok: true,
-        message: 'Conexão com Mercado Livre confirmada e registrada com sucesso em 1 clique!',
-        status: 'conectado',
-        affiliateTag: vaultRecord.affiliateTag || cleanTag,
-        appId: vaultRecord.appId || cleanToolId,
-        lastVerifiedAt: vaultRecord.lastVerifiedAt,
-        expiresAt,
-        daysRemaining: 30,
-        hasCookies: Boolean(cleanCookie),
-      },
-      { headers: corsHeaders }
+      { ok: false, code: 'EXTENSION_UNPAIRED', error: 'Faça login no painel ou reconecte a extensão.' },
+      { status: 401 }
     );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: msg }, { status: 500, headers: corsHeaders });
+  }
+  const body = await req.json().catch(() => ({}));
+  try {
+    const view = await connectStore(userId, {
+      store: 'mercadolivre',
+      cookies: String(body?.cookieString || body?.cookies || ''),
+      tag: body?.affiliateTag ? String(body.affiliateTag) : undefined,
+    });
+    return NextResponse.json({ ok: view.status === 'ok', status: view }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (e) {
+    if (e instanceof ConnectError) return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'Não foi possível conectar o Mercado Livre agora.' }, { status: 500 });
   }
 }

@@ -373,3 +373,20 @@ body {
   font-size: 10px;
   font-family: inherit;
 }
+
+/* v2.2 — vínculo, status real e campos para colar */
+.cc-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1f292e;
+  border: 1px solid #4a5a62;
+  border-radius: 8px;
+  color: #e6f1f5;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin: 6px 0 8px;
+  letter-spacing: 0.04em;
+}
+.cc-status { font-size: 11px; margin: 10px 0 0; color: #b9cdd6; line-height: 1.4; }
+.cc-fields label { display: block; font-size: 11px; color: #b9cdd6; margin-top: 8px; }
+.cc-fields .cc-button { margin-top: 8px; }
