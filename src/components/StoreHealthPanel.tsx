@@ -66,6 +66,21 @@ export default function StoreHealthPanel({ onChange }: { onChange?: (stores: Sto
     }
   };
 
+  const revokeAll = async () => {
+    if (!window.confirm('Desvincular todas as extensões desta conta? Elas vão precisar de um código novo para conectar lojas.')) return;
+    setError(null);
+    try {
+      const res = await fetch('/api/integrations/extension/revoke', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setPair(null);
+        setError('Extensões desvinculadas. Gere um código novo para vincular de novo.');
+      } else setError(data.error || 'Não foi possível desvincular agora.');
+    } catch {
+      setError('Não foi possível desvincular agora.');
+    }
+  };
+
   return (
     <section className="cc-onboard" aria-label="Status real das lojas" style={{ marginBottom: 16 }}>
       <div className="cc-onboard-top" style={{ alignItems: 'flex-start' }}>
@@ -75,7 +90,8 @@ export default function StoreHealthPanel({ onChange }: { onChange?: (stores: Sto
           <p className="cc-sub">O painel gera um link de teste ao conectar e todo dia às 08:00. Se uma loja falhar, as ofertas dela param até você reconectar.</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <button type="button" className="cc-button" onClick={createCode}>Conectar extensão</button>
+          <button type="button" className="cc-button" onClick={createCode}>Conectar extensão</button>{' '}
+          <button type="button" className="cc-button cc-quiet" onClick={revokeAll}>Desvincular extensões</button>
           {pair && (
             <p className="cc-sub" style={{ marginTop: 8 }}>
               Código: <strong style={{ fontSize: 18, letterSpacing: '0.12em' }}>{pair.code}</strong>

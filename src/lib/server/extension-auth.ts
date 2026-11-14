@@ -21,6 +21,7 @@ export interface ExtensionAuthRepo {
   findToken(tokenHash: string): Promise<TokenRow | null>;
   touchToken(tokenHash: string): Promise<void>;
   revokeToken(tokenHash: string): Promise<void>;
+  revokeAllForUser(userId: string): Promise<void>;
 }
 
 export function memoryExtensionAuthRepo(): ExtensionAuthRepo & { dump(): unknown } {
@@ -38,6 +39,7 @@ export function memoryExtensionAuthRepo(): ExtensionAuthRepo & { dump(): unknown
     async findToken(hash) { const r = tokens.get(hash); return r ? { ...r } : null; },
     async touchToken() {},
     async revokeToken(hash) { const r = tokens.get(hash); if (r) r.revokedAt = Date.now(); },
+    async revokeAllForUser(userId) { for (const r of tokens.values()) if (r.userId === userId && !r.revokedAt) r.revokedAt = Date.now(); },
     dump: () => ({ codes: [...codes.values()], tokens: [...tokens.values()] }),
   };
 }
@@ -71,7 +73,8 @@ export function supabaseExtensionAuthRepo(): ExtensionAuthRepo {
       if (error) throw new Error(`Falha ao criar token da extensão: ${error.message}`);
     },
     async findToken(hash) {
-      const { data } = await db().from('extension_tokens').select('token_hash,user_id,revoked_at').eq('token_hash', hash).maybeSingle();
+      const { data, error } = await db().from('extension_tokens').select('token_hash,user_id,revoked_at').eq('token_hash', hash).maybeSingle();
+      if (error) throw new Error(`Falha ao validar o token da extensão: ${error.message}`);
       return data ? { tokenHash: data.token_hash, userId: data.user_id, revokedAt: data.revoked_at ? Date.parse(data.revoked_at) : null } : null;
     },
     async touchToken(hash) {
@@ -79,6 +82,10 @@ export function supabaseExtensionAuthRepo(): ExtensionAuthRepo {
     },
     async revokeToken(hash) {
       await db().from('extension_tokens').update({ revoked_at: new Date().toISOString() }).eq('token_hash', hash);
+    },
+    async revokeAllForUser(userId) {
+      const { error } = await db().from('extension_tokens').update({ revoked_at: new Date().toISOString() }).eq('user_id', userId).is('revoked_at', null);
+      if (error) throw new Error(`Falha ao desvincular extensões: ${error.message}`);
     },
   };
 }
@@ -123,10 +130,40 @@ export async function resolveExtensionUser(req: Request, repo?: ExtensionAuthRep
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim();
   if (!token || token.length < 20) return null;
   const r = repoOr(repo);
-  const row = await r.findToken(sha(token)).catch(() => null);
+  let row: TokenRow | null;
+  try {
+    row = await r.findToken(sha(token));
+  } catch {
+    // Instabilidade do banco não é "token inválido": não desvincula a extensão.
+    throw new ExtensionAuthUnavailableError();
+  }
   if (!row || row.revokedAt) return null;
   await r.touchToken(row.tokenHash).catch(() => {});
   return row.userId;
+}
+
+export class ExtensionAuthUnavailableError extends Error {
+  constructor() {
+    super('O painel está instável agora. Tente de novo em instantes.');
+    this.name = 'ExtensionAuthUnavailableError';
+  }
+}
+
+/** Para as rotas da extensão: devolve o usuário ou a resposta pronta (401 desvinculada / 503 instável). */
+export async function extensionUserOrResponse(req: Request): Promise<{ userId: string } | { response: NextResponse }> {
+  try {
+    const userId = await resolveExtensionUser(req);
+    return userId ? { userId } : { response: extensionUnauthorized() };
+  } catch (e) {
+    if (e instanceof ExtensionAuthUnavailableError) {
+      return { response: NextResponse.json({ ok: false, code: 'TEMPORARILY_UNAVAILABLE', error: e.message }, { status: 503 }) };
+    }
+    throw e;
+  }
+}
+
+export async function revokeAllExtensionTokens(userId: string, repo?: ExtensionAuthRepo): Promise<void> {
+  await repoOr(repo).revokeAllForUser(userId);
 }
 
 export async function revokeExtensionToken(token: string, repo?: ExtensionAuthRepo): Promise<void> {

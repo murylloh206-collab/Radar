@@ -62,8 +62,14 @@ function formatWhen(iso) {
 function statusLine(view) {
   if (!view) return '⚪ Não configurado — conecte pela página da loja.';
   const when = formatWhen(view.lastCheckedAt);
-  if (view.status === 'ok') return `✅ Conectado${view.hint ? ` (${view.hint})` : ''} — ${when}`;
+  if (view.status === 'ok') {
+    if (view.lastCheckedAt && Date.now() - Date.parse(view.lastCheckedAt) > 26 * 3600 * 1000) {
+      return `⚠️ Teste atrasado — último ${when}. Abra o painel e clique em Testar agora.`;
+    }
+    return `✅ Conectado${view.hint ? ` (${view.hint})` : ''} — ${when}`;
+  }
   if (view.status === 'falhou') return `❌ Falhou — ${view.reason || 'reconecte a loja.'}`;
+  if (view.status === 'sem_teste' && view.store !== 'amazon') return '🟡 Ainda não testado — clique em Conectar ou teste pelo painel.';
   if (view.status === 'sem_teste') return `🟡 Tag salva${view.hint ? ` (${view.hint})` : ''} — a Amazon não permite teste sem API.`;
   return '⚪ Não configurado — conecte pela página da loja.';
 }

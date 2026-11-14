@@ -2,7 +2,7 @@ import 'server-only';
 import type { StoreName } from '@/lib/types';
 import { getStoreCredentialsMapWithSecrets, saveStoreCredentials, type SaveVaultInput } from './credentials-vault';
 import { getStoreHealthMap, defaultStoreHealthRepo, type StoreHealth, type StoreHealthRepo, type StoreHealthStatus } from './store-health';
-import { checkStoreConnection, defaultStoreCheckDeps, AMAZON_TAG_RE } from './store-health-checks';
+import { checkStoreConnection, defaultStoreCheckDeps, AMAZON_TAG_RE, INVALID_CREDENTIAL_REASONS } from './store-health-checks';
 
 export type ConnectPayload =
   | { store: 'mercadolivre'; cookies: string; tag?: string }
@@ -16,6 +16,8 @@ export interface StoreStatusView {
   reason: string | null;
   lastCheckedAt: string | null;
   hint: string | null;
+  /** Aviso pontual da conexão (ex.: dados lidos não funcionaram e a conexão anterior foi mantida). */
+  notice?: string;
 }
 
 export class ConnectError extends Error {
@@ -50,9 +52,15 @@ function invalid(message: string): never {
   throw new ConnectError(message);
 }
 
+const SNAPSHOT_FIELDS = ['appId', 'appSecret', 'affiliateTag', 'userToken'] as const;
+
 export async function connectStore(userId: string, payload: ConnectPayload, deps?: StoreConnectDeps): Promise<StoreStatusView> {
   const d = deps || defaultStoreConnectDeps();
   const now = new Date().toISOString();
+  const storeOf = (p: ConnectPayload | null | undefined): StoreName | null =>
+    p?.store === 'rakuten' ? 'netshoes' : p?.store && ['mercadolivre', 'shopee', 'amazon'].includes(p.store) ? (p.store as StoreName) : null;
+  const target = storeOf(payload);
+  const before = target ? (await d.getCredentials(userId))?.[target] : null;
   let store: StoreName;
 
   if (payload?.store === 'mercadolivre') {
@@ -96,9 +104,19 @@ export async function connectStore(userId: string, payload: ConnectPayload, deps
     invalid('Loja não suportada pela extensão.');
   }
 
-  const health = await d.check(userId, store);
+  let health = await d.check(userId, store);
+  let notice: string | undefined;
+  const hadWorking = before && SNAPSHOT_FIELDS.some(f => clean(before[f]));
+  if (health.status === 'falhou' && hadWorking && INVALID_CREDENTIAL_REASONS.includes(health.reason || '')) {
+    // Os dados novos estão errados: volta a credencial anterior e confere de novo.
+    const restore: SaveVaultInput = { storeName: store };
+    for (const f of SNAPSHOT_FIELDS) (restore as any)[f] = clean(before[f]) || undefined;
+    await d.save(userId, restore);
+    health = await d.check(userId, store);
+    notice = 'Os dados lidos foram recusados pela loja; mantive a conexão anterior.';
+  }
   const creds = await d.getCredentials(userId);
-  return toView(health, creds?.[store], store);
+  return { ...toView(health, creds?.[store], store), ...(notice ? { notice } : {}) };
 }
 
 function lastDigits(v: unknown, n = 4): string | null {
@@ -114,7 +132,13 @@ function hintFor(store: StoreName, c: any): string | null {
   return null;
 }
 
+const hasAnyCredential = (c: any) => Boolean(c && [c.appId, c.appSecret, c.affiliateTag, c.userToken].some(v => clean(v)));
+
 function toView(h: StoreHealth, c: any, store: StoreName): StoreStatusView {
+  // Credencial salva antes do status real existir: mostra "ainda não testado" (com botão), não "não configurado".
+  if (h.status === 'nao_configurado' && hasAnyCredential(c)) {
+    return { store, status: 'sem_teste', reason: 'Ainda não testado.', lastCheckedAt: null, hint: hintFor(store, c) };
+  }
   return { store, status: h.status, reason: h.reason, lastCheckedAt: h.lastCheckedAt, hint: hintFor(store, c) };
 }
 

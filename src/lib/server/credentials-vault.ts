@@ -6,7 +6,7 @@ import { StoreCredential, StoreName } from '../types';
 import { isSupabaseConfigured, supabase } from '../supabase';
 import { encryptSecret, decryptSecret, encryptJson, decryptJson } from './crypto-vault';
 import { readDatabase, writeDatabase } from './storage';
-import { isValidUuid } from './auth';
+import { isValidUuid, ADMIN_UUID } from './auth';
 
 export interface StoreVaultRecord {
   id: string;
@@ -387,13 +387,12 @@ export async function getDecryptedCredentials(
     }
   }
 
-  // 2. Se não encontrou no Supabase (ou Supabase desligado), ler do cofre local
-  if (!record) {
+  // 2. Cofre local só quando o Supabase está desligado (dev/testes) — e sempre do próprio usuário.
+  //    Nunca usar a credencial de outra conta como "reserva".
+  if (!record && !(isSupabaseConfigured && supabase)) {
     const localVault = readLocalVault();
     record =
       localVault.find((r) => r.userId === effectiveUserId && r.storeName === storeName && !r.revokedAt) ||
-      localVault.find((r) => r.userId === userId && r.storeName === storeName && !r.revokedAt) ||
-      localVault.find((r) => r.storeName === storeName && !r.revokedAt) ||
       null;
   }
 
@@ -474,7 +473,11 @@ export async function getStoreCredentialsMapWithSecrets(
   };
 
   for (const storeName of storeNames) {
-    const base = baseStores.find((s) => s.storeName === storeName) || null;
+    // db.stores é global (legado): só vale se for desta conta; sem dono, só para a conta do dono.
+    const base =
+      baseStores.find(
+        (s) => s.storeName === storeName && (s.userId ? s.userId === userId : userId === ADMIN_UUID)
+      ) || null;
     let vaultCred: DecryptedStoreCredential | null = null;
     try {
       vaultCred = await getDecryptedCredentials(userId, storeName);
@@ -485,6 +488,8 @@ export async function getStoreCredentialsMapWithSecrets(
       continue;
     }
 
+    // Valores de ambiente/fixos pertencem à conta do dono: nunca completam a conta de um cliente.
+    const owner = userId === ADMIN_UUID;
     result[storeName] = {
       id: vaultCred?.id || base?.id || `store_${storeName}`,
       userId: vaultCred?.userId || base?.userId || userId,
@@ -492,7 +497,9 @@ export async function getStoreCredentialsMapWithSecrets(
       appId:
         vaultCred?.appId ||
         base?.appId ||
-        (storeName === 'shopee'
+        (!owner
+          ? ''
+          : storeName === 'shopee'
           ? process.env.SHOPEE_APP_ID || ''
           : storeName === 'mercadolivre'
           ? process.env.ML_AFFILIATE_APP_ID || '77625408'
@@ -501,15 +508,15 @@ export async function getStoreCredentialsMapWithSecrets(
         vaultCred?.affiliateTag ||
         vaultCred?.tagIdentified ||
         base?.affiliateTag ||
-        (storeName === 'mercadolivre' ? process.env.ML_AFFILIATE_TAG || 'michelhenrique1' : ''),
+        (owner && storeName === 'mercadolivre' ? process.env.ML_AFFILIATE_TAG || 'michelhenrique1' : ''),
       appSecret:
         vaultCred?.appSecret ||
         base?.appSecret ||
-        (storeName === 'shopee' ? process.env.SHOPEE_APP_SECRET || '' : ''),
+        (owner && storeName === 'shopee' ? process.env.SHOPEE_APP_SECRET || '' : ''),
       userToken:
         vaultCred?.userToken ||
         base?.userToken ||
-        (storeName === 'mercadolivre' ? process.env.MERCADOLIVRE_COOKIE || process.env.ML_COOKIE || '' : ''),
+        (owner && storeName === 'mercadolivre' ? process.env.MERCADOLIVRE_COOKIE || process.env.ML_COOKIE || '' : ''),
       isActive: vaultCred ? vaultCred.isActive : (base?.isActive ?? true),
       isValidated: vaultCred ? vaultCred.connectionStatus === 'conectado' : base?.isValidated,
       validationMethod: vaultCred?.authType || base?.validationMethod,

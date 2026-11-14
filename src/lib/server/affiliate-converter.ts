@@ -318,7 +318,8 @@ export async function generateMercadoLivreMeliLaDetailed(
   tag: string,
   cookies?: string
 ): Promise<{ link: string | null; unauthorized: boolean }> {
-  const cookieString = (cookies || process.env.MERCADOLIVRE_COOKIE || process.env.ML_COOKIE || '').trim();
+  // Só a sessão da própria conta: o cookie do dono (variável de ambiente) entra apenas pelo cofre da conta do dono.
+  const cookieString = (cookies || '').trim();
   if (!cookieString || cookieString.length < 15) {
     return { link: null, unauthorized: true };
   }
@@ -572,11 +573,7 @@ export async function convertToAffiliateLink(
         throw new Error('Credenciais do Mercado Livre incompletas (affiliateTag/matt_word é obrigatório).');
       }
 
-      const cookieString =
-        storeCreds.userToken ||
-        (storeCreds as any)?.sessionData?.cookies ||
-        process.env.MERCADOLIVRE_COOKIE ||
-        process.env.ML_COOKIE;
+      const cookieString = storeCreds.userToken || (storeCreds as any)?.sessionData?.cookies || '';
 
       void toolId;
       const meli = await generateMercadoLivreMeliLaDetailed(cleanUrl, tag, cookieString ? String(cookieString) : '');
