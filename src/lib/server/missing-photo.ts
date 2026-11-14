@@ -1,11 +1,10 @@
 import 'server-only';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { rakutenFetch, type RakutenCredentials } from './rakuten-auth';
 
 /*
  * Quando a loja não fornece foto (Amazon e Netshoes bloqueiam a leitura da página e a origem manda só texto):
  *  1) Netshoes: foto oficial pela API de produtos da Rakuten (busca pelo nome, confere código/nome);
- *  2) qualquer loja: arte com nome, preço e o logo da loja no lugar da foto. Nada sai sem imagem.
+ *  2) Amazon: imagem pública pelo código do produto (ASIN). Sem foto, a oferta espera (nada sai sem imagem).
  */
 
 const norm = (s: string) =>
@@ -60,61 +59,23 @@ export async function findNetshoesPhotoViaRakuten(
   }
 }
 
-const STORE_LOGOS: Record<string, string> = {
-  amazon: '/brands/amazon-original.png',
-  netshoes: '/brands/netshoes-original.png',
-  mercadolivre: '/brands/mercadolivre-original.png',
-  shopee: '/brands/shopee-original.png',
-  magalu: '/brands/magalu-original.png',
-};
-
-export interface NoPhotoArtDeps {
-  render: (userId: string, req: any) => Promise<Buffer>;
-  upload: (buffer: Buffer, path: string, contentType: string) => Promise<string | null>;
-}
-
-async function defaultDeps(): Promise<NoPhotoArtDeps> {
-  const { renderBrandedOfferArt } = await import('./offer-art/branded');
-  return {
-    render: renderBrandedOfferArt,
-    async upload(buffer, path, contentType) {
-      if (!isSupabaseConfigured || !supabase) return null;
-      const { error } = await supabase.storage.from('radar-media').upload(path, buffer, { contentType, upsert: true });
-      if (error) return null;
-      return supabase.storage.from('radar-media').getPublicUrl(path).data.publicUrl || null;
-    },
-  };
-}
-
-export async function createNoPhotoArt(
-  input: {
-    userId: string;
-    store: string;
-    title: string;
-    priceCurrent: number;
-    priceOriginal?: number | null;
-    discountPct?: number | null;
-    coupon?: string;
-    messageId: string;
-  },
-  deps?: NoPhotoArtDeps
+/**
+ * Amazon: imagem pública pelo código do produto (ASIN), 500x500. Produtos sem imagem nesse endereço
+ * devolvem um GIF de 1 pixel — tratado como "sem foto".
+ */
+export async function findAmazonPhotoByAsin(
+  asin: string,
+  fetchImpl: (url: string) => Promise<Response> = url => fetch(url, { signal: AbortSignal.timeout(8_000) })
 ): Promise<string | undefined> {
-  const logo = STORE_LOGOS[input.store];
-  if (!logo || !(input.priceCurrent > 0) || !input.title) return undefined;
+  if (!/^[A-Z0-9]{10}$/i.test(String(asin || ''))) return undefined;
+  const url = `https://m.media-amazon.com/images/P/${asin.toUpperCase()}.01.LZZZZZZZ.jpg`;
   try {
-    const d = deps || (await defaultDeps());
-    const png = await d.render(input.userId, {
-      format: 'feed',
-      title: input.title,
-      imagePathOrUrl: logo,
-      priceCurrent: input.priceCurrent,
-      priceOriginal: input.priceOriginal ?? null,
-      discountPct: input.discountPct ?? null,
-      coupon: input.coupon,
-      footerCta: 'link na mensagem',
-    });
-    const safeId = String(input.messageId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || `art${Date.now()}`;
-    return (await d.upload(png, `copier-art/${safeId}.png`, 'image/png')) || undefined;
+    const res = await fetchImpl(url);
+    if (!res.ok || !/^image\/(jpeg|png|webp)/i.test(res.headers.get('content-type') || '')) return undefined;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const { default: sharp } = await import('sharp');
+    const meta = await sharp(buf).metadata();
+    return (meta.width || 0) >= 200 && (meta.height || 0) >= 200 ? url : undefined;
   } catch {
     return undefined;
   }

@@ -1,6 +1,6 @@
 import 'server-only';
 import { fetchSourceImageUrl } from './source-image';
-import { findNetshoesPhotoViaRakuten, createNoPhotoArt } from './missing-photo';
+import { findNetshoesPhotoViaRakuten, findAmazonPhotoByAsin } from './missing-photo';
 import { runtimeDatabase } from './copier-runtime-context';
 import {
   CopySource,
@@ -1220,6 +1220,16 @@ export async function processIncomingMessage(
     );
     if (rakutenPhoto) productData.imageUrl = rakutenPhoto;
   }
+  // 6.10 Amazon sem foto: imagem pública pelo código do produto (ASIN).
+  if (
+    conversionResult.store === 'amazon' &&
+    (!productData.imageUrl || !productData.imageUrl.startsWith('http')) &&
+    !isSimulation
+  ) {
+    const asin = (String(conversionResult.cleanUrl || '').match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i) || [])[1];
+    const amazonPhoto = asin ? await findAmazonPhotoByAsin(asin) : undefined;
+    if (amazonPhoto) productData.imageUrl = amazonPhoto;
+  }
 
   // 7. Imagem do Copiador (Foto Oficial da Loja em alta resolução e formato 1:1 sem cortes)
   let finalMediaUrl: string | undefined = undefined;
@@ -1270,20 +1280,6 @@ export async function processIncomingMessage(
     if (!finalMediaUrl) {
       if (bestOfficialPhoto && (bestOfficialPhoto.startsWith('http://') || bestOfficialPhoto.startsWith('https://'))) {
         finalMediaUrl = bestOfficialPhoto;
-      } else if (
-        !isSimulation &&
-        (finalMediaUrl = await createNoPhotoArt({
-          userId: authorizedSource.userId,
-          store: String(conversionResult.store || ''),
-          title: productData.title || '',
-          priceCurrent: Number(productData.currentPrice || 0),
-          priceOriginal: productData.originalPrice ?? null,
-          discountPct: productData.discountPct ?? null,
-          coupon: parsedFromWhatsApp.couponCode,
-          messageId,
-        }))
-      ) {
-        // Sem foto da loja nem da origem: arte com nome, preço e logo da loja (nada sai sem imagem).
       } else {
         requiresManualReviewDueToImage = true;
         imageReviewReason = 'Fotografia do produto indisponível. Publicação sem imagem bloqueada para proteção de qualidade.';
