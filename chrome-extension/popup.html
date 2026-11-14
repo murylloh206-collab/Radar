@@ -41,6 +41,15 @@
         </button>
       </div>
 
+      <!-- Vínculo com a conta do painel -->
+      <section class="cc-connect-box" id="pairBox" hidden>
+        <div class="cc-connect-heading"><h3>Vincular ao seu painel</h3></div>
+        <p>No painel, abra <b>Conexões → Lojas</b> e clique em <b>Conectar extensão</b>. Cole aqui o código de 8 letras.</p>
+        <input class="cc-input" id="pairCode" maxlength="12" autocomplete="off" placeholder="EX.: K7MP4QZ2" aria-label="Código do painel">
+        <button type="button" class="cc-button cc-primary" id="btnPair"><span>Vincular</span></button>
+      </section>
+
+      <div id="storeArea" hidden>
       <!-- Seletor de 4 Lojas -->
       <div class="cc-shop-picker" role="radiogroup" aria-label="Escolher loja">
         <button type="button" role="radio" data-store="mercadolivre" aria-checked="true" aria-pressed="true">
@@ -81,9 +90,12 @@
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
           </svg>
-          <span id="btnStoreLabel">Conectar conta</span>
+          <span id="btnStoreLabel">Conectar</span>
         </button>
+        <p class="cc-status" id="storeStatus"></p>
+        <div class="cc-fields" id="manualFields" hidden></div>
       </section>
+      </div>
 
       <!-- Aviso de Segurança Oficial -->
       <p class="cc-secure">
@@ -110,10 +122,10 @@
     <!-- Rodapé -->
     <footer class="cc-popup-foot">
       <span>Radar de Ofertas</span>
-      <span>Conector v2.1</span>
+      <span>Conector v2.2</span>
     </footer>
   </article>
 
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>
