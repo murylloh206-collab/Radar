@@ -19,6 +19,7 @@ export interface BrandSettingsRecord {
   panelName: string;
   panelLogoUrl: string | null;
   accentColor: string;
+  artBackground: 'dark' | 'light';
   watermarkEnabled: boolean;
   watermarkHandle: string;
   watermarkLogoUrl: string | null;
@@ -41,6 +42,7 @@ export function getDefaultBrandSettings(userId: string = ADMIN_UUID): BrandSetti
     panelName: 'Radar de Ofertas',
     panelLogoUrl: null,
     accentColor: '#6366f1',
+    artBackground: 'dark',
     watermarkEnabled: true,
     watermarkHandle: DEFAULT_PLATFORM_WATERMARK.handle,
     watermarkLogoUrl: null,
@@ -103,6 +105,7 @@ export async function getBrandSettings(userIdInput?: string): Promise<BrandSetti
           panelName: data.panel_name || 'Radar de Ofertas',
           panelLogoUrl: data.panel_logo_url || null,
           accentColor: data.accent_color || '#6366f1',
+          artBackground: data.art_background === 'light' ? 'light' : 'dark',
           watermarkEnabled: data.watermark_enabled !== false,
           watermarkHandle: data.watermark_handle || DEFAULT_PLATFORM_WATERMARK.handle,
           watermarkLogoUrl: data.watermark_logo_url || null,
@@ -159,6 +162,10 @@ export async function saveBrandSettings(
       typeof partial.accentColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(partial.accentColor.trim())
         ? partial.accentColor.trim()
         : current.accentColor,
+    artBackground:
+      partial.artBackground === 'light' || partial.artBackground === 'dark'
+        ? partial.artBackground
+        : current.artBackground || 'dark',
     watermarkEnabled:
       typeof partial.watermarkEnabled === 'boolean'
         ? partial.watermarkEnabled
@@ -226,6 +233,8 @@ export async function saveBrandSettings(
         },
         { onConflict: 'user_id' }
       );
+      // Gravado à parte: se a migração 09 ainda não rodou, só o fundo da arte deixa de ser salvo no banco.
+      await supabase.from('brand_settings').update({ art_background: updated.artBackground }).eq('user_id', userId);
     } catch {}
   }
 

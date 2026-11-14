@@ -1,4 +1,5 @@
 import 'server-only';
+import { ADMIN_UUID } from './auth';
 import fs from 'node:fs';
 import path from 'node:path';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -128,3 +129,41 @@ export async function savePublicStorefrontConfig(
   return updated;
 }
 
+
+/** Endereços que pertencem à plataforma e nunca podem ser usados por clientes. */
+const RESERVED_SLUGS = new Set([DEFAULT_PUBLIC_PAGE_CONFIG.slug, 'radar', 'radarofertas', 'admin', 'api', 'painel', 'login', 'suporte']);
+
+function normalizeSlug(raw: string): string {
+  return decodeURIComponent(raw || '').replace(/^@+/, '').trim().toLowerCase();
+}
+
+/** Descobre de qual cliente é a página da bio pelo endereço (/u/<slug>). O endereço reservado é sempre da conta dona. */
+export async function resolveStorefrontUserId(rawSlug: string): Promise<string | null> {
+  const slug = normalizeSlug(rawSlug);
+  if (!slug || !/^[a-z0-9._-]{2,40}$/.test(slug)) return null;
+  if (slug === DEFAULT_PUBLIC_PAGE_CONFIG.slug) return ADMIN_UUID;
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data } = await supabase.from('public_storefronts').select('user_id').eq('slug', slug).limit(2);
+      if (data?.length === 1) return String(data[0].user_id);
+      if (data && data.length > 1) return null; // endereço duplicado antigo: não arrisca mostrar a loja errada
+    } catch {}
+  }
+  const matches = Array.from(localStorefrontMemory.entries()).filter(([, config]) => (config.slug || '').toLowerCase() === slug);
+  return matches.length === 1 ? matches[0][0] : null;
+}
+
+/** Valida o endereço antes de salvar: formato, reservado ou já em uso por outro cliente. Retorna a mensagem de erro ou null. */
+export async function validateStorefrontSlug(userId: string, rawSlug: string): Promise<string | null> {
+  const slug = normalizeSlug(rawSlug);
+  if (!/^[a-z0-9._-]{3,40}$/.test(slug)) return 'Use de 3 a 40 letras minúsculas, números, ponto, hífen ou sublinhado.';
+  if (RESERVED_SLUGS.has(slug) && userId !== ADMIN_UUID) return 'Este endereço é reservado. Escolha outro (ex.: o @ da sua loja).';
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data } = await supabase.from('public_storefronts').select('user_id').eq('slug', slug).neq('user_id', userId).limit(1);
+      if (data?.length) return 'Este endereço já está em uso por outra loja.';
+    } catch {}
+  }
+  const takenLocally = Array.from(localStorefrontMemory.entries()).some(([owner, config]) => owner !== userId && (config.slug || '').toLowerCase() === slug);
+  return takenLocally ? 'Este endereço já está em uso por outra loja.' : null;
+}

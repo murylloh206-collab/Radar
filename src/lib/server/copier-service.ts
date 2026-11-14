@@ -1345,6 +1345,15 @@ export async function processIncomingMessage(
       messageText: formattedMessage,
       mediaType: finalMediaType,
       mediaUrl: finalMediaUrl, // URL da composição ou foto oficial configurada
+      socialOffer: {
+        title: productData.title,
+        imageUrl: bestOfficialPhoto || null,
+        currentPrice: productData.currentPrice,
+        originalPrice: productData.originalPrice ?? null,
+        discountPct: productData.discountPct ?? null,
+        coupon: parsedFromWhatsApp.couponCode || null,
+        store: conversionResult.store,
+      },
       affiliateUrl: conversionResult.affiliateUrl,
       originalUrl: primaryUrl,
       cleanUrl: conversionResult.cleanUrl,

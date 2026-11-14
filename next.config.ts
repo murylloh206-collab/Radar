@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_BUILD_DIR || ".next",
   reactStrictMode: true,
+  // Fonte Inter embutida usada pelas artes (texto vetorial): precisa acompanhar as funções do servidor.
+  outputFileTracingIncludes: {
+    '/api/**': ['./assets/fonts/**'],
+    '/u/**': ['./assets/fonts/**'],
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },

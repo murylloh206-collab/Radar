@@ -321,6 +321,8 @@ export interface OfferEvaluation {
 }
 
 export interface PublicationJob {
+  /** Resumo estruturado da oferta (copiador) usado pelo Instagram Pro: título, foto limpa, preços, cupom. */
+  socialOffer?: { title?: string; imageUrl?: string | null; currentPrice?: number; originalPrice?: number | null; discountPct?: number | null; coupon?: string | null; store?: string };
   connectionId?: string;
   lockedAt?: string;
   id: string;
