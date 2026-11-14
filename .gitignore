@@ -49,3 +49,8 @@ tests/fixtures/
 
 .vercel
 .env*
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# Rascunhos locais das sessões (amostras, registros de execução)
+.superpowers/
