@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveExtensionUser, extensionUnauthorized } from '@/lib/server/extension-auth';
+import { extensionUserOrResponse } from '@/lib/server/extension-auth';
 import { connectStore, ConnectError } from '@/lib/server/store-connect';
 
 export const dynamic = 'force-dynamic';
@@ -7,8 +7,9 @@ export const maxDuration = 30;
 
 /** A extensão envia os dados lidos na página da loja; o painel salva no cofre e testa na hora. */
 export async function POST(req: NextRequest) {
-  const userId = await resolveExtensionUser(req);
-  if (!userId) return extensionUnauthorized();
+  const auth = await extensionUserOrResponse(req);
+  if ('response' in auth) return auth.response;
+  const { userId } = auth;
   const body = await req.json().catch(() => null);
   try {
     const view = await connectStore(userId, body);

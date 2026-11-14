@@ -10,8 +10,8 @@ test('ok testado hoje mostra a hora de Brasília', () => {
 });
 
 test('ok testado em outro dia mostra a data', () => {
-  const l = storeStatusLabel({ store: 'shopee', status: 'ok', reason: null, lastCheckedAt: '2026-11-12T22:30:00Z', hint: null }, NOW);
-  assert.equal(l.detail, 'Testado em 12/11 às 19:30');
+  const l = storeStatusLabel({ store: 'shopee', status: 'ok', reason: null, lastCheckedAt: '2026-11-13T22:30:00Z', hint: null }, NOW);
+  assert.equal(l.detail, 'Testado em 13/11 às 19:30');
 });
 
 test('falhou mostra o motivo', () => {

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
  * nunca grava na conta de outra pessoa.
  */
 export async function POST(req: NextRequest) {
-  const userId = getStrictSession(req)?.userId || (await resolveExtensionUser(req));
+  const userId = getStrictSession(req)?.userId || (await resolveExtensionUser(req).catch(() => null));
   if (!userId) {
     return NextResponse.json(
       { ok: false, code: 'EXTENSION_UNPAIRED', error: 'Faça login no painel ou reconecte a extensão.' },
