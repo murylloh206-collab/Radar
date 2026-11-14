@@ -18,6 +18,8 @@ export interface BrandedArtRequest {
   discountPct?: number | null;
   coupon?: string;
   offerNumber?: number;
+  /** Texto do rodapé (padrão do Instagram: "link na bio"). */
+  footerCta?: string;
 }
 
 async function loadImage(source: string): Promise<Buffer> {
@@ -51,5 +53,6 @@ export async function renderBrandedOfferArt(userId: string, request: BrandedArtR
     pricing: { current: request.priceCurrent, original: request.priceOriginal ?? null, discountPct: request.discountPct ?? null },
     coupon: request.coupon || undefined,
     offerNumber: request.offerNumber,
+    footerCta: request.footerCta,
   });
 }

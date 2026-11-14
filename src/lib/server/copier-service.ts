@@ -1,5 +1,6 @@
 import 'server-only';
 import { fetchSourceImageUrl } from './source-image';
+import { findNetshoesPhotoViaRakuten, createNoPhotoArt } from './missing-photo';
 import { runtimeDatabase } from './copier-runtime-context';
 import {
   CopySource,
@@ -9,7 +10,7 @@ import {
   StoreCredential,
   StoreName,
 } from '../types';
-import { convertToAffiliateLink } from './affiliate-converter';
+import { convertToAffiliateLink, rakutenCredentialsFrom } from './affiliate-converter';
 import { getStoreCredentialsMapWithSecrets } from './credentials-vault';
 import { buildWhatsAppMessage, sanitizeCopiedText } from './message-builder';
 import { evaluateOfferQuality } from './quality-engine';
@@ -1204,6 +1205,22 @@ export async function processIncomingMessage(
     };
   }
 
+  // 6.9 Netshoes sem foto (a loja bloqueia a leitura da página): foto oficial pela API de produtos da Rakuten.
+  if (
+    conversionResult.store === 'netshoes' &&
+    (!productData.imageUrl || !productData.imageUrl.startsWith('http')) &&
+    !isSimulation
+  ) {
+    const ns: any = (credentialsMap as any)?.netshoes;
+    const rakutenPhoto = await findNetshoesPhotoViaRakuten(
+      rakutenCredentialsFrom(ns),
+      String(ns?.sessionData?.netshoesAdvertiserId || ''),
+      conversionResult.cleanUrl,
+      productData.title || ''
+    );
+    if (rakutenPhoto) productData.imageUrl = rakutenPhoto;
+  }
+
   // 7. Imagem do Copiador (Foto Oficial da Loja em alta resolução e formato 1:1 sem cortes)
   let finalMediaUrl: string | undefined = undefined;
   let finalMediaType: 'image' | 'video' | 'none' = 'none';
@@ -1253,6 +1270,20 @@ export async function processIncomingMessage(
     if (!finalMediaUrl) {
       if (bestOfficialPhoto && (bestOfficialPhoto.startsWith('http://') || bestOfficialPhoto.startsWith('https://'))) {
         finalMediaUrl = bestOfficialPhoto;
+      } else if (
+        !isSimulation &&
+        (finalMediaUrl = await createNoPhotoArt({
+          userId: authorizedSource.userId,
+          store: String(conversionResult.store || ''),
+          title: productData.title || '',
+          priceCurrent: Number(productData.currentPrice || 0),
+          priceOriginal: productData.originalPrice ?? null,
+          discountPct: productData.discountPct ?? null,
+          coupon: parsedFromWhatsApp.couponCode,
+          messageId,
+        }))
+      ) {
+        // Sem foto da loja nem da origem: arte com nome, preço e logo da loja (nada sai sem imagem).
       } else {
         requiresManualReviewDueToImage = true;
         imageReviewReason = 'Fotografia do produto indisponível. Publicação sem imagem bloqueada para proteção de qualidade.';
