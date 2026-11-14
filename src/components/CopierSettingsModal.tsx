@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import CopierTemplateBlock from '@/components/CopierTemplateBlock';
 import {
   Settings,
   Image as ImageIcon,
@@ -767,6 +768,8 @@ export default function CopierSettingsModal({
                 </p>
               </div>
             </div>
+
+            {imageMode !== 'none' && <CopierTemplateBlock />}
 
             {/* Controle da Marca d'Água com Logo Oficial */}
             {imageMode !== 'none' && (

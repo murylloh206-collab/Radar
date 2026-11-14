@@ -29,6 +29,7 @@ export type PlanFeatureKey =
   | 'full_store_metrics'
   | 'price_drop_alert'
   | 'story_template'
+  | 'copier_template'
   | 'what_to_post_today'
   | 'weekly_report'
   | 'opportunity_radar'
@@ -264,6 +265,7 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
       'story_image_cards',
       'instagram_pro',
       'story_template',
+      'copier_template',
       'telegram_posting',
       'post_scheduling',
       'comparator_search',
@@ -378,6 +380,11 @@ export const FEATURE_METADATA: Record<
     label: 'Instagram Pro',
     minPlan: 'plus',
     description: 'Artes com a sua marca para story, feed e status do WhatsApp, com link pela bio e postagem automática com freio.',
+  },
+  copier_template: {
+    label: 'Template das fotos do copiador',
+    minPlan: 'ultimate',
+    description: 'Fundo próprio nas fotos das ofertas automáticas do WhatsApp, com o produto num cartão no centro.',
   },
   story_template: {
     label: 'Template do story',

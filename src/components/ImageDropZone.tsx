@@ -12,7 +12,7 @@ export default function ImageDropZone({
   aspect = '1 / 1',
   onUploaded,
 }: {
-  kind: 'logo' | 'story_background';
+  kind: 'logo' | 'story_background' | 'copier_background';
   label: string;
   hint: string;
   currentUrl?: string | null;

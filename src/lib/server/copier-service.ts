@@ -1,6 +1,7 @@
 import 'server-only';
 import { fetchSourceImageUrl } from './source-image';
 import { findNetshoesPhotoViaRakuten, findAmazonPhotoByAsin } from './missing-photo';
+import { applyCopierTemplate } from './copier-photo-template';
 import { runtimeDatabase } from './copier-runtime-context';
 import {
   CopySource,
@@ -1262,7 +1263,9 @@ export async function processIncomingMessage(
           ? authorizedSource.brandWatermarkHandle
           : undefined;
 
-      finalMediaUrl = await optimizeProductImageForWhatsApp(
+      // Template das fotos (Ultimate + fundo enviado): foto no cartão sobre o fundo do cliente, sem marca d'água extra.
+      const templated = !isSimulation ? await applyCopierTemplate(authorizedSource.userId, bestOfficialPhoto, messageId) : undefined;
+      finalMediaUrl = templated || await optimizeProductImageForWhatsApp(
         bestOfficialPhoto,
         authorizedSource.userId,
         {
