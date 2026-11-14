@@ -36,7 +36,7 @@ interface CheckoutModalData {
 
 export default function PlanosPage() {
   const { subscription, quota, isDevMode, setTestPlan } = usePlan();
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>('anual');
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('mensal');
   const [copiedRef, setCopiedRef] = useState(false);
   const [checkoutModal, setCheckoutModal] = useState<CheckoutModalData | null>(null);
 
@@ -55,60 +55,34 @@ export default function PlanosPage() {
   };
 
   const handleStartCheckout = async (planId: PlanId) => {
+    // Nesta etapa só existe assinatura MENSAL (anual parcelado virá depois). O preço é definido no servidor.
     const plan = PLANS_CONFIG[planId];
-    const amountLabel =
-      billingCycle === 'anual'
-        ? `12x R$ ${formatCurrencyBRL(plan.annualMonthlyEquivalent)}/mês`
-        : `R$ ${formatCurrencyBRL(plan.monthlyPrice)}/mês`;
-    const commitmentLabel =
-      billingCycle === 'anual'
-        ? `Compromisso de 12 meses. Sem juros. Preço anual total: R$ ${formatCurrencyBRL(plan.annualTotalPrice)}`
-        : 'Renovação mensal sem fidelidade.';
+    const amountLabel = `R$ ${formatCurrencyBRL(plan.monthlyPrice)}/mês`;
+    const commitmentLabel = 'Assinatura mensal no Mercado Pago. Renova todo mês e você cancela quando quiser.';
+    const base = { open: true, planId, cycle: 'mensal' as BillingCycle, amountLabel, commitmentLabel };
 
-    setCheckoutModal({
-      open: true,
-      planId,
-      cycle: billingCycle,
-      loading: true,
-      message: 'Preparando sessão de assinatura...',
-      amountLabel,
-      commitmentLabel,
-    });
-
+    setCheckoutModal({ ...base, loading: true, message: 'Abrindo o pagamento seguro do Mercado Pago…' });
     try {
       const res = await fetch('/api/subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'checkout',
-          planId,
-          cycle: billingCycle,
-        }),
+        body: JSON.stringify({ action: 'checkout', planId }),
       });
       const data = await res.json();
-      setCheckoutModal({
-        open: true,
-        planId,
-        cycle: billingCycle,
-        loading: false,
-        message:
-          data.checkout?.message ||
-          `Checkout em breve para o plano ${plan.name}. A função única de pagamento já está pronta para integração com Stripe ou Mercado Pago.`,
-        amountLabel,
-        commitmentLabel,
-      });
+      if (res.status === 401) {
+        window.location.href = `/login?redirect=${encodeURIComponent('/planos')}`;
+        return;
+      }
+      if (res.ok && data.checkout?.mode === 'redirect' && data.checkout.url) {
+        window.location.href = data.checkout.url;
+        return;
+      }
+      setCheckoutModal({ ...base, loading: false, message: data.error || 'Não consegui abrir o pagamento agora. Tente de novo em instantes.' });
     } catch {
-      setCheckoutModal({
-        open: true,
-        planId,
-        cycle: billingCycle,
-        loading: false,
-        message: `Checkout em breve para o plano ${plan.name}.`,
-        amountLabel,
-        commitmentLabel,
-      });
+      setCheckoutModal({ ...base, loading: false, message: 'Não consegui abrir o pagamento agora. Verifique sua internet e tente de novo.' });
     }
   };
+
 
   return (
     <div
@@ -133,10 +107,12 @@ export default function PlanosPage() {
           Automatize suas postagens no WhatsApp, personalize sua marca d&apos;água e aumente suas comissões no Mercado Livre e na Shopee com ferramentas profissionais.
         </p>
 
-        {/* Seletor de Ciclo: Anual parcelado (padrão) e Mensal */}
+        {/* Seletor de Ciclo: por enquanto só mensal (anual parcelado em breve) */}
         <div className="mt-8 inline-flex items-center rounded-2xl bg-black/60 border border-white/15 p-1.5 shadow-inner">
           <button
             type="button"
+            disabled
+            title="O plano anual parcelado chega em breve. Por enquanto a assinatura é mensal."
             onClick={() => setBillingCycle('anual')}
             className={`relative flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all ${
               billingCycle === 'anual'
@@ -152,7 +128,7 @@ export default function PlanosPage() {
                   : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
               }`}
             >
-              Economize 20%
+              Em breve
             </span>
           </button>
 

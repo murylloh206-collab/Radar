@@ -1272,7 +1272,9 @@ export async function processIncomingMessage(
   // Verificar limite diário do plano no servidor antes de agendar envio automático
   const dailyQuota = await getDailyOfferQuotaStatus(authorizedSource.userId);
   const planQuotaReached = dailyQuota.limitReached;
-  const planQuotaReason = planQuotaReached
+  const planQuotaReason = planQuotaReached && dailyQuota.dailyLimit === 0
+    ? 'Assinatura inativa ou vencida: assine ou renove um plano em /planos para voltar a enviar automático.'
+    : planQuotaReached
     ? `Limite diário do plano (${dailyQuota.dailyLimit} ofertas/dia) atingido (${dailyQuota.postedToday} postadas hoje). Faça upgrade em /planos para continuar enviando hoje.`
     : undefined;
 

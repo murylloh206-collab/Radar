@@ -383,12 +383,27 @@ export async function setDevTestPlan(
  * Conta quantas ofertas foram postadas hoje pelo usuário (fuso America/Sao_Paulo)
  * e verifica se atingiu o limite diário do plano.
  */
+/**
+ * Pode enviar automático? Conta do dono: sempre. Clientes: precisa de assinatura paga dentro do prazo
+ * (expira_em já inclui os 2 dias de tolerância; se cancelada, é o fim do período pago). Bloqueio não apaga nada.
+ */
+export function subscriptionAllowsSending(
+  userId: string,
+  sub: { status: string; expiraEm: string | null },
+  now: Date = new Date()
+): boolean {
+  if (userId === ADMIN_UUID) return true;
+  if (sub.expiraEm) return new Date(sub.expiraEm).getTime() > now.getTime();
+  return sub.status === 'active' || sub.status === 'trialing';
+}
+
 export async function getDailyOfferQuotaStatus(userIdInput?: string): Promise<DailyQuotaStatus> {
   const userId = userIdInput || ADMIN_UUID;
   const sub = await getUserSubscription(userId);
   const planDef: PlanDefinition = PLANS_CONFIG[sub.effectivePlan] || PLANS_CONFIG.impulse;
   // A conta dona do sistema não tem limite de plano (continua valendo max_daily_messages das configurações).
-  const dailyLimit = userId === ADMIN_UUID ? null : planDef.dailyOfferLimit;
+  const paid = subscriptionAllowsSending(userId, { status: sub.status, expiraEm: sub.expiraEm });
+  const dailyLimit = userId === ADMIN_UUID ? null : paid ? planDef.dailyOfferLimit : 0;
 
   // Regra única: status 'enviado' e sent_at desde a meia-noite de Brasília.
   let postedToday = 0;

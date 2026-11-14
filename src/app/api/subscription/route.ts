@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getStrictSession } from '@/lib/server/auth';
+import { startCheckout, BillingError } from '@/lib/server/billing/billing-core';
+import { billingDeps } from '@/lib/server/billing/billing-service';
 import {
   getUserSubscription,
   getDailyOfferQuotaStatus,
@@ -197,26 +200,22 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'checkout') {
-      const planId = body.planId as PlanId;
-      const cycle: BillingCycle = body.cycle === 'mensal' ? 'mensal' : 'anual';
-
-      if (!planId || !['impulse', 'plus', 'ultimate'].includes(planId)) {
-        return NextResponse.json(
-          { ok: false, error: 'Plano inválido selecionado para checkout.' },
-          { status: 400 }
-        );
+      // Checkout real (Mercado Pago, mensal). Preço vem SÓ do catálogo do servidor; o cliente é o da sessão.
+      const session = getStrictSession(req);
+      if (!session) {
+        return NextResponse.json({ ok: false, error: 'Entre na sua conta para assinar.', code: 'UNAUTHORIZED' }, { status: 401 });
       }
-
-      const checkoutResult = await startCheckoutSession({
-        planId,
-        billingCycle: cycle,
-        referralCode: typeof body.referralCode === 'string' ? body.referralCode : undefined,
-      });
-
-      return NextResponse.json({
-        ok: true,
-        checkout: checkoutResult,
-      });
+      const planId = body.planId as PlanId;
+      if (!planId || !['impulse', 'plus', 'ultimate'].includes(planId)) {
+        return NextResponse.json({ ok: false, error: 'Plano inválido selecionado para checkout.' }, { status: 400 });
+      }
+      try {
+        const { checkoutUrl } = await startCheckout(billingDeps(), { userId: session.userId, email: session.email, planId });
+        return NextResponse.json({ ok: true, checkout: { mode: 'redirect', url: checkoutUrl } });
+      } catch (e) {
+        const status = e instanceof BillingError ? e.status : 500;
+        return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : 'Falha ao iniciar o pagamento.' }, { status });
+      }
     }
 
     return NextResponse.json({ ok: false, error: 'Ação inválida.' }, { status: 400 });

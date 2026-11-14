@@ -398,6 +398,15 @@ export function AppShell({ children }: AppShellProps) {
                 Minha conta e preferências
               </button>
 
+              <a
+                href="/assinatura"
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-200 hover:bg-white/5 rounded-lg"
+                onClick={() => setAccountMenuOpen(false)}
+              >
+                <Sliders className="w-3.5 h-3.5 text-[#39bee6]" />
+                Minha assinatura
+              </a>
+
               <button
                 type="button"
                 onClick={() => {

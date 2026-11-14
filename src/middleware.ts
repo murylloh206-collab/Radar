@@ -128,6 +128,7 @@ export async function middleware(req: NextRequest) {
     pathname === '/api/worker/poll' ||
     pathname.startsWith('/api/cron/') || // a própria rota valida o CRON_SECRET
     pathname.startsWith('/api/extension/') || // a própria rota valida o token da extensão
+    pathname === '/api/webhooks/mercadopago' || // a própria rota valida a assinatura x-signature
     pathname.startsWith('/api/comparator/search')
   ) {
     return NextResponse.next();
