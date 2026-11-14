@@ -18,7 +18,6 @@ Data: 2026-11-13 · Aprovado pelo dono em conversa (abordagem C).
 
 ## Não objetivos (agora)
 
-- Shopee (credenciais indisponíveis; segue no modo atual, digitado no painel).
 - Notificação no celular / PWA (etapa seguinte; ver memória "alertas pendentes").
 - Outras lojas (Nike, Centauro, Magalu).
 - Login automático nas lojas ou guardar senhas — nunca.
@@ -42,6 +41,7 @@ Data: 2026-11-13 · Aprovado pelo dono em conversa (abordagem C).
 | Mercado Livre | cookies da sessão (como hoje) | qualquer página do ML logada | `chrome.cookies` |
 | Rakuten/Netshoes | Client ID, Client Secret | `developers.rakutenadvertising.com/default/dashboard/` | tabela "API Credentials" (`table.Table tbody tr td.Table__TableData`, colunas "Client ID" e "Client Secret", 32 chars cada) |
 | Rakuten/Netshoes | SID (Account ID, 7 dígitos) | `publisher.rakutenadvertising.com/` | botão da conta: texto "SID (ID do Site) NNNNNNN" (`button.AccountAction`) |
+| Shopee | AppID (11 dígitos) e Senha (32 chars) | `affiliate.shopee.com.br/open_api` | texto "AppID: …" e "Senha: …" no painel "Meu API". **Nunca** clicar em "Redefinir" (troca a senha). |
 | Amazon | Tracking ID (`xxx-20`) | `associados.amazon.com.br/home` | `input[name=store_id]` ou texto "StoreID: xxx-20" |
 
 Leitura por **rótulo de texto** (cabeçalho da coluna, "SID", "StoreID"), com seletor CSS só como apoio — sobrevive a mudanças de classe.
@@ -62,7 +62,7 @@ Problemas encontrados: a rota de conexão do ML usa a conta do dono quando não 
 ## Status real
 
 - Tabela de saúde por (usuário, loja): status, motivo, `last_checked_at`, `last_ok_at`.
-- Teste por loja: ML gera um meli.la de um produto fixo; Rakuten gera token + um deep link da Netshoes; Amazon só valida o formato da tag (🟡).
+- Teste por loja: ML gera um meli.la de um produto fixo; Shopee gera um link curto oficial (API GraphQL) de um produto fixo; Rakuten gera token + um deep link da Netshoes; Amazon só valida o formato da tag (🟡).
 - Roda: ao conectar, ao clicar "Testar agora", e diariamente pelo agendador já existente (pg_cron → rota protegida por `CRON_SECRET`).
 - O conversor consulta o status: loja ❌ → oferta fica parada com o motivo; ML sem meli.la → parada (não usa is.gd).
 - Uma API de status serve painel e extensão.

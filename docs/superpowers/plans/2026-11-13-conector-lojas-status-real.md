@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extensão conecta Mercado Livre, Rakuten/Netshoes e Amazon com um clique na página da loja, vinculada à conta logada, e painel/extensão mostram status testado de verdade (na hora e diariamente).
+**Goal:** Extensão conecta Mercado Livre, Shopee, Rakuten/Netshoes e Amazon com um clique na página da loja, vinculada à conta logada, e painel/extensão mostram status testado de verdade (na hora e diariamente).
 
 **Architecture:** Servidor ganha 3 módulos novos (`store-health`, `rakuten-auth`, `extension-auth`) e rotas sob `/api/extension/*` (token da extensão) e `/api/store-health` (sessão do painel). O conversor passa a usar token Rakuten renovado e deixa de cair em fallback no ML. A extensão ganha extratores puros testáveis e um popup que pareia, lê a página ativa e mostra o status vindo do servidor.
 
@@ -109,7 +109,7 @@ Regras: Netshoes exige `appId`, `appSecret`, `affiliateTag` (SID) e `sessionData
 **Interfaces:**
 - Consumes: Tasks 1–3; `getStoreCredentialsMapWithSecrets`, `saveStoreCredentials` (cofre); `checkCronSecret`.
 - Produces:
-  - `checkStoreConnection(userId: string, store: StoreName, deps?): Promise<StoreHealth>` — ML: gera meli.la de `https://www.mercadolivre.com.br/p/MLB39016247`; Rakuten: `getRakutenAccessToken(forceRefresh)` + `findNetshoesAdvertiserId` (salva no `sessionData` se mudou) + deep link de `https://www.netshoes.com.br/`; Amazon: tag casa `/^[a-z0-9][a-z0-9-]{1,60}-2\d$/i` → `sem_teste`, senão `falhou`; sem credencial → `nao_configurado`. Grava via `recordStoreHealth`.
+  - `checkStoreConnection(userId: string, store: StoreName, deps?): Promise<StoreHealth>` — ML: gera meli.la de `https://www.mercadolivre.com.br/p/MLB39016247`; Rakuten: `getRakutenAccessToken(forceRefresh)` + `findNetshoesAdvertiserId` (salva no `sessionData` se mudou) + deep link de `https://www.netshoes.com.br/`; Shopee: `generateShopeeShortLinkDetailed(appId, appSecret, 'https://shopee.com.br/product/1/1')` com sucesso → `ok`, erro de autenticação → `falhou` "AppID ou Senha da Shopee inválidos. Reconecte pela extensão."; Amazon: tag casa `/^[a-z0-9][a-z0-9-]{1,60}-2\d$/i` → `sem_teste`, senão `falhou`; sem credencial → `nao_configurado`. Grava via `recordStoreHealth`.
   - `runDailyStoreHealth(opts?: { deadlineAt?: number; perStoreTimeoutMs?: number }): Promise<{ checked: number; failed: number }>` — todos os usuários com credencial ativa; timeout 15 s por loja.
 - Rota: `POST` com `checkCronSecret`; 401 sem segredo.
 
@@ -157,10 +157,10 @@ Regras: Netshoes exige `appId`, `appSecret`, `affiliateTag` (SID) e `sessionData
 - Consumes: Tasks 1, 4, 5; `saveStoreCredentials`.
 - Produces:
   - `connectStore(userId, payload: ConnectPayload): Promise<StoreStatusView>` onde
-    `ConnectPayload = { store:'mercadolivre'; cookies: string } | { store:'rakuten'; clientId?: string; clientSecret?: string; sid?: string } | { store:'amazon'; tag: string }` — Rakuten aceita conexão parcial (as duas páginas chegam separadas); salva no cofre como `netshoes`; quando os três existirem roda `checkStoreConnection`; parcial devolve `falhou` com motivo "Falta abrir a página do publisher (SID)" ou "Falta abrir a página de desenvolvedor (Client ID/Secret)".
+    `ConnectPayload = { store:'mercadolivre'; cookies: string } | { store:'rakuten'; clientId?: string; clientSecret?: string; sid?: string } | { store:'shopee'; appId: string; appSecret: string } | { store:'amazon'; tag: string }` — Rakuten aceita conexão parcial (as duas páginas chegam separadas); salva no cofre como `netshoes`; quando os três existirem roda `checkStoreConnection`; parcial devolve `falhou` com motivo "Falta abrir a página do publisher (SID)" ou "Falta abrir a página de desenvolvedor (Client ID/Secret)".
   - `StoreStatusView = { store: StoreName; status: StoreHealthStatus; reason: string | null; lastCheckedAt: string | null; hint: string | null }` — `hint` só do tipo "termina em 1234"; nenhum segredo.
   - `getStoreStatusViews(userId): Promise<StoreStatusView[]>`
-- Validação: Client ID/Secret 20–64 `[A-Za-z0-9]`; SID `^\d{5,9}$`; tag regex da Task 4; cookies precisam conter `ssid=`.
+- Validação: Client ID/Secret 20–64 `[A-Za-z0-9]`; SID `^\d{5,9}$`; tag regex da Task 4; cookies precisam conter `ssid=`; Shopee AppID `^\d{6,15}$`, Senha 20–64 `[A-Za-z0-9]` (salva como `appId`/`appSecret`, `authType:'api_hmac'`).
 
 - [ ] **Step 1: Testes** — conectar Rakuten em duas chamadas chega a `ok` (deps mockadas); só SID → motivo de falta; tag inválida → 400; Review Focus 5: com cofre contendo segredos conhecidos, `JSON.stringify(getStoreStatusViews())` não contém nenhum deles; rota ML connect sem sessão/token → 401.
 - [ ] **Step 2: Rodar** — FAIL.
@@ -172,7 +172,7 @@ Regras: Netshoes exige `appId`, `appSecret`, `affiliateTag` (SID) e `sessionData
 
 **Files:**
 - Create: `chrome-extension/extractors.js` (ES module, funções puras)
-- Modify: `chrome-extension/manifest.json` (versão `2.2.0`; `permissions` + `scripting`; `host_permissions` + `https://developers.rakutenadvertising.com/*`, `https://publisher.rakutenadvertising.com/*`, `https://associados.amazon.com.br/*`)
+- Modify: `chrome-extension/manifest.json` (versão `2.2.0`; `permissions` + `scripting`; `host_permissions` + `https://developers.rakutenadvertising.com/*`, `https://publisher.rakutenadvertising.com/*`, `https://associados.amazon.com.br/*`, `https://affiliate.shopee.com.br/*`). O script injetado só lê texto; nunca clica (a página da Shopee tem "Redefinir").
 - Modify: `chrome-extension/popup.html`, `chrome-extension/popup.js` (`type="module"`), `chrome-extension/background.js`
 - Test: `tests/extension_extractors.test.ts`
 
@@ -182,13 +182,14 @@ Regras: Netshoes exige `appId`, `appSecret`, `affiliateTag` (SID) e `sessionData
   - `extractRakutenCredentials(table: { headers: string[]; rows: string[][] }): { clientId: string; clientSecret: string } | null` — localiza colunas pelos cabeçalhos "Client ID" / "Client Secret"; primeira linha com ambos válidos.
   - `extractRakutenSid(text: string): string | null` — `/SID[^\d]{0,30}(\d{5,9})/`.
   - `extractAmazonTag(storeIdInputValue: string | null, text: string): string | null` — input primeiro, senão `/StoreID:\s*([a-z0-9][a-z0-9-]{1,60}-2\d)/i`.
-  - `detectStorePage(url: string): 'rakuten_dev' | 'rakuten_publisher' | 'amazon' | 'mercadolivre' | null`
+  - `extractShopeeCredentials(text: string): { appId: string; appSecret: string } | null` — `/AppID:\s*(\d{6,15})/` e `/Senha:\s*([A-Za-z0-9]{20,64})/`.
+  - `detectStorePage(url: string): 'rakuten_dev' | 'rakuten_publisher' | 'shopee' | 'amazon' | 'mercadolivre' | null`
 - Popup: sem token salvo → tela "Cole o código do painel" (troca em `/api/extension/pair`, guarda token em `chrome.storage.local`); com token → seletor de loja; Conectar roda `chrome.scripting.executeScript` na aba ativa coletando `{headers, rows}`/`innerText`/`input[name=store_id]`, aplica o extrator, envia a `/api/extension/connect`; extrator `null` → mostra campo(s) para colar; status de cada loja vem de `/api/extension/status` (remove o `mlConnection` local); resposta `EXTENSION_UNPAIRED` → apaga token e volta à tela de código.
 
-- [ ] **Step 1: Testes** — tabela com cabeçalhos em outra ordem ainda extrai; tabela sem a coluna Secret → `null`; Review Focus 3: texto da página de login ("Faça login…") → `extractAmazonTag(null, txt) === null` e `extractRakutenSid(txt) === null`; `'SID (ID do Site) 1234567'` → `'1234567'`; `detectStorePage` para as 4 URLs do spec e `null` para outra.
+- [ ] **Step 1: Testes** — tabela com cabeçalhos em outra ordem ainda extrai; tabela sem a coluna Secret → `null`; Review Focus 3: texto da página de login ("Faça login…") → `extractAmazonTag(null, txt) === null` e `extractRakutenSid(txt) === null`; `'SID (ID do Site) 1234567'` → `'1234567'`; texto `'Meu API Válido AppID: 18312345678 Senha: ABCDEFGHIJKLMNOPQRSTUVWXYZ123456 Redefinir'` → `{appId:'18312345678', appSecret:'ABCDEFGHIJKLMNOPQRSTUVWXYZ123456'}`; `detectStorePage` para as 5 URLs do spec e `null` para outra.
 - [ ] **Step 2: Rodar** — FAIL.
 - [ ] **Step 3: Implementar** extratores e popup.
-- [ ] **Step 4: Rodar** — PASS. Verificação manual com o dono: carregar extensão sem empacotar, parear, conectar Amazon e Rakuten nas páginas reais (sem imprimir valores).
+- [ ] **Step 4: Rodar** — PASS. Verificação manual com o dono: carregar extensão sem empacotar, parear, conectar Shopee, Amazon e Rakuten nas páginas reais (sem imprimir valores).
 - [ ] **Step 5: Commit** `feat(extensão): conectar lojas lendo a página`
 
 ### Task 8: Painel — status real e código de pareamento
