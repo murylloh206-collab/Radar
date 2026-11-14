@@ -12,3 +12,17 @@ create table if not exists public.store_health (
   primary key (user_id, store_name)
 );
 alter table public.store_health enable row level security;
+
+-- Parte 2: teste diário das lojas às 08:00 (Brasília) ------------------------------
+select cron.unschedule(jobname) from cron.job where jobname = 'radar-lojas-saude';
+select cron.schedule('radar-lojas-saude', '0 11 * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'radar_app_url') || '/api/cron/store-health',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'radar_cron_secret')
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 55000
+  );
+$job$);
