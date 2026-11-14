@@ -53,6 +53,8 @@ export async function renderBrandedOfferArt(userId: string, request: BrandedArtR
           current: request.priceCurrent,
           original: request.priceOriginal ?? null,
           discountPct: request.discountPct ?? null,
+          coupon: request.coupon || null,
+          offerNumber: request.offerNumber ?? null,
         });
       }
     }

@@ -53,3 +53,17 @@ test('conta do dono tem acesso a todos os recursos, inclusive o template do stor
   const r = await checkPlanFeatureAccess('story_template', '00000000-0000-0000-0000-000000000001');
   assert.equal(r.allowed, true);
 });
+
+test('template mostra "De", "Por", cupom e "Oferta #N · link na bio"', async () => {
+  const { storyTemplateTexts } = await import('../src/lib/server/offer-art/story-template');
+  const t = storyTemplateTexts({ title: 'Relógio Technos', current: 436, original: 795.99, coupon: 'ACHADO', offerNumber: 128 });
+  assert.equal(t.de, 'De R$ 795,99');
+  assert.equal(t.por, 'Por R$ 436');
+  assert.equal(t.coupon, 'Cupom: ACHADO');
+  assert.equal(t.footer, 'Oferta #128 · link na bio');
+  const sem = storyTemplateTexts({ title: 'X', current: 59.9 });
+  assert.equal(sem.de, null);
+  assert.equal(sem.por, 'Por R$ 59,90');
+  assert.equal(sem.coupon, null);
+  assert.equal(sem.footer, 'link na bio');
+});
