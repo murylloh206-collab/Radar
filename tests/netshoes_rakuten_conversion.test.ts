@@ -56,3 +56,20 @@ test('Netshoes sem Client Secret falha listando o que falta', async () => {
   assert.equal(r.success, false);
   assert.match(r.error || '', /faltando: .*Client Secret/);
 });
+
+test('lê o formato real da Rakuten: advertiser.deep_link.deep_link_url', async () => {
+  global.fetch = (async (url: any) => {
+    const u = String(url);
+    if (u === 'https://api.linksynergy.com/token') return new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), { status: 200 });
+    if (u.includes('/v1/links/deep_links')) {
+      return new Response(JSON.stringify({
+        _metadata: { api_name_version: 'links-deep-links-v1.1.0' },
+        advertiser: { id: 43984, name: 'Netshoes WL', deep_link: { deep_link_url: 'https://click.linksynergy.com/deeplink?id=AbC&mid=43984&murl=https%3A%2F%2Fwww.netshoes.com.br%2F', u1: '' } },
+      }), { status: 200 });
+    }
+    return new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  }) as typeof fetch;
+  const r = await convertToAffiliateLink(PRODUCT, creds({ sessionData: { netshoesAdvertiserId: '43984' } }));
+  assert.equal(r.success, true, r.error);
+  assert.equal(r.affiliateUrl, 'https://click.linksynergy.com/deeplink?id=AbC&mid=43984&murl=https%3A%2F%2Fwww.netshoes.com.br%2F');
+});

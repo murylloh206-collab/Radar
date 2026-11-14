@@ -54,3 +54,6 @@ tests/fixtures/
 
 # Rascunhos locais das sessões (amostras, registros de execução)
 .superpowers/
+
+# Cópia local extraída do zip da extensão (não publicar)
+public/downloads/radar-conector/

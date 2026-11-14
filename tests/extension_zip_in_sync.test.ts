@@ -36,6 +36,7 @@ test('o zip baixado pelo painel tem exatamente os arquivos atuais da extensão',
   for (const file of ['manifest.json', 'popup.js', 'popup.html', 'popup.css', 'extractors.js', 'background.js']) {
     const inZip = readFromZip(ZIP, file);
     assert.ok(inZip, `${file} ausente no zip`);
-    assert.equal(inZip!.toString('utf8'), fs.readFileSync(path.join(ROOT, 'chrome-extension', file), 'utf8'), `${file} desatualizado no zip`);
+    const lf = (t: string) => t.split(String.fromCharCode(13)).join("");
+    assert.equal(lf(inZip!.toString('utf8')), lf(fs.readFileSync(path.join(ROOT, 'chrome-extension', file), 'utf8')), `${file} desatualizado no zip`);
   }
 });

@@ -71,13 +71,20 @@ test('rakutenFetch: 401 na API renova o token uma vez e repete a chamada', async
   assert.notEqual((last.init?.headers as any).Authorization, (calls[1].init?.headers as any).Authorization);
 });
 
-test('descobre o código da Netshoes na lista de anunciantes', async () => {
-  mock(url => url.endsWith('/token') ? tokenResponse() :
-    new Response(JSON.stringify({ advertisers: [{ id: 111, name: 'Outra Loja' }, { id: 43984, name: 'Netshoes BR' }] }), { status: 200 }));
+test('descobre o código da Netshoes nas PARCERIAS ativas da conta (não na lista geral da rede)', async () => {
+  const calls = mock(url => url.endsWith('/token') ? tokenResponse() :
+    new Response(JSON.stringify({ _metadata: { total: 2 }, partnerships: [
+      { status: 'active', advertiser: { id: 111, name: 'Outra Loja' } },
+      { status: 'active', advertiser: { id: 43984, name: 'Netshoes WL' } },
+    ] }), { status: 200 }));
   assert.equal(await findNetshoesAdvertiserId(CREDS), '43984');
+  const api = calls.find(c => !c.url.endsWith('/token'))!;
+  assert.match(api.url, /\/v1\/partnerships\?/);
+  assert.match(api.url, /partner_status=active/);
 });
 
-test('sem Netshoes na lista devolve null', async () => {
-  mock(url => url.endsWith('/token') ? tokenResponse() : new Response(JSON.stringify([{ id: 1, name: 'X' }]), { status: 200 }));
+test('sem parceria ativa com a Netshoes devolve null', async () => {
+  mock(url => url.endsWith('/token') ? tokenResponse() :
+    new Response(JSON.stringify({ partnerships: [{ status: 'active', advertiser: { id: 1, name: 'X' } }] }), { status: 200 }));
   assert.equal(await findNetshoesAdvertiserId(CREDS), null);
 });

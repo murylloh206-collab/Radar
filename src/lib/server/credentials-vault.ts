@@ -517,6 +517,7 @@ export async function getStoreCredentialsMapWithSecrets(
         vaultCred?.userToken ||
         base?.userToken ||
         (owner && storeName === 'mercadolivre' ? process.env.MERCADOLIVRE_COOKIE || process.env.ML_COOKIE || '' : ''),
+      ...(vaultCred?.sessionData ? { sessionData: vaultCred.sessionData } : {}),
       isActive: vaultCred ? vaultCred.isActive : (base?.isActive ?? true),
       isValidated: vaultCred ? vaultCred.connectionStatus === 'conectado' : base?.isValidated,
       validationMethod: vaultCred?.authType || base?.validationMethod,

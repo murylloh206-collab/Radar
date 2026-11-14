@@ -155,3 +155,11 @@ test('#1 base global (db.stores) de outra conta ou sem dono não completa a cont
   assert.equal(map.shopee, null);
   assert.equal(map.amazon, null);
 });
+
+test('mapa de credenciais repassa o sessionData do cofre (ex.: código da Netshoes)', async () => {
+  const { saveStoreCredentials } = await import('../src/lib/server/credentials-vault');
+  const U = '13131313-1313-4131-8131-131313131313';
+  await saveStoreCredentials(U, { storeName: 'netshoes', appId: 'ClientIdK8p3Qz9vWm2Lx7RdQ', appSecret: 'SecretH4n8Tq2Zx6BvH4n8Tq2Z', affiliateTag: '3846201', sessionData: { netshoesAdvertiserId: '43984' } });
+  const map = await getStoreCredentialsMapWithSecrets(U);
+  assert.equal((map.netshoes as any)?.sessionData?.netshoesAdvertiserId, '43984');
+});

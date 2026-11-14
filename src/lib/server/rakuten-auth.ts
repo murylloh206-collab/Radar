@@ -75,11 +75,18 @@ export async function rakutenFetch(c: RakutenCredentials, url: string, init: Req
   return call(await getRakutenAccessToken(c, { forceRefresh: true }));
 }
 
+/**
+ * Código da Netshoes nas parcerias ATIVAS desta conta (/v1/partnerships).
+ * (Não usar /v2/advertisers: é a lista geral da rede, com milhares de anunciantes paginados.)
+ */
 export async function findNetshoesAdvertiserId(c: RakutenCredentials): Promise<string | null> {
-  const res = await rakutenFetch(c, 'https://api.linksynergy.com/v2/advertisers', { method: 'GET', signal: AbortSignal.timeout(10_000) });
+  const res = await rakutenFetch(c, 'https://api.linksynergy.com/v1/partnerships?partner_status=active&limit=200', {
+    method: 'GET',
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) return null;
   const data: any = await res.json().catch(() => null);
-  const list: any[] = Array.isArray(data) ? data : Array.isArray(data?.advertisers) ? data.advertisers : [];
-  const found = list.find(a => /netshoes/i.test(String(a?.name || '')));
-  return found?.id != null ? String(found.id) : null;
+  const list: any[] = Array.isArray(data?.partnerships) ? data.partnerships : [];
+  const found = list.find(p => /netshoes/i.test(String(p?.advertiser?.name || '')) && String(p?.status || 'active').toLowerCase() === 'active');
+  return found?.advertiser?.id != null ? String(found.advertiser.id) : null;
 }

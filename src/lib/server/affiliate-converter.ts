@@ -467,6 +467,7 @@ export async function tryGenerateRakutenDeepLink(
       const data = await res.json().catch(() => ({}));
       const item = Array.isArray(data) ? data[0] : data;
       const link =
+        item?.advertiser?.deep_link?.deep_link_url ||
         item?.short_link ||
         item?.deep_link ||
         item?.deep_link_url ||
