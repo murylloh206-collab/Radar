@@ -379,6 +379,11 @@ export async function generateMercadoLivreMeliLaDetailed(
     if (res.status === 401 || res.status === 403) {
       return { link: null, unauthorized: true };
     }
+    // Sessão derrubada: o ML redireciona para o login e devolve HTML 200 em vez de JSON.
+    const contentType = res.headers.get('content-type') || '';
+    if (/text\/html/i.test(contentType) || /\/(login|jms)\b/i.test(res.url || '')) {
+      return { link: null, unauthorized: true };
+    }
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       if (data?.short_url && typeof data.short_url === 'string' && data.short_url.includes('meli.la/')) {

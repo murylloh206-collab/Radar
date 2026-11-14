@@ -86,3 +86,9 @@ test('rota diária recusa chamada sem o segredo do agendador', async () => {
   const res = await POST(new NextRequest('http://localhost/api/cron/store-health', { method: 'POST' }));
   assert.equal(res.status, 401);
 });
+
+test('credencial desativada ou revogada conta como "não configurado" (não mostra 🟡/✅ falso)', async () => {
+  const off = { affiliateTag: 'radar-20', isActive: false };
+  assert.equal((await checkStoreConnection(U, 'amazon', deps({}, { amazon: off }))).status, 'nao_configurado');
+  assert.equal((await checkStoreConnection(U, 'mercadolivre', deps({}, { mercadolivre: { ...ML, isActive: false } }))).status, 'nao_configurado');
+});

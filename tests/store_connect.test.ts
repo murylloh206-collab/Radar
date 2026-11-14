@@ -92,3 +92,8 @@ test('rotas da extensão recusam sem token com código EXTENSION_UNPAIRED', asyn
   assert.equal(res.status, 401);
   assert.equal((await res.json()).code, 'EXTENSION_UNPAIRED');
 });
+
+test('loja desativada no cofre aparece como não configurada no status', async () => {
+  const views = await getStoreStatusViews(U, { repo: memoryStoreHealthRepo(), getCredentials: async () => ({ amazon: { affiliateTag: 'radar-20', isActive: false } }) });
+  assert.equal(views.find(v => v.store === 'amazon')!.status, 'nao_configurado');
+});

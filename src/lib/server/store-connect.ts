@@ -132,7 +132,8 @@ function hintFor(store: StoreName, c: any): string | null {
   return null;
 }
 
-const hasAnyCredential = (c: any) => Boolean(c && [c.appId, c.appSecret, c.affiliateTag, c.userToken].some(v => clean(v)));
+const hasAnyCredential = (c: any) =>
+  Boolean(c && c.isActive !== false && !c.revokedAt && [c.appId, c.appSecret, c.affiliateTag, c.userToken].some(v => clean(v)));
 
 function toView(h: StoreHealth, c: any, store: StoreName): StoreStatusView {
   // Credencial salva antes do status real existir: mostra "ainda não testado" (com botão), não "não configurado".

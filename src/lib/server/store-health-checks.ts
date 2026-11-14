@@ -70,7 +70,9 @@ type Result = { status: StoreHealth['status']; reason?: string };
 
 async function evaluate(userId: string, store: StoreName, d: StoreCheckDeps): Promise<Result> {
   const all = await d.getCredentials(userId);
-  const c = all?.[store];
+  const raw = all?.[store];
+  // Desativada ou revogada no cofre = não configurada (nunca mostrar status de uma credencial que não vale).
+  const c = raw && raw.isActive !== false && !raw.revokedAt ? raw : null;
   if (store === 'mercadolivre') {
     const cookies = String(c?.userToken || c?.sessionData?.cookies || '');
     if (!c || !c.affiliateTag || !cookies) return { status: 'nao_configurado' };

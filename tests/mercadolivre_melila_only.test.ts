@@ -65,3 +65,17 @@ test('erro de rede: sem link e sem envio, mas a saúde não é alterada', async 
   const health = await getStoreHealthMap(userId);
   assert.equal(health.mercadolivre.status, 'nao_configurado');
 });
+
+test('API devolvendo a PÁGINA DE LOGIN (HTML 200) conta como sessão expirada', async () => {
+  global.fetch = (async (url: any) => {
+    const u = String(url);
+    if (u.includes('/affiliate-program/api/v2/stripe/user/links')) {
+      return new Response('<!DOCTYPE html><html data-assets-prefix="https://http2.mlstatic.com/frontend-assets/auth-identification-frontend/"></html>', { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    }
+    return new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  }) as typeof fetch;
+  const { map, userId } = creds();
+  const r = await convertToAffiliateLink(PRODUCT, map);
+  assert.equal(r.error, 'Sessão do Mercado Livre expirou. Reconecte pela extensão.');
+  assert.equal((await getStoreHealthMap(userId)).mercadolivre.status, 'falhou');
+});
