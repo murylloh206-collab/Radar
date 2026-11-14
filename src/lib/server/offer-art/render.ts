@@ -59,6 +59,8 @@ export interface ArtLayout {
   oldPriceY: number | null; priceY: number; priceSize: number; currencySize: number; currencyW: number; priceBottom: number;
   coupon: { text: string; size: number; x: number; y: number; w: number; h: number; right: number; bottom: number } | null;
   dividerY: number; footerY: number;
+  /** "De R$ X" (null se não houver preço antigo) e o rótulo "Por" antes do preço atual. */
+  oldPriceText: string | null; porLabel: string; porW: number;
 }
 
 /** Calcula as posições da arte: a foto encolhe o necessário para que nada se sobreponha. */
@@ -66,14 +68,16 @@ export function computeArtLayout(p: { format: 'story' | 'feed'; title: string; c
   const story = p.format === 'story';
   const H = story ? 1920 : 1350;
   const pad = 72;
-  const headerY = story ? 150 : 64;
+  const headerY = story ? 120 : 64;
   const logoSize = story ? 104 : 88;
-  const stageTop = headerY + logoSize + (story ? 90 : 48);
+  const stageTop = headerY + logoSize + (story ? 52 : 48);
   const titleSize = story ? 50 : 42;
   const titleLines = wrapText(p.title || 'Oferta', { size: titleSize, weight: 700, maxWidth: W - pad * 2, maxLines: story ? 3 : 2 });
   const priceSize = story ? 132 : 104;
   const currencySize = story ? 48 : 40;
   const currencyW = measureText('R$', currencySize, 800);
+  const porLabel = 'Por';
+  const porW = measureText(porLabel, currencySize, 700) + 14;
   const valueW = measureText(money(p.current), priceSize, 800, -2);
   const hasOld = Boolean(p.original && p.original > p.current);
 
@@ -91,23 +95,24 @@ export function computeArtLayout(p: { format: 'story' | 'feed'; title: string; c
     const [text] = wrapText(`CUPOM ${p.coupon.toUpperCase().trim()}`, { size, weight: 700, maxWidth: W - pad * 2 - 60, maxLines: 1 });
     const w = measureText(text, size, 700, 1) + 48;
     const h = size + 36;
-    const fitsRight = pad + currencyW + 14 + valueW + 40 + w <= W - pad;
+    const fitsRight = pad + porW + currencyW + 14 + valueW + 40 + w <= W - pad;
     const x = fitsRight ? W - pad - w : pad;
     const yRel = fitsRight ? priceRel - priceSize * 0.38 - h / 2 : priceRel + priceSize * 0.24 + (story ? 28 : 20);
     couponRel = { text, size, x, yRel, w, h };
     contentBottomRel = Math.max(contentBottomRel, yRel + h);
   }
 
-  const dividerGap = story ? 44 : 30;
-  const footerGap = story ? 64 : 54;
-  const maxFooter = story ? H - 230 : H - 74;
-  const maxStage = story ? 860 : 560;
+  const dividerGap = story ? 36 : 30;
+  const footerGap = story ? 54 : 54;
+  const maxFooter = story ? H - 200 : H - 74;
+  const maxStage = story ? 980 : 600;
   const minStage = story ? 520 : 360;
   const available = maxFooter - footerGap - dividerGap - contentBottomRel - stageTop;
   const stageH = Math.max(minStage, Math.min(maxStage, Math.floor(available)));
   const base = stageTop + stageH;
   const naturalDivider = base + contentBottomRel + dividerGap;
-  const footerY = story ? Math.min(maxFooter, Math.max(naturalDivider + footerGap, 1640)) : maxFooter;
+  // Rodapé logo depois do conteúdo (sem vão grande); no feed fica na base.
+  const footerY = story ? Math.min(maxFooter, naturalDivider + footerGap) : maxFooter;
   const coupon = couponRel ? { text: couponRel.text, size: couponRel.size, x: couponRel.x, y: base + couponRel.yRel, w: couponRel.w, h: couponRel.h,
     right: couponRel.x + couponRel.w, bottom: base + couponRel.yRel + couponRel.h } : null;
   return {
@@ -115,6 +120,7 @@ export function computeArtLayout(p: { format: 'story' | 'feed'; title: string; c
     oldPriceY: oldPriceRel === null ? null : base + oldPriceRel,
     priceY: base + priceRel, priceSize, currencySize, currencyW, priceBottom: base + priceRel + priceSize * 0.24,
     coupon, dividerY: footerY - footerGap, footerY,
+    oldPriceText: hasOld ? `De R$ ${money(p.original as number)}` : null, porLabel, porW,
   };
 }
 
@@ -137,7 +143,7 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
   svg.push(`<rect width="${W}" height="${H}" fill="url(#bg)"/>`);
 
   // ---- Cabeçalho: logo + nome da loja + @
-  const headerY = story ? 150 : 64;
+  const headerY = story ? 120 : 64;
   const logoSize = story ? 104 : 88;
   if (input.brand.logo) {
     try {
@@ -172,8 +178,8 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
 
   // área do produto deixa espaço para o selo de desconto no canto superior esquerdo
   const chipReserve = story ? 120 : 100;
-  const productBoxW = stageW - 200;
-  const productBoxH = Math.max(stageH - chipReserve - (story ? 90 : 60), 160);
+  const productBoxW = stageW - 96;
+  const productBoxH = Math.max(stageH - chipReserve - (story ? 40 : 30), 160);
   const product = await prepareProduct(input.product.image, productBoxW, productBoxH);
   const productLeft = Math.round(W / 2 - product.width / 2);
   const productTop = Math.round(stageTop + chipReserve + (stageH - chipReserve - product.height) / 2 - (story ? 10 : 6));
@@ -199,15 +205,17 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
   });
 
   // ---- Preços
-  if (L.oldPriceY !== null && input.pricing.original) {
-    const oldText = `R$ ${money(input.pricing.original)}`;
+  if (L.oldPriceY !== null && L.oldPriceText) {
     const oldSize = story ? 36 : 30;
-    const oldW = measureText(oldText, oldSize, 500);
-    svg.push(textPath(oldText, { x: pad, y: L.oldPriceY, size: oldSize, weight: 500, fill: t.textMuted }).svg);
-    svg.push(`<rect x="${pad - 4}" y="${L.oldPriceY - oldSize * 0.36}" width="${oldW + 8}" height="${story ? 4 : 3}" rx="2" fill="${t.textMuted}"/>`);
+    const deW = measureText('De ', oldSize, 500);
+    const oldW = measureText(L.oldPriceText, oldSize, 500);
+    svg.push(textPath(L.oldPriceText, { x: pad, y: L.oldPriceY, size: oldSize, weight: 500, fill: t.textMuted }).svg);
+    svg.push(`<rect x="${pad + deW - 4}" y="${L.oldPriceY - oldSize * 0.36}" width="${oldW - deW + 8}" height="${story ? 4 : 3}" rx="2" fill="${t.textMuted}"/>`);
   }
-  svg.push(textPath('R$', { x: pad, y: L.priceY - L.priceSize * 0.42, size: L.currencySize, weight: 800, fill: t.accentText }).svg);
-  svg.push(textPath(money(input.pricing.current), { x: pad + L.currencyW + 14, y: L.priceY, size: L.priceSize, weight: 800, fill: t.text, letterSpacing: -2 }).svg);
+  // "Por" + R$ + valor
+  svg.push(textPath(L.porLabel, { x: pad, y: L.priceY, size: L.currencySize, weight: 700, fill: t.textMuted }).svg);
+  svg.push(textPath('R$', { x: pad + L.porW, y: L.priceY - L.priceSize * 0.42, size: L.currencySize, weight: 800, fill: t.accentText }).svg);
+  svg.push(textPath(money(input.pricing.current), { x: pad + L.porW + L.currencyW + 14, y: L.priceY, size: L.priceSize, weight: 800, fill: t.text, letterSpacing: -2 }).svg);
 
   // cupom (à direita do preço quando couber; senão abaixo; encurtado se for longo)
   if (L.coupon) {

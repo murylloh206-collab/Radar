@@ -24,16 +24,30 @@ export default function ImageDropZone({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** A Vercel recusa envios acima de ~4,5 MB: imagens grandes são reduzidas no navegador antes (o servidor gera 1080×1920 de qualquer forma). */
+  const shrink = async (file: File): Promise<Blob> => {
+    if (file.size <= 3.5 * 1024 * 1024) return file;
+    const bitmap = await createImageBitmap(file);
+    const maxSide = kind === 'logo' ? 1024 : 2160;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const type = kind === 'logo' ? 'image/png' : 'image/jpeg';
+    return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Não consegui preparar a imagem.'))), type, 0.9));
+  };
+
   const send = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
     if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return setError('Envie uma imagem PNG, JPG ou WebP.');
-    if (file.size > 8 * 1024 * 1024) return setError('A imagem passa de 8 MB.');
+    if (file.size > 25 * 1024 * 1024) return setError('A imagem passa de 25 MB.');
     setBusy(true);
     try {
       const fd = new FormData();
       fd.set('kind', kind);
-      fd.set('file', file);
+      fd.set('file', await shrink(file), file.name);
       const res = await fetch('/api/brand-assets', { method: 'POST', body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || 'Não consegui enviar a imagem.');

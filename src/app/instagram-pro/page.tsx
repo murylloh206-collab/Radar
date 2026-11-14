@@ -274,7 +274,7 @@ function IdentityForm({ identity, busy, onSave }: { identity: Identity; busy: bo
         </label>
       </div>
       <div style={{ marginTop: 12 }}>
-        <ImageDropZone kind="logo" label="Logo da loja" hint="PNG, JPG ou WebP até 8 MB. Sem logo, usamos a inicial da loja."
+        <ImageDropZone kind="logo" label="Logo da loja" hint="PNG, JPG ou WebP. Sem logo, usamos a inicial da loja."
           currentUrl={form.panelLogoUrl} onUploaded={url => setForm({ ...form, panelLogoUrl: url })} />
       </div>
       <fieldset style={{ border: 0, padding: 0, margin: '12px 0', display: 'flex', gap: 10 }}>
@@ -377,7 +377,7 @@ function StoryTemplatePanel({ sampleJobId }: { sampleJobId: string | null }) {
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 18, alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 10 }}>
-          <ImageDropZone kind="story_background" label="Fundo do story" aspect="9 / 16" hint="PNG, JPG ou WebP até 8 MB."
+          <ImageDropZone kind="story_background" label="Fundo do story" aspect="9 / 16" hint="PNG, JPG ou WebP. Imagens grandes são reduzidas automaticamente."
             currentUrl={state.url} onUploaded={url => { setState({ ...state, url }); void refreshPreview(); }} />
           {state.url && <button type="button" className="rp-btn" onClick={remove} style={{ justifySelf: 'start' }}>Remover fundo e voltar à arte padrão</button>}
           {!sampleJobId && <p style={{ fontSize: 12, opacity: 0.7 }}>A prévia aparece quando houver uma oferta enviada com foto.</p>}
