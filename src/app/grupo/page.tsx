@@ -13,9 +13,6 @@ export const viewport: Viewport = {
   themeColor: '#080f1d',
 };
 
-const WHATSAPP_GROUP_INVITE_URL =
-  'https://chat.whatsapp.com/BU0EXrYHWFk2qLdmqopMTs?s=cl&p=a&iam=2';
-
 export default function GrupoRadarDeOfertasPage() {
   return (
     <div id="inicio" className="radar-grupo-root">
@@ -66,7 +63,7 @@ export default function GrupoRadarDeOfertasPage() {
             <p className="intro">
               Entre no grupo para receber promoções e cupons direto no celular e aproveitar quando o preço baixar.
             </p>
-            <a className="join" href={WHATSAPP_GROUP_INVITE_URL}>
+            <a className="join" href="/grupo/entrar">
               <svg fill="currentColor" aria-hidden="true">
                 <use href="#i-whatsapp" />
               </svg>
