@@ -61,10 +61,10 @@ export async function resolveRotationInvite(): Promise<string> {
   if (picked && picked.expires > Date.now()) { lastRotationSource = picked.source; return picked.url; }
   try {
     const { connection, groups } = await copierGroupCatalog(ownerSession(), {});
-    const choice = pickRotationGroup(rotationQueue(groups), numberEnv('GROUP_ROTATION_LIMIT', 500), numberEnv('GROUP_ROTATION_WARN', 400));
+    const choice = pickRotationGroup(rotationQueue(groups, process.env.GROUP_ROTATION_PREFIX ?? undefined), numberEnv('GROUP_ROTATION_LIMIT', 500), numberEnv('GROUP_ROTATION_WARN', 400));
     if (!choice) { lastRotationSource = `fallback:fila-vazia(${groups.length} grupos)`; return lastGood || FALLBACK_GROUP_INVITE; }
     if (choice.needsNew) {
-      const queue = rotationQueue(groups);
+      const queue = rotationQueue(groups, process.env.GROUP_ROTATION_PREFIX ?? undefined);
       const last = queue[queue.length - 1];
       void warnNewGroup(last.number + 1, last.name, last.participantCount);
     }
