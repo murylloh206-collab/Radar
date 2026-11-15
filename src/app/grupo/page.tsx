@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './grupo.css';
+import GroupNumber from './GroupNumber';
 
 export const metadata: Metadata = {
   title: 'Radar de Ofertas | Grupo no WhatsApp',
@@ -56,7 +57,7 @@ export default function GrupoRadarDeOfertasPage() {
       <main className="shell">
         <section className="hero" aria-labelledby="titulo">
           <div>
-            <p className="eyebrow">Grupo de ofertas · #1</p>
+            <p className="eyebrow">Grupo de ofertas<GroupNumber /></p>
             <h1 id="titulo">
               Seu próximo achado tá no <span>WhatsApp.</span>
             </h1>

@@ -13,9 +13,9 @@ const PICK_TTL = 60_000;
 const INVITE_TTL = 10 * 60_000;
 const WARN_EVERY = 12 * 60 * 60_000;
 
-let picked: { url: string; expires: number; source: string } | null = null;
+let picked: { url: string; number: number | null; expires: number; source: string } | null = null;
 export let lastRotationSource = 'none';
-let lastGood: string | null = null;
+let lastGood: { url: string; number: number | null } | null = null;
 let lastWarnAt = 0;
 const inviteCache = new Map<string, { url: string; expires: number }>();
 
@@ -56,24 +56,32 @@ async function warnNewGroup(nextNumber: number, lastName: string, lastCount: num
   });
 }
 
+export interface RotationTarget { url: string; number: number | null }
+
 export async function resolveRotationInvite(): Promise<string> {
-  if (picked && picked.expires > Date.now()) { lastRotationSource = picked.source; return picked.url; }
+  return (await resolveRotationTarget()).url;
+}
+
+/** Grupo da vez: link de convite e o número (#N) para mostrar na página. */
+export async function resolveRotationTarget(): Promise<RotationTarget> {
+  if (picked && picked.expires > Date.now()) { lastRotationSource = picked.source; return { url: picked.url, number: picked.number }; }
+  const fallback = (): RotationTarget => lastGood || { url: FALLBACK_GROUP_INVITE, number: null };
   try {
     const { connection, groups } = await copierGroupCatalog(ownerSession(), {});
-    const choice = pickRotationGroup(rotationQueue(groups, process.env.GROUP_ROTATION_PREFIX ?? undefined), numberEnv('GROUP_ROTATION_LIMIT', 500), numberEnv('GROUP_ROTATION_WARN', 400));
-    if (!choice) { lastRotationSource = `fallback:fila-vazia(${groups.length} grupos)`; return lastGood || FALLBACK_GROUP_INVITE; }
+    const queue = rotationQueue(groups, process.env.GROUP_ROTATION_PREFIX ?? undefined);
+    const choice = pickRotationGroup(queue, numberEnv('GROUP_ROTATION_LIMIT', 500), numberEnv('GROUP_ROTATION_WARN', 400));
+    if (!choice) { lastRotationSource = `fallback:fila-vazia(${groups.length} grupos)`; return fallback(); }
     if (choice.needsNew) {
-      const queue = rotationQueue(groups, process.env.GROUP_ROTATION_PREFIX ?? undefined);
       const last = queue[queue.length - 1];
       void warnNewGroup(last.number + 1, last.name, last.participantCount);
     }
     const url = await inviteFor(connection, choice.group.groupJid);
-    lastGood = url;
-    picked = { url, expires: Date.now() + PICK_TTL, source: `#${choice.group.number}:${choice.group.participantCount}` };
+    lastGood = { url, number: choice.group.number };
+    picked = { url, number: choice.group.number, expires: Date.now() + PICK_TTL, source: `#${choice.group.number}:${choice.group.participantCount}` };
     lastRotationSource = picked.source;
-    return url;
+    return lastGood;
   } catch (error) {
     lastRotationSource = `fallback:${error instanceof Error ? (error as any).code || error.message : 'erro'}`.slice(0, 120);
-    return lastGood || FALLBACK_GROUP_INVITE;
+    return fallback();
   }
 }
