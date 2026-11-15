@@ -92,7 +92,31 @@ export async function recordStoreHealth(
     lastOkAt: result.status === 'ok' ? now : previous?.lastOkAt ?? null,
   };
   await r.upsert(userId, health);
+  if (shouldWarnOwner(userId, previous?.status, health.status)) {
+    const { notifyOwner } = await import('./owner-notify');
+    await notifyOwner(storeDownNotice(storeName, health.reason));
+  }
   return health;
+}
+
+const OWNER_ID = '00000000-0000-0000-0000-000000000001';
+const STORE_LABEL: Record<string, string> = { mercadolivre: 'Mercado Livre', shopee: 'Shopee', netshoes: 'Netshoes', amazon: 'Amazon', magalu: 'Magalu' };
+
+/** Avisa o dono uma vez, na passagem de "funcionando/sem teste" para "falhou" (não repete enquanto seguir falhando). */
+export function shouldWarnOwner(userId: string, previous: StoreHealthStatus | undefined, current: StoreHealthStatus): boolean {
+  return userId === OWNER_ID && current === 'falhou' && previous !== 'falhou';
+}
+
+export function storeDownNotice(storeName: StoreName, reason: string | null) {
+  const label = STORE_LABEL[storeName] || storeName;
+  return {
+    title: `${label} desconectou, reconecte`,
+    body: `${reason || 'O teste diário da conexão falhou.'}
+Abra o painel em Conectar lojas e reconecte pela extensão para os links não quebrarem.`,
+    tags: 'warning',
+    priority: 'high' as const,
+    click: `${(process.env.APP_URL || 'https://painel-de-ofertas.vercel.app').trim()}/conectar-lojas`,
+  };
 }
 
 export async function getStoreHealthMap(

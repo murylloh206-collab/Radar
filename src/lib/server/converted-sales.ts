@@ -8,7 +8,7 @@ import { getDecryptedCredentials, getSafeVaultStatus } from './credentials-vault
 import { normalizeStoreSlug } from './click-tracker';
 import { isDevEnvironment } from './plan-guard';
 
-export type SalesDataSource = 'api_oficial_shopee' | 'csv_importado';
+export type SalesDataSource = 'api_oficial_shopee' | 'api_oficial_rakuten' | 'csv_importado';
 
 export interface ConvertedSaleRecord {
   id: string;
@@ -131,12 +131,30 @@ export async function syncShopeeOfficialConversions(
   source: SalesDataSource;
   message: string;
 }> {
+  const result = await fetchShopeeConversions(userId, daysBack);
+  if (result.ok && result.sales.length) await saveConvertedSalesBatch(userId, result.sales);
+  const { sales: _sales, ...rest } = result;
+  return rest;
+}
+
+/** Busca as vendas da API oficial da Shopee SEM salvar (o sync e os avisos de venda decidem o que fazer). */
+export async function fetchShopeeConversions(
+  userId: string = ADMIN_UUID,
+  daysBack: number = 30
+): Promise<{
+  ok: boolean;
+  importedCount: number;
+  source: SalesDataSource;
+  message: string;
+  sales: ConvertedSaleRecord[];
+}> {
   const creds = await getDecryptedCredentials(userId, 'shopee');
   if (!creds || !creds.appId || !creds.appSecret) {
     return {
       ok: false,
       importedCount: 0,
       source: 'api_oficial_shopee',
+      sales: [],
       message:
         'Conta da Shopee não conectada com App ID e App Secret. Conecte sua API Oficial da Shopee em Conexões ou importe seu relatório CSV.',
     };
@@ -193,6 +211,7 @@ export async function syncShopeeOfficialConversions(
         ok: false,
         importedCount: 0,
         source: 'api_oficial_shopee',
+        sales: [],
         message: `A API Oficial da Shopee respondeu sem conversões ou com aviso: ${apiErr}`,
       };
     }
@@ -203,6 +222,7 @@ export async function syncShopeeOfficialConversions(
         ok: true,
         importedCount: 0,
         source: 'api_oficial_shopee',
+        sales: [],
         message: 'Sincronização concluída via API Oficial da Shopee: nenhuma venda convertida encontrada no período consultado.',
       };
     }
@@ -255,12 +275,11 @@ export async function syncShopeeOfficialConversions(
       }
     }
 
-    await saveConvertedSalesBatch(userId, salesToSave);
-
     return {
       ok: true,
       importedCount: salesToSave.length,
       source: 'api_oficial_shopee',
+      sales: salesToSave,
       message: `${salesToSave.length} venda(s) sincronizada(s) diretamente da API Oficial da Shopee!`,
     };
   } catch (err: unknown) {
@@ -269,6 +288,7 @@ export async function syncShopeeOfficialConversions(
       ok: false,
       importedCount: 0,
       source: 'api_oficial_shopee',
+      sales: [],
       message: `Falha de rede ao consultar API Oficial da Shopee: ${msg}`,
     };
   }

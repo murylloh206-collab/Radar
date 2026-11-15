@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { runCopierWatchdog } from '@/lib/server/copier-watchdog';
 import { checkCronSecret } from '@/lib/server/cron-auth';
 import { runRepostCycle } from '@/lib/server/copier-repost';
+import { runSalesAlerts } from '@/lib/server/sales-alerts';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -17,11 +18,16 @@ export async function GET(req: NextRequest) {
     const forceRestart = req.nextUrl.searchParams.get('restart') === 'true';
     // Repostagem: ofertas que falharam por erro corrigível voltam para a fila antes do ciclo do copiador.
     const repost = await runRepostCycle().catch(() => ({ requeued: 0 }));
+    // Vendas novas (Shopee/Netshoes) → aviso no celular do dono; a cada ~15 min (o agendador roda a cada 5).
+    const sales = new Date().getUTCMinutes() % 15 < 5
+      ? await runSalesAlerts().catch(() => ({ fetched: 0, alerted: 0 }))
+      : undefined;
     const watchdogReport = await runCopierWatchdog(forceRestart);
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
       repost,
+      sales,
       watchdog: watchdogReport,
       cycle: watchdogReport.cycle,
     }, { headers: { 'Cache-Control': 'no-store, no-cache' } });

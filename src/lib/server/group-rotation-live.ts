@@ -45,16 +45,15 @@ async function inviteFor(connection: Parameters<typeof photoGatewayRequest>[0], 
 }
 
 async function warnNewGroup(nextNumber: number, lastName: string, lastCount: number): Promise<void> {
-  const topic = (process.env.NTFY_TOPIC || '').trim();
-  if (!topic || Date.now() - lastWarnAt < WARN_EVERY) return;
+  if (Date.now() - lastWarnAt < WARN_EVERY) return;
   lastWarnAt = Date.now();
-  const server = (process.env.NTFY_SERVER || 'https://ntfy.sh').trim().replace(/\/$/, '');
-  await fetch(`${server}/${encodeURIComponent(topic)}`, {
-    method: 'POST',
-    headers: { Title: `Crie o grupo #${nextNumber}`, Tags: 'busts_in_silhouette', Priority: 'high' },
-    body: `${lastName} já tem ${lastCount} membros. Crie o próximo com "#${nextNumber}" no fim do nome e adicione no copiador.`,
-    signal: AbortSignal.timeout(8000),
-  }).catch(() => {});
+  const { notifyOwner } = await import('./owner-notify');
+  await notifyOwner({
+    title: `Crie o grupo #${nextNumber}`,
+    body: `${lastName} já tem ${lastCount} membros. Crie "Radar de Ofertas #${nextNumber}" e adicione como destino no copiador.`,
+    tags: 'busts_in_silhouette',
+    priority: 'high',
+  });
 }
 
 export async function resolveRotationInvite(): Promise<string> {
