@@ -13,7 +13,8 @@ const PICK_TTL = 60_000;
 const INVITE_TTL = 10 * 60_000;
 const WARN_EVERY = 12 * 60 * 60_000;
 
-let picked: { url: string; expires: number } | null = null;
+let picked: { url: string; expires: number; source: string } | null = null;
+export let lastRotationSource = 'none';
 let lastGood: string | null = null;
 let lastWarnAt = 0;
 const inviteCache = new Map<string, { url: string; expires: number }>();
@@ -57,11 +58,11 @@ async function warnNewGroup(nextNumber: number, lastName: string, lastCount: num
 }
 
 export async function resolveRotationInvite(): Promise<string> {
-  if (picked && picked.expires > Date.now()) return picked.url;
+  if (picked && picked.expires > Date.now()) { lastRotationSource = picked.source; return picked.url; }
   try {
     const { connection, groups } = await copierGroupCatalog(ownerSession(), {});
     const choice = pickRotationGroup(rotationQueue(groups), numberEnv('GROUP_ROTATION_LIMIT', 800), numberEnv('GROUP_ROTATION_WARN', 700));
-    if (!choice) return lastGood || FALLBACK_GROUP_INVITE;
+    if (!choice) { lastRotationSource = `fallback:fila-vazia(${groups.length} grupos)`; return lastGood || FALLBACK_GROUP_INVITE; }
     if (choice.needsNew) {
       const queue = rotationQueue(groups);
       const last = queue[queue.length - 1];
@@ -69,9 +70,11 @@ export async function resolveRotationInvite(): Promise<string> {
     }
     const url = await inviteFor(connection, choice.group.groupJid);
     lastGood = url;
-    picked = { url, expires: Date.now() + PICK_TTL };
+    picked = { url, expires: Date.now() + PICK_TTL, source: `#${choice.group.number}:${choice.group.participantCount}` };
+    lastRotationSource = picked.source;
     return url;
-  } catch {
+  } catch (error) {
+    lastRotationSource = `fallback:${error instanceof Error ? (error as any).code || error.message : 'erro'}`.slice(0, 120);
     return lastGood || FALLBACK_GROUP_INVITE;
   }
 }

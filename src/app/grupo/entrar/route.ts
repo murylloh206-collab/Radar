@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { resolveRotationInvite } from '@/lib/server/group-rotation-live';
+import { lastRotationSource, resolveRotationInvite } from '@/lib/server/group-rotation-live';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -8,5 +8,6 @@ export const maxDuration = 30;
 export async function GET() {
   const response = NextResponse.redirect(await resolveRotationInvite(), 302);
   response.headers.set('Cache-Control', 'no-store');
+  response.headers.set('X-Rotation', lastRotationSource.replace(/[^ -~]/g, ''));
   return response;
 }
