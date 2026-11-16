@@ -5,7 +5,7 @@ import { processAutomationCampaigns } from './automation-engine';
 import { validateJobForDispatch } from './job-validator';
 import { getDailyOfferQuotaStatus } from './plan-guard';
 import { getBrandSettings } from './brand-settings';
-import { isSentToday } from './daily-sent-counter';
+import { countDistinctOffers, isSentToday } from './daily-sent-counter';
 
 export interface DispatchResult {
   jobId: string;
@@ -219,9 +219,10 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
       };
     }
 
-    const sentTodayCount = db.jobs.filter(
+    // Limite conta ofertas (posts): as cópias da mesma oferta para vários grupos contam 1.
+    const sentTodayCount = countDistinctOffers(db.jobs.filter(
       (j) => (!db.settings.userId || j.userId === db.settings.userId) && isSentToday(j, now)
-    ).length;
+    ) as any[]);
 
     if (sentTodayCount >= db.settings.maxDailyMessages) {
       return {
@@ -229,7 +230,7 @@ export async function runWorkerCycle(): Promise<WorkerCycleReport> {
         processedCount: 0,
         results: [],
         automationJobsCreated: automationReport?.newJobsCreated || 0,
-        skippedReason: `Limite diário de ${db.settings.maxDailyMessages} mensagens atingido (${sentTodayCount} enviadas hoje).`,
+        skippedReason: `Limite diário de ${db.settings.maxDailyMessages} ofertas atingido (${sentTodayCount} ofertas enviadas hoje).`,
       };
     }
 

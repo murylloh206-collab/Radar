@@ -330,6 +330,8 @@ export interface PublicationJob {
   originType: 'manual' | 'copiador' | 'fila' | 'lista' | 'curador';
   sourceId?: string;
   incomingMessageId?: string;
+  /** Evento do copiador que gerou a oferta: as cópias para vários grupos compartilham o mesmo. */
+  runtimeInboxId?: string;
   productId?: string;
   evaluationId?: string;
   targetJid: string;

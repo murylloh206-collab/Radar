@@ -901,6 +901,7 @@ export async function getDatabase(): Promise<DatabaseSchema> {
       originType: j.origin_type,
       sourceId: j.source_id,
       incomingMessageId: j.incoming_message_id,
+      runtimeInboxId: j.runtime_inbox_id || undefined,
       productId: j.product_id,
       evaluationId: j.evaluation_id,
       targetJid: j.target_jid,

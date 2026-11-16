@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isSentToday, startOfTodaySaoPaulo } from '@/lib/server/daily-sent-counter';
+import { countDistinctOffers, isSentToday, startOfTodaySaoPaulo } from '@/lib/server/daily-sent-counter';
 import { getDatabase, readDatabase } from '@/lib/server/storage';
 import { PublicationJob } from '@/lib/types';
 import {
@@ -105,14 +105,15 @@ export async function GET(req: NextRequest) {
     const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const startOfMonth = new Date(startOfToday.getTime() - (Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', day: 'numeric' }).format(now)) - 1) * 24 * 60 * 60 * 1000);
 
-    const sentToday = jobs.filter((j) => isSentToday(j, now)).length;
-    const sentWeek = jobs.filter(
+    // Ofertas (posts), não mensagens: a mesma oferta enviada a vários grupos conta 1.
+    const sentToday = countDistinctOffers(jobs.filter((j) => isSentToday(j, now)));
+    const sentWeek = countDistinctOffers(jobs.filter(
       (j) => j.status === 'enviado' && new Date(j.sentAt || j.createdAt) >= startOfWeek
-    ).length;
-    const sentMonth = jobs.filter(
+    ));
+    const sentMonth = countDistinctOffers(jobs.filter(
       (j) => j.status === 'enviado' && new Date(j.sentAt || j.createdAt) >= startOfMonth
-    ).length;
-    const totalOffersPostedAllTime = jobs.filter((j) => j.status === 'enviado').length;
+    ));
+    const totalOffersPostedAllTime = countDistinctOffers(jobs.filter((j) => j.status === 'enviado'));
 
     // 2. Consultar eventos reais de cliques (/r/[code])
     const allClicks = await listClickEvents({ userId });

@@ -20,15 +20,26 @@ export function isSentToday(job: { status?: string; sentAt?: string | null }, no
   return !Number.isNaN(sent) && sent >= startOfTodaySaoPaulo(now).getTime() && sent <= now.getTime();
 }
 
+/** Uma oferta = um post: as cópias da mesma oferta para vários grupos contam 1 no limite diário. */
+export function offerKey(job: { id?: string; runtimeInboxId?: string | null; runtime_inbox_id?: string | null;
+  incomingMessageId?: string | null; incoming_message_id?: string | null }): string {
+  return String(job.runtimeInboxId || job.runtime_inbox_id || job.incomingMessageId || job.incoming_message_id || job.id || '');
+}
+
+export function countDistinctOffers(jobs: Parameters<typeof offerKey>[0][]): number {
+  return new Set(jobs.map(offerKey).filter(Boolean)).size;
+}
+
+/** Ofertas (posts) enviadas hoje — não mensagens. */
 export async function countSentToday(userId: string, opts: { connectionId?: string } = {}): Promise<number> {
   if (isSupabaseConfigured && supabase) {
-    let query = supabase.from('publication_jobs').select('id', { count: 'exact', head: true })
-      .eq('user_id', userId).eq('status', 'enviado').gte('sent_at', startOfTodaySaoPaulo().toISOString());
+    let query = supabase.from('publication_jobs').select('id, runtime_inbox_id, incoming_message_id')
+      .eq('user_id', userId).eq('status', 'enviado').gte('sent_at', startOfTodaySaoPaulo().toISOString()).limit(5000);
     if (opts.connectionId) query = query.eq('connection_id', opts.connectionId);
-    const { count, error } = await query;
+    const { data, error } = await query;
     if (error) throw new Error('Não foi possível contar os envios de hoje.');
-    return count || 0;
+    return countDistinctOffers(data || []);
   }
-  return (readDatabase().jobs || []).filter(job => job.userId === userId &&
-    (!opts.connectionId || job.connectionId === opts.connectionId) && isSentToday(job)).length;
+  return countDistinctOffers((readDatabase().jobs || []).filter(job => job.userId === userId &&
+    (!opts.connectionId || job.connectionId === opts.connectionId) && isSentToday(job)) as any[]);
 }
