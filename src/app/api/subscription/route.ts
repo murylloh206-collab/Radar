@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStrictSession } from '@/lib/server/auth';
 import { startCheckout, BillingError } from '@/lib/server/billing/billing-core';
+import { checkoutGate } from '@/lib/server/billing/checkout-gate';
+import { billingConfig } from '@/lib/server/billing/billing-service';
+import { dadosPendentes } from '@/lib/legal/empresa';
 import { billingDeps } from '@/lib/server/billing/billing-service';
 import {
   getUserSubscription,
@@ -209,6 +212,8 @@ export async function POST(req: NextRequest) {
       if (!planId || !['impulse', 'plus', 'ultimate'].includes(planId)) {
         return NextResponse.json({ ok: false, error: 'Plano inválido selecionado para checkout.' }, { status: 400 });
       }
+      const gate = checkoutGate(billingConfig().env, session.role, dadosPendentes());
+      if (gate) return NextResponse.json({ ok: false, error: gate, code: 'CHECKOUT_SOON' }, { status: 403 });
       try {
         const { checkoutUrl } = await startCheckout(billingDeps(), { userId: session.userId, email: session.email, planId });
         return NextResponse.json({ ok: true, checkout: { mode: 'redirect', url: checkoutUrl } });
