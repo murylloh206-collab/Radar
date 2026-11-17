@@ -48,15 +48,16 @@ function mercadoPagoApi(token: string): MpApi {
     createPreapproval: body => call('POST', '/preapproval', body),
     getPreapproval: id => call('GET', `/preapproval/${encodeURIComponent(id)}`),
     async searchAuthorizedPayments(id) {
-      // O Mercado Pago recusa limit=100 ("Invalid value for limit"): páginas de 20 (o padrão dele) com offset.
-      const pageSize = 20;
+      // O Mercado Pago recusa o parâmetro limit neste endpoint ("Invalid value for limit", até com 20):
+      // usamos a página padrão dele e avançamos só pelo offset.
       const all: any[] = [];
-      for (let offset = 0; offset < 500; offset += pageSize) {
-        const data = await call('GET', `/authorized_payments/search?preapproval_id=${encodeURIComponent(id)}&limit=${pageSize}&offset=${offset}`);
-        const page = Array.isArray(data?.results) ? data.results : [];
-        all.push(...page);
+      for (let page = 0; page < 25; page++) {
+        const offset = all.length;
+        const data = await call('GET', `/authorized_payments/search?preapproval_id=${encodeURIComponent(id)}${offset ? `&offset=${offset}` : ''}`);
+        const results = Array.isArray(data?.results) ? data.results : [];
+        all.push(...results);
         const total = Number(data?.paging?.total);
-        if (page.length < pageSize || (Number.isFinite(total) && offset + pageSize >= total)) break;
+        if (!results.length || !Number.isFinite(total) || all.length >= total) break;
       }
       return all;
     },
