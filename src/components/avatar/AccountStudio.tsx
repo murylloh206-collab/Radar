@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Camera, Check, CreditCard, Dices, Link2, Settings2, Trash2, Upload, UserRound, X } from 'lucide-react';
+import { Camera, Check, CreditCard, Dices, Link2, Settings2, ShieldCheck, Trash2, Upload, UserRound, X } from 'lucide-react';
 import {
   ACCESSORY_OPTIONS, AvatarConfig, BACKGROUNDS, BEARD_OPTIONS, DEFAULT_AVATAR, HAIR_COLORS, HAIR_OPTIONS, ITEM_OPTIONS,
   OUTFIT_COLORS, OUTFIT_OPTIONS, RadarAvatar, SKIN_TONES, loadAvatar, saveAvatar, saveDisplayName,
@@ -139,6 +139,7 @@ export function AccountStudio({ userName, userEmail, waPhone, onClose, onSaved }
             <Link href="/assinatura" onClick={onClose}><CreditCard size={15} /> Minha assinatura</Link>
             <Link href="/conexoes" onClick={onClose}><Link2 size={15} /> Conexões</Link>
             <Link href="/copiador" onClick={onClose}><Settings2 size={15} /> Ajustes de envio</Link>
+            <Link href="/legal" onClick={onClose}><ShieldCheck size={15} /> Privacidade e meus dados</Link>
           </div>
         </aside>
 

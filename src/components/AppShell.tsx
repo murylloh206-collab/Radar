@@ -36,11 +36,11 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const STANDALONE_PAGES = ['/', '/login', '/cadastro', '/termos', '/privacidade', '/ajuda', '/grupo'];
+const STANDALONE_PAGES = ['/', '/login', '/cadastro', '/termos', '/privacidade', '/legal', '/ajuda', '/grupo'];
 
 function isStandalonePage(pathname: string | null): boolean {
   if (!pathname) return false;
-  if (STANDALONE_PAGES.includes(pathname) || pathname.startsWith('/grupo/') || pathname === '/previa' || pathname.startsWith('/previa/')) return true;
+  if (STANDALONE_PAGES.includes(pathname) || pathname.startsWith('/grupo/') || pathname.startsWith('/legal/') || pathname === '/previa' || pathname.startsWith('/previa/')) return true;
   if (
     pathname.startsWith('/r/') ||
     pathname.startsWith('/u/') ||

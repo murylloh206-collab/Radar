@@ -4,6 +4,7 @@ import './radar-v4.css';
 import { WhatsAppWorkspaceProvider } from '@/components/WhatsAppWorkspaceProvider';
 import { PlanProvider } from '@/components/PlanProvider';
 import { AppShell } from '@/components/AppShell';
+import { CookieConsent } from '@/components/legal/CookieConsent';
 
 export const metadata: Metadata = {
   title: 'Radar de Ofertas — Painel de Afiliados',
@@ -41,6 +42,7 @@ export default function RootLayout({
         <PlanProvider>
           <WhatsAppWorkspaceProvider>
             <AppShell>{children}</AppShell>
+            <CookieConsent />
           </WhatsAppWorkspaceProvider>
         </PlanProvider>
       </body>

@@ -26,6 +26,7 @@ const PUBLIC_PREFIXES = [
   '/planos',
   '/termos',
   '/privacidade',
+  '/legal',
   '/ajuda',
   '/grupo',
   '/r/',
@@ -129,7 +130,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/cron/') || // a própria rota valida o CRON_SECRET
     pathname.startsWith('/api/extension/') || // a própria rota valida o token da extensão
     pathname === '/api/webhooks/mercadopago' || // a própria rota valida a assinatura x-signature
-    pathname.startsWith('/api/comparator/search')
+    pathname.startsWith('/api/comparator/search') ||
+    pathname.startsWith('/api/legal/') // consentimento de cookies e pedidos de titular (validados na rota)
   ) {
     return NextResponse.next();
   }

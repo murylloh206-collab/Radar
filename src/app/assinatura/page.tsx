@@ -76,7 +76,7 @@ export default function MinhaAssinaturaPage() {
     setBusy(false);
     if (data?.ok) {
       setSub(data.subscription);
-      setMsg('Assinatura cancelada.');
+      setMsg(data.arrependimento ? 'Assinatura cancelada dentro do prazo de arrependimento (7 dias). Vamos estornar o valor integral no mesmo meio de pagamento.' : 'Assinatura cancelada. O acesso continua até o fim do período já pago.');
     } else setMsg(data?.error || 'Não consegui cancelar agora.');
   };
 

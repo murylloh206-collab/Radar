@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticate, signSession, SESSION_COOKIE_NAME } from '@/lib/server/auth';
+import { logAccess } from '@/lib/server/compliance';
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,11 +10,14 @@ export async function POST(req: NextRequest) {
     const result = await authenticate(email, password);
 
     if (!result.success || !result.session) {
+      await logAccess('login_falhou', req.headers, null);
       return NextResponse.json(
         { ok: false, error: result.error || 'Credenciais inválidas' },
         { status: 401 }
       );
     }
+
+    await logAccess('login', req.headers, result.session.userId);
 
     const token = signSession({
       userId: result.session.userId,

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { EMPRESA } from '@/lib/legal/empresa';
+import { logAccess, recordConsent } from '@/lib/server/compliance';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { signSession, SESSION_COOKIE_NAME } from '@/lib/server/auth';
 import { ensureUserSubscription } from '@/lib/server/plan-guard';
@@ -43,6 +45,7 @@ export async function POST(req: NextRequest) {
           full_name: cleanName || undefined,
           accepted_terms: true,
           accepted_terms_at: new Date().toISOString(),
+          accepted_terms_version: EMPRESA.versaoDocumentos,
           referred_by: refCode || null,
         },
       },
@@ -56,6 +59,10 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = data.user.id;
+    await Promise.all([
+      recordConsent({ kind: 'termos', version: EMPRESA.versaoDocumentos, choices: { termos: true, privacidade: true }, userId, userAgent: req.headers.get('user-agent') }),
+      logAccess('cadastro', req.headers, userId),
+    ]);
     const requiresEmailConfirmation = !data.session;
 
     // Sem período de teste grátis: conta criada sem ativar assinatura paga nem liberar recursos pagos indevidamente
