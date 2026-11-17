@@ -1,7 +1,9 @@
 import 'server-only';
+import { randomBytes } from 'node:crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { clearAuthState, loadAuthState } from './auth-store';
-import { buildGroupStatusMessage, GROUP_STATUS_META_NODE, isGroupJid } from './group-status-message';
+import { MAX_STATUS_GROUPS } from './copier-groups';
+import { GROUP_STATUS_META_NODE, isGroupJid, markAsGroupStatus, wrapGroupStatus } from './group-status-message';
 
 /*
  * Conector próprio do WhatsApp, sob demanda: abre a conexão, faz o trabalho e fecha.
@@ -67,6 +69,11 @@ async function openSocket(userId: string, options: { onQr?: (qr: string) => void
       shouldSyncHistoryMessage: () => false,
       generateHighQualityLinkPreview: false,
       fireInitQueries: false,
+      // O envelope groupStatusMessageV2 é aplicado aqui, depois que o Baileys já leu o tipo da mídia.
+      patchMessageBeforeSending: message => wrapGroupStatus(message),
+      // Sem cache de reenvio: um reenvio automático sairia sem a marca de status e viraria
+      // mensagem comum no chat do grupo. Preferimos não reenviar.
+      enableRecentMessageCache: false,
     });
     sock.ev.on('creds.update', () => { void saveCreds().catch(() => undefined); });
 
@@ -139,8 +146,8 @@ export async function publishGroupStatus(
   input: { image: Buffer; caption: string; groupJids: string[] },
 ): Promise<GroupStatusResult[]> {
   const groups = [...new Set(input.groupJids)].filter(isGroupJid);
-  if (!groups.length) throw new GatewayError('Escolha pelo menos um grupo.');
-  if (groups.length > 10) throw new GatewayError('Escolha no máximo 10 grupos por publicação.');
+  if (!groups.length) throw new GatewayError('Nenhum grupo de destino ativo no Copiador.');
+  if (groups.length > MAX_STATUS_GROUPS) throw new GatewayError(`O status vai para no máximo ${MAX_STATUS_GROUPS} grupos por vez.`);
 
   const baileys = await import('baileys');
   const sock = await openSocket(userId, { timeoutMs: 45_000, allowPairing: false });
@@ -154,7 +161,8 @@ export async function publishGroupStatus(
       if (index > 0) await new Promise(resolve => setTimeout(resolve, 2500));
       try {
         const messageId = baileys.generateMessageIDV2(sock.user?.id);
-        await sock.relayMessage(jid, buildGroupStatusMessage(content as unknown as Record<string, unknown>) as never, {
+        const message = markAsGroupStatus(content as unknown as Record<string, unknown>, randomBytes(32));
+        await sock.relayMessage(jid, message as never, {
           messageId,
           additionalNodes: [GROUP_STATUS_META_NODE],
         });

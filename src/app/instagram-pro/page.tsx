@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera, CheckCircle2, Clock, Image as ImageIcon, Layers, Loader2, MessageCircle, Palette, Send, Settings, Settings2, Users, X, Zap } from 'lucide-react';
 import { GroupStatusPicker } from '@/components/GroupStatusPicker';
 import ImageDropZone from '@/components/ImageDropZone';
@@ -53,8 +54,8 @@ export default function InstagramProPage() {
   const [dialog, setDialog] = useState<{ offer: Offer; channel: Channel } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [groupJids, setGroupJids] = useState<string[]>([]);
-  const [groupReady, setGroupReady] = useState(false);
+  const [groupState, setGroupState] = useState({ ready: false, count: 0 });
+  const onGroupReady = useCallback((ready: boolean, count: number) => setGroupState({ ready, count }), []);
   const previewRequest = useRef(0);
 
   const load = useCallback(async () => {
@@ -76,6 +77,16 @@ export default function InstagramProPage() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const closeDialog = useCallback(() => { previewRequest.current++; setDialog(null); }, []);
+  useEffect(() => {
+    if (!dialog) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) closeDialog(); };
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
+  }, [dialog, busy, closeDialog]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
 
   const openDialog = async (offer: Offer, channel: Channel) => {
@@ -101,14 +112,14 @@ export default function InstagramProPage() {
     setBusy(true);
     try {
       const res = await fetch('/api/social/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: dialog.offer.jobId, channel: dialog.channel, groupJids: dialog.channel === 'whatsapp_group_status' ? groupJids : undefined }) });
+        body: JSON.stringify({ jobId: dialog.offer.jobId, channel: dialog.channel }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Não foi possível publicar.');
       const label = CHANNELS.find(c => c.id === dialog.channel)?.label;
       setToast({ type: 'ok', text: data.post?.status === 'incerto'
         ? `Enviado para ${label}, mas sem confirmação. Confira no aplicativo antes de repetir.`
         : dialog.channel === 'whatsapp_group_status'
-          ? `Oferta #${data.offer.offerNumber} publicada como status em ${groupJids.length} ${groupJids.length === 1 ? 'grupo' : 'grupos'}!${data.post?.error ? ` Atenção: ${data.post.error}` : ''}`
+          ? `Oferta #${data.offer.offerNumber} publicada como status em ${groupState.count} ${groupState.count === 1 ? 'grupo' : 'grupos'}!${data.post?.error ? ` Atenção: ${data.post.error}` : ''}`
           : `Oferta #${data.offer.offerNumber} publicada no ${label}!` });
       setDialog(null);
       await load();
@@ -218,32 +229,57 @@ export default function InstagramProPage() {
 
       <CopierHistoryModal isOpen={showHistory} onClose={() => setShowHistory(false)} />
 
-      {dialog && (
-        <div role="dialog" aria-modal="true" aria-label="Prévia da publicação" className="rp-dialog"
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
-          <div className="rp-panel" style={{ maxWidth: 420, width: '100%', maxHeight: '92vh', overflow: 'auto', margin: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h2 style={{ margin: 0 }}>{CHANNELS.find(c => c.id === dialog.channel)?.label}</h2>
-              <button type="button" className="rp-btn" onClick={() => { previewRequest.current++; setDialog(null); }} aria-label="Fechar"><X className="w-4 h-4" /></button>
+      {dialog && (() => {
+        const channel = CHANNELS.find(c => c.id === dialog.channel)!;
+        const isGroup = dialog.channel === 'whatsapp_group_status';
+        const note = dialog.channel === 'whatsapp_status'
+          ? 'Aparece no status para os seus contatos, com o link direto da oferta.'
+          : isGroup
+            ? 'Aparece como status dentro dos grupos do Copiador, com o link direto da oferta.'
+            : 'Sai com “Oferta #N · link na bio”. O número é definido na hora de publicar.';
+        const { offer } = dialog;
+        // Portal no <body>: os contêineres animados da página prendem position:fixed e cortavam o modal.
+        return createPortal(
+          <div className="rpm-overlay" onMouseDown={e => { if (e.target === e.currentTarget && !busy) closeDialog(); }}>
+            <div role="dialog" aria-modal="true" aria-labelledby="rpm-title" className={`rpm${dialog.channel === 'instagram_feed' ? ' rpm-feed' : ''}`}>
+              <div className="rpm-art">
+                {preview
+                  ? <img src={preview} alt="Prévia da arte que será publicada" />
+                  : <div className="rpm-art-wait"><Loader2 className="w-6 h-6 animate-spin" /><span>Gerando a arte…</span></div>}
+              </div>
+              <div className="rpm-body">
+                <header className="rpm-head">
+                  <div>
+                    <span className="rpm-kicker"><channel.icon className="w-3.5 h-3.5" /> {channel.label}</span>
+                    <h2 id="rpm-title">{offer.title}</h2>
+                  </div>
+                  <button type="button" className="rpm-close" onClick={closeDialog} disabled={busy} aria-label="Fechar"><X className="w-4 h-4" /></button>
+                </header>
+                <div className="rpm-price">
+                  {offer.priceOriginal ? <s>R$ {brl(offer.priceOriginal)}</s> : null}
+                  <strong>R$ {brl(offer.priceCurrent)}</strong>
+                  {offer.discountPct ? <span className="rv10-off rpm-off">−{offer.discountPct}%</span> : null}
+                  {offer.coupon ? <span className="rp-tag">cupom {offer.coupon}</span> : null}
+                </div>
+                <p className="rpm-note">{note}</p>
+                {isGroup && <GroupStatusPicker onReadyChange={onGroupReady} />}
+                <div className="rpm-foot">
+                  <button type="button" className="rp-btn rp-primary rpm-publish"
+                    disabled={!preview || busy || (isGroup && !groupState.ready)} onClick={publish}>
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {busy ? 'Publicando…' : isGroup && groupState.count ? `Publicar em ${groupState.count} ${groupState.count === 1 ? 'grupo' : 'grupos'}` : 'Publicar agora'}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div style={{ borderRadius: 12, overflow: 'hidden', background: '#131312', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {preview ? <img src={preview} alt="Prévia da arte" style={{ width: '100%' }} /> : <Loader2 className="w-6 h-6 animate-spin" />}
-            </div>
-            <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>O número da oferta é definido na hora de publicar.</p>
-            {dialog.channel === 'whatsapp_group_status' && (
-              <GroupStatusPicker selected={groupJids} onChange={setGroupJids} onReadyChange={setGroupReady} />
-            )}
-            <button type="button" className="rp-btn rp-primary" style={{ width: '100%', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              disabled={!preview || busy || (dialog.channel === 'whatsapp_group_status' && !groupReady)} onClick={publish}>
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Publicar agora
-            </button>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        );
+      })()}
 
-      {settingsTab && (
+      {settingsTab && createPortal(
         <div role="dialog" aria-modal="true" aria-label="Configurações do Instagram Pro" onClick={e => { if (e.target === e.currentTarget) setSettingsTab(null); }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(12, 11, 10,.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+          style={{ position: 'fixed', inset: 0, background: 'rgba(12, 11, 10,.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2147483000, padding: 16 }}>
           <div className="rp-panel" style={{ maxWidth: 680, width: '100%', maxHeight: '92vh', overflow: 'auto', margin: 0, borderRadius: 20, padding: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 22px 0' }}>
               <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Settings className="w-5 h-5" /> Configurações</h2>
@@ -263,13 +299,15 @@ export default function InstagramProPage() {
               {settingsTab === 'automatico' && autopost && <AutopostForm settings={autopost} busy={busy} onSave={next => saveSettings({ autopost: next })} />}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {toast && (
-        <div className="rp-toast" role="status" style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 60, display: 'flex', gap: 8, alignItems: 'center' }}>
+      {toast && createPortal(
+        <div className="rp-toast" role="status" style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 2147483001, display: 'flex', gap: 8, alignItems: 'center' }}>
           {toast.type === 'ok' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <X className="w-4 h-4 text-rose-400" />} {toast.text}
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );

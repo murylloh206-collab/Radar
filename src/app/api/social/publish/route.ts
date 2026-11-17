@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/server/auth';
 import { publishSocialPost, SocialPublishError, type SocialChannel } from '@/lib/server/social-posts';
+import { copierStatusGroups, MAX_STATUS_GROUPS } from '@/lib/server/wa-gateway/copier-groups';
+import { getGatewayStatus } from '@/lib/server/wa-gateway/group-status';
 
 export const dynamic = 'force-dynamic';
 // Status de grupo: conecta, envia a arte e distribui a chave do grupo para cada participante na 1ª vez.
@@ -10,16 +12,25 @@ export const maxDuration = 240;
 export async function POST(req: NextRequest) {
   const session = getSessionFromRequest(req);
   if (!session) return NextResponse.json({ ok: false, error: 'Faça login para continuar.' }, { status: 401 });
-  let body: { jobId?: unknown; channel?: unknown; connectionId?: unknown; groupJids?: unknown };
+  let body: { jobId?: unknown; channel?: unknown; connectionId?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'Requisição inválida.' }, { status: 400 }); }
   if (typeof body.jobId !== 'string' || typeof body.channel !== 'string') {
     return NextResponse.json({ ok: false, error: 'Informe a oferta e o canal.' }, { status: 400 });
   }
   try {
+    // Status nos grupos: sempre os grupos de destino ativos do Copiador (decidido no servidor).
+    let groupJids: string[] | undefined;
+    if (body.channel === 'whatsapp_group_status') {
+      const gateway = await getGatewayStatus(session.userId);
+      if (gateway.status !== 'conectado') return NextResponse.json({ ok: false, error: 'Conecte o status nos grupos pelo QR code antes de publicar.' }, { status: 409 });
+      groupJids = (await copierStatusGroups(session, gateway.phone)).map(group => group.jid);
+      if (!groupJids.length) return NextResponse.json({ ok: false, error: 'Nenhum grupo de destino ativo no Copiador. Ative os grupos no Copiador e tente de novo.' }, { status: 400 });
+      groupJids = groupJids.slice(0, MAX_STATUS_GROUPS);
+    }
     const result = await publishSocialPost(session.userId, {
       jobId: body.jobId, channel: body.channel as SocialChannel,
       connectionId: typeof body.connectionId === 'string' ? body.connectionId : undefined,
-      groupJids: Array.isArray(body.groupJids) ? body.groupJids.filter((j): j is string => typeof j === 'string').slice(0, 10) : undefined,
+      groupJids,
       origin: 'manual',
     });
     const status = result.post.status === 'falha' ? 502 : 200;
