@@ -6,18 +6,18 @@
 export const EMPRESA = {
   marca: 'Radar de Ofertas',
   /** Nome completo da pessoa física responsável (ou razão social quando houver CNPJ). */
-  responsavelNome: '',
+  responsavelNome: 'Michel Henrique Cardoso Callejas Costa (MEI)',
   /** CPF ou CNPJ. Exigido pelo Decreto 7.962/2013 para venda pela internet. */
-  documento: '',
+  documento: '66.337.433/0001-45',
   /** Endereço físico ou eletrônico para contato (Decreto 7.962/2013, art. 2º, II). */
-  endereco: '',
-  cidade: '',
-  uf: '',
+  endereco: 'Rua Coronel José Leopoldino, 213, Centro',
+  cidade: 'Divinolândia',
+  uf: 'SP',
   emailPrivacidade: 'rd.of00@gmail.com',
   emailSuporte: 'rd.of00@gmail.com',
   site: 'https://radarofertasbr.vercel.app',
   /** O dono atua como Encarregado (LGPD, art. 41). */
-  encarregadoNome: '',
+  encarregadoNome: 'Michel Henrique Cardoso Callejas Costa',
   versaoDocumentos: '2026-11-17',
   vigenciaDesde: '17 de novembro de 2026',
 } as const;
@@ -26,7 +26,7 @@ export const dadosPendentes = (): boolean => !EMPRESA.responsavelNome || !EMPRES
 
 export const identificacao = (): string =>
   EMPRESA.responsavelNome
-    ? `${EMPRESA.responsavelNome}${EMPRESA.documento ? `, inscrito(a) sob o nº ${EMPRESA.documento}` : ''}${EMPRESA.cidade ? `, com sede em ${EMPRESA.cidade}/${EMPRESA.uf}` : ''}`
+    ? `${EMPRESA.responsavelNome}${EMPRESA.documento ? `, inscrito(a) no CNPJ sob o nº ${EMPRESA.documento}` : ''}${EMPRESA.cidade ? `, com sede em ${EMPRESA.endereco ? `${EMPRESA.endereco}, ` : ''}${EMPRESA.cidade}/${EMPRESA.uf}` : ''}`
     : 'quem administra o Radar de Ofertas (identificação completa em atualização)';
 
 export const foro = (): string => (EMPRESA.cidade ? `${EMPRESA.cidade}/${EMPRESA.uf}` : 'domicílio do prestador');
