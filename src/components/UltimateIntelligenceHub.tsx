@@ -190,11 +190,11 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
         {feedback && (
           <div
             style={{
-              background: 'rgba(28, 202, 242, 0.1)',
-              border: '1px solid rgba(28, 202, 242, 0.4)',
+              background: 'rgba(245, 197, 66, 0.1)',
+              border: '1px solid rgba(245, 197, 66, 0.4)',
               borderRadius: 12,
               padding: '12px 16px',
-              color: '#E2E8F0',
+              color: '#ebe6da',
               fontSize: 13,
               display: 'flex',
               justifyContent: 'space-between',
@@ -205,7 +205,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
             <button
               type="button"
               onClick={() => setFeedback(null)}
-              style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+              style={{ background: 'none', border: 'none', color: '#a8a39a', cursor: 'pointer' }}
             >
               ✕
             </button>
@@ -221,20 +221,20 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
         >
           <div
             style={{
-              background: '#091526',
-              border: '1px solid #1C314B',
+              background: '#0b0b0a',
+              border: '1px solid #20201f',
               borderRadius: 16,
               padding: 20,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Sparkles className="w-5 h-5 text-[#1CCAF2]" />
+                <Sparkles className="w-5 h-5 text-[#f5c542]" />
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F8FBFF' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#f6f2e8' }}>
                     O que Postar Hoje (Baseado nas suas Métricas Reais)
                   </h3>
-                  <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                  <span style={{ fontSize: 12, color: '#a8a39a' }}>
                     Sugestões calculadas exclusivamente a partir dos cliques reais em /r/[code], vendas convertidas e disparos da sua conta.
                   </span>
                 </div>
@@ -250,7 +250,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
             </div>
 
             {loading ? (
-              <p style={{ fontSize: 13, color: '#8EADC7' }}>Analisando histórico real de cliques e conversões...</p>
+              <p style={{ fontSize: 13, color: '#a8a39a' }}>Analisando histórico real de cliques e conversões...</p>
             ) : !whatToPost?.hasEnoughData ? (
               <div
                 style={{
@@ -266,7 +266,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                     Aguardando dados reais suficientes (Sem números inventados)
                   </strong>
                 </div>
-                <p style={{ margin: 0, fontSize: 12, color: '#CBD5E1', lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: 12, color: '#ddd8cc', lineHeight: 1.5 }}>
                   {whatToPost?.emptyStateExplanation ||
                     'Publique suas primeiras ofertas ou acumule cliques reais nos links /r/[code] para destravar as sugestões de melhor horário e categorias campeãs.'}
                 </p>
@@ -281,28 +281,28 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                   }}
                 >
                   {whatToPost.bestPostingHour && (
-                    <div style={{ background: '#050E1C', border: '1px solid #18283D', borderRadius: 12, padding: 14 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#1CCAF2', fontSize: 11, fontWeight: 700 }}>
+                    <div style={{ background: '#090908', border: '1px solid #20201f', borderRadius: 12, padding: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f5c542', fontSize: 11, fontWeight: 700 }}>
                         <Clock className="w-3.5 h-3.5" /> MELHOR HORÁRIO PARA POSTAR HOJE
                       </div>
-                      <div style={{ fontSize: 22, fontWeight: 900, color: '#F8FBFF', marginTop: 4 }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: '#f6f2e8', marginTop: 4 }}>
                         {whatToPost.bestPostingHour.hourLabel}
                       </div>
-                      <span style={{ fontSize: 11, color: '#8EADC7' }}>
+                      <span style={{ fontSize: 11, color: '#a8a39a' }}>
                         {whatToPost.bestPostingHour.reason}
                       </span>
                     </div>
                   )}
 
-                  <div style={{ background: '#050E1C', border: '1px solid #18283D', borderRadius: 12, padding: 14 }}>
-                    <div style={{ color: '#20C997', fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ background: '#090908', border: '1px solid #20201f', borderRadius: 12, padding: 14 }}>
+                    <div style={{ color: '#5fd0a0', fontSize: 11, fontWeight: 700 }}>
                       CATEGORIAS QUE MAIS CONVERTERAM
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                       {whatToPost.topCategories.slice(0, 3).map((cat: any) => (
                         <div key={cat.categoryKey} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                          <strong style={{ color: '#F8FBFF' }}>{cat.categoryLabel}</strong>
-                          <span style={{ color: '#8EADC7' }}>{cat.conversionSignal}</span>
+                          <strong style={{ color: '#f6f2e8' }}>{cat.categoryLabel}</strong>
+                          <span style={{ color: '#a8a39a' }}>{cat.conversionSignal}</span>
                         </div>
                       ))}
                     </div>
@@ -311,7 +311,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
 
                 {whatToPost.suggestedOffers?.length > 0 && (
                   <div>
-                    <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: '#CBD5E1' }}>
+                    <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: '#ddd8cc' }}>
                       Ofertas recomendadas para postar ou repostar hoje:
                     </h4>
                     <div
@@ -325,8 +325,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                         <div
                           key={idx}
                           style={{
-                            background: '#050E1C',
-                            border: '1px solid #18283D',
+                            background: '#090908',
+                            border: '1px solid #20201f',
                             borderRadius: 12,
                             padding: 12,
                             display: 'flex',
@@ -336,13 +336,13 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                           }}
                         >
                           <div>
-                            <span style={{ fontSize: 10, color: '#1CCAF2', fontWeight: 700 }}>
+                            <span style={{ fontSize: 10, color: '#f5c542', fontWeight: 700 }}>
                               {item.storeName}
                             </span>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#F8FBFF', marginTop: 2 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#f6f2e8', marginTop: 2 }}>
                               {item.title}
                             </div>
-                            <div style={{ fontSize: 11, color: '#20C997', marginTop: 4 }}>
+                            <div style={{ fontSize: 11, color: '#5fd0a0', marginTop: 4 }}>
                               {item.reason}
                             </div>
                           </div>
@@ -382,18 +382,18 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
         >
           <div
             style={{
-              background: '#091526',
-              border: '1px solid #1C314B',
+              background: '#0b0b0a',
+              border: '1px solid #20201f',
               borderRadius: 16,
               padding: 20,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Radar className="w-5 h-5 text-[#20C997]" />
+                <Radar className="w-5 h-5 text-[#5fd0a0]" />
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F8FBFF' }}>
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#f6f2e8' }}>
                       Radar de Oportunidades
                     </h3>
                     <span
@@ -402,23 +402,23 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                         fontWeight: 800,
                         padding: '2px 8px',
                         borderRadius: 999,
-                        background: 'rgba(32, 201, 151, 0.15)',
-                        color: '#20C997',
-                        border: '1px solid rgba(32, 201, 151, 0.35)',
+                        background: 'rgba(95, 208, 160, 0.15)',
+                        color: '#5fd0a0',
+                        border: '1px solid rgba(95, 208, 160, 0.35)',
                       }}
                     >
                       <ShieldCheck className="w-3 h-3 inline mr-1" />
                       NUNCA POSTA SOZINHO · SEMPRE VAI PARA REVISÃO
                     </span>
                   </div>
-                  <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                  <span style={{ fontSize: 12, color: '#a8a39a' }}>
                     Detecta quedas fortes de preço e ofertas relâmpago e aguarda sua revisão antes de qualquer envio.
                   </span>
                 </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <label style={{ fontSize: 12, color: '#CBD5E1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label style={{ fontSize: 12, color: '#ddd8cc', display: 'flex', alignItems: 'center', gap: 6 }}>
                   Queda mínima (%):
                   <input
                     type="number"
@@ -428,11 +428,11 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                     onChange={(e) => setRadarMinDropPct(Number(e.target.value || 25))}
                     style={{
                       width: 68,
-                      background: '#040C1A',
-                      border: '1px solid #1C2E46',
+                      background: '#090908',
+                      border: '1px solid #20201f',
                       borderRadius: 6,
                       padding: '4px 8px',
-                      color: '#F8FBFF',
+                      color: '#f6f2e8',
                     }}
                   />
                 </label>
@@ -473,28 +473,28 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
             {reviewQueue.length === 0 ? (
               <div
                 style={{
-                  background: '#050E1C',
-                  border: '1px dashed #18283D',
+                  background: '#090908',
+                  border: '1px dashed #20201f',
                   borderRadius: 12,
                   padding: 16,
                   textAlign: 'center',
                   fontSize: 12,
-                  color: '#8EADC7',
+                  color: '#a8a39a',
                 }}
               >
                 Nenhuma oportunidade pendente na Fila de Revisão no momento. Clique em &quot;Escanear Oportunidades Agora&quot; para buscar quedas de pelo menos {radarMinDropPct}% OFF no catálogo.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <strong style={{ fontSize: 12, color: '#20C997' }}>
+                <strong style={{ fontSize: 12, color: '#5fd0a0' }}>
                   Fila de Revisão ({reviewQueue.length} oportunidade(s) aguardando sua decisão):
                 </strong>
                 {reviewQueue.map((job: any) => (
                   <div
                     key={job.id}
                     style={{
-                      background: '#050E1C',
-                      border: '1px solid #1C314B',
+                      background: '#090908',
+                      border: '1px solid #20201f',
                       borderRadius: 12,
                       padding: 14,
                       display: 'flex',
@@ -508,10 +508,10 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                       <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 700 }}>
                         AGUARDANDO REVISÃO HUMANA
                       </span>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#F8FBFF', marginTop: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#f6f2e8', marginTop: 2 }}>
                         {job.targetName}
                       </div>
-                      <div style={{ fontSize: 11, color: '#8EADC7', marginTop: 2 }}>
+                      <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 2 }}>
                         Link rastreado: <code>{job.affiliateUrl}</code>
                       </div>
                     </div>
@@ -562,8 +562,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
         >
           <div
             style={{
-              background: '#091526',
-              border: '1px solid #1C314B',
+              background: '#0b0b0a',
+              border: '1px solid #20201f',
               borderRadius: 16,
               padding: 20,
             }}
@@ -572,10 +572,10 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <BellRing className="w-5 h-5 text-[#F59E0B]" />
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F8FBFF' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#f6f2e8' }}>
                     Monitor e Alerta de Queda de Preço
                   </h3>
-                  <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                  <span style={{ fontSize: 12, color: '#a8a39a' }}>
                     Cadastre um produto e o valor desejado; receba aviso no WhatsApp ou Telegram assim que atingir a meta.
                   </span>
                 </div>
@@ -670,7 +670,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
             </form>
 
             {alerts.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#8EADC7' }}>
+              <div style={{ fontSize: 12, color: '#a8a39a' }}>
                 Nenhum alerta de queda de preço ativo. Preencha os campos acima para monitorar seu primeiro produto.
               </div>
             ) : (
@@ -679,8 +679,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                   <div
                     key={al.id}
                     style={{
-                      background: '#050E1C',
-                      border: '1px solid #18283D',
+                      background: '#090908',
+                      border: '1px solid #20201f',
                       borderRadius: 10,
                       padding: '10px 14px',
                       display: 'flex',
@@ -691,14 +691,14 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                     }}
                   >
                     <div>
-                      <strong style={{ fontSize: 13, color: '#F8FBFF' }}>{al.productTitle}</strong>
-                      <div style={{ fontSize: 11, color: '#8EADC7' }}>
+                      <strong style={{ fontSize: 13, color: '#f6f2e8' }}>{al.productTitle}</strong>
+                      <div style={{ fontSize: 11, color: '#a8a39a' }}>
                         Atual: R$ {Number(al.currentPrice).toFixed(2)} ·{' '}
-                        <strong style={{ color: '#20C997' }}>
+                        <strong style={{ color: '#5fd0a0' }}>
                           Meta: ≤ R$ {Number(al.targetPrice).toFixed(2)}
                         </strong>{' '}
                         · Canal: {String(al.notifyChannel).toUpperCase()} · Status:{' '}
-                        <span style={{ color: al.status === 'triggered' ? '#20C997' : '#1CCAF2' }}>
+                        <span style={{ color: al.status === 'triggered' ? '#5fd0a0' : '#f5c542' }}>
                           {al.status === 'triggered' ? 'DISPARADO' : 'MONITORANDO'}
                         </span>
                       </div>
@@ -754,11 +754,11 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
       {feedback && (
         <div
           style={{
-            background: 'rgba(28, 202, 242, 0.1)',
-            border: '1px solid rgba(28, 202, 242, 0.4)',
+            background: 'rgba(245, 197, 66, 0.1)',
+            border: '1px solid rgba(245, 197, 66, 0.4)',
             borderRadius: 12,
             padding: '12px 16px',
-            color: '#E2E8F0',
+            color: '#ebe6da',
             fontSize: 13,
             display: 'flex',
             justifyContent: 'space-between',
@@ -769,7 +769,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
           <button
             type="button"
             onClick={() => setFeedback(null)}
-            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', color: '#a8a39a', cursor: 'pointer' }}
           >
             ✕
           </button>
@@ -785,20 +785,20 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
       >
         <div
           style={{
-            background: '#091526',
-            border: '1px solid #1C314B',
+            background: '#0b0b0a',
+            border: '1px solid #20201f',
             borderRadius: 16,
             padding: 20,
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <FileBarChart2 className="w-5 h-5 text-[#1CCAF2]" />
+              <FileBarChart2 className="w-5 h-5 text-[#f5c542]" />
               <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F8FBFF' }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#f6f2e8' }}>
                   Relatório Semanal Automático (WhatsApp + E-mail)
                 </h3>
-                <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                <span style={{ fontSize: 12, color: '#a8a39a' }}>
                   Comparativo automático de 7 dias vs. semana anterior e destaque da oferta mais clicada.
                 </span>
               </div>
@@ -830,28 +830,28 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                 marginBottom: 14,
               }}
             >
-              <div style={{ background: '#050E1C', border: '1px solid #18283D', borderRadius: 12, padding: 14 }}>
-                <span style={{ fontSize: 11, color: '#8EADC7', fontWeight: 700 }}>
+              <div style={{ background: '#090908', border: '1px solid #20201f', borderRadius: 12, padding: 14 }}>
+                <span style={{ fontSize: 11, color: '#a8a39a', fontWeight: 700 }}>
                   CLIQUES NA SEMANA ATUAL vs. ANTERIOR
                 </span>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#1CCAF2', marginTop: 4 }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#f5c542', marginTop: 4 }}>
                   {weekly.currentWeekClicks} clique(s)
                 </div>
-                <span style={{ fontSize: 11, color: '#CBD5E1' }}>
+                <span style={{ fontSize: 11, color: '#ddd8cc' }}>
                   {weekly.clicksComparisonText}
                 </span>
               </div>
 
-              <div style={{ background: '#050E1C', border: '1px solid #18283D', borderRadius: 12, padding: 14 }}>
-                <span style={{ fontSize: 11, color: '#8EADC7', fontWeight: 700 }}>
+              <div style={{ background: '#090908', border: '1px solid #20201f', borderRadius: 12, padding: 14 }}>
+                <span style={{ fontSize: 11, color: '#a8a39a', fontWeight: 700 }}>
                   MELHOR OFERTA DA SEMANA
                 </span>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#20C997', marginTop: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#5fd0a0', marginTop: 6 }}>
                   {weekly.bestOffer
                     ? `${weekly.bestOffer.title} (${weekly.bestOffer.clicks} clique(s))`
                     : 'Nenhuma oferta clicada nesta semana'}
                 </div>
-                <span style={{ fontSize: 11, color: '#8EADC7' }}>
+                <span style={{ fontSize: 11, color: '#a8a39a' }}>
                   Período: {weekly.periodLabel}
                 </span>
               </div>
@@ -865,10 +865,10 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
               gap: 12,
               alignItems: 'end',
               paddingTop: 10,
-              borderTop: '1px solid #18283D',
+              borderTop: '1px solid #20201f',
             }}
           >
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#F8FBFF' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#f6f2e8' }}>
               <input
                 type="checkbox"
                 checked={reportWaEnabled}
@@ -902,9 +902,9 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
               Salvar preferências
             </button>
           </div>
-          <div style={{ fontSize: 11, color: '#8EADC7', marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 8 }}>
             Status de E-mail no Servidor:{' '}
-            <strong style={{ color: data?.emailEnvConfigured ? '#20C997' : '#F59E0B' }}>
+            <strong style={{ color: data?.emailEnvConfigured ? '#5fd0a0' : '#F59E0B' }}>
               {data?.emailEnvConfigured
                 ? 'RESEND_API_KEY / SMTP detectado e pronto'
                 : 'Apenas WhatsApp ativo (adicione RESEND_API_KEY no .env para habilitar envio por e-mail)'}
@@ -922,8 +922,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
       >
         <div
           style={{
-            background: '#091526',
-            border: '1px solid #1C314B',
+            background: '#0b0b0a',
+            border: '1px solid #20201f',
             borderRadius: 16,
             padding: 20,
             display: 'flex',
@@ -933,12 +933,12 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Users className="w-5 h-5 text-[#20C997]" />
+              <Users className="w-5 h-5 text-[#5fd0a0]" />
               <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F8FBFF' }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#f6f2e8' }}>
                   Gestão de Equipe e Múltiplos Canais
                 </h3>
-                <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                <span style={{ fontSize: 12, color: '#a8a39a' }}>
                   Papéis de Dono e Colaborador com permissões granulares + múltiplos canais de disparo.
                 </span>
               </div>
@@ -960,8 +960,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
               <div
                 key={m.id}
                 style={{
-                  background: '#050E1C',
-                  border: '1px solid #18283D',
+                  background: '#090908',
+                  border: '1px solid #20201f',
                   borderRadius: 10,
                   padding: '10px 14px',
                   display: 'flex',
@@ -973,21 +973,21 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <strong style={{ fontSize: 13, color: '#F8FBFF' }}>{m.name}</strong>
+                    <strong style={{ fontSize: 13, color: '#f6f2e8' }}>{m.name}</strong>
                     <span
                       style={{
                         fontSize: 10,
                         fontWeight: 800,
                         padding: '2px 8px',
                         borderRadius: 999,
-                        background: m.role === 'dono' ? 'rgba(28,202,242,0.18)' : 'rgba(148,163,184,0.18)',
-                        color: m.role === 'dono' ? '#1CCAF2' : '#CBD5E1',
+                        background: m.role === 'dono' ? 'rgba(245, 197, 66,0.18)' : 'rgba(168, 167, 164,0.18)',
+                        color: m.role === 'dono' ? '#f5c542' : '#ddd8cc',
                       }}
                     >
                       {m.role.toUpperCase()}
                     </span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#8EADC7', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 2 }}>
                     {m.email} · Permissões:{' '}
                     {[
                       m.permissions?.canPostOffers ? 'Postar Ofertas' : null,
@@ -1020,8 +1020,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
           </div>
 
           {/* Cadastro de canais adicionais */}
-          <div style={{ borderTop: '1px solid #18283D', paddingTop: 14 }}>
-            <strong style={{ fontSize: 13, color: '#F8FBFF', display: 'block', marginBottom: 8 }}>
+          <div style={{ borderTop: '1px solid #20201f', paddingTop: 14 }}>
+            <strong style={{ fontSize: 13, color: '#f6f2e8', display: 'block', marginBottom: 8 }}>
               Canais Adicionais do Workspace (WhatsApp / Telegram)
             </strong>
             <form
@@ -1078,8 +1078,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                   <div
                     key={ch.id}
                     style={{
-                      background: '#050E1C',
-                      border: '1px solid #18283D',
+                      background: '#090908',
+                      border: '1px solid #20201f',
                       borderRadius: 8,
                       padding: '8px 12px',
                       display: 'flex',
@@ -1089,9 +1089,9 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                     }}
                   >
                     <span>
-                      <strong style={{ color: '#1CCAF2' }}>[{ch.channelType.toUpperCase()}]</strong>{' '}
-                      <strong style={{ color: '#F8FBFF' }}>{ch.label}</strong> —{' '}
-                      <code style={{ color: '#8EADC7' }}>{ch.targetIdentifier}</code>
+                      <strong style={{ color: '#f5c542' }}>[{ch.channelType.toUpperCase()}]</strong>{' '}
+                      <strong style={{ color: '#f6f2e8' }}>{ch.label}</strong> —{' '}
+                      <code style={{ color: '#a8a39a' }}>{ch.targetIdentifier}</code>
                     </span>
                     <button
                       type="button"
@@ -1117,20 +1117,20 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
       {/* 3. PAINEL DE STATUS DOS TRABALHOS EM SEGUNDO PLANO */}
       <div
         style={{
-          background: '#091526',
-          border: '1px solid #18283D',
+          background: '#0b0b0a',
+          border: '1px solid #20201f',
           borderRadius: 16,
           padding: 20,
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Cpu className="w-5 h-5 text-[#1CCAF2]" />
+            <Cpu className="w-5 h-5 text-[#f5c542]" />
             <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F8FBFF' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#f6f2e8' }}>
                 Status do Motor em Segundo Plano (Última Execução, Próxima e Erros)
               </h3>
-              <span style={{ fontSize: 12, color: '#8EADC7' }}>
+              <span style={{ fontSize: 12, color: '#a8a39a' }}>
                 Todos os serviços de fundo (Agendamentos, Alertas, Radar e Relatório Semanal) usam o motor unificado de envios.
               </span>
             </div>
@@ -1152,7 +1152,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #18283D', color: '#8EADC7', textAlign: 'left' }}>
+              <tr style={{ borderBottom: '1px solid #20201f', color: '#a8a39a', textAlign: 'left' }}>
                 <th style={{ padding: '8px 6px' }}>Serviço em Segundo Plano</th>
                 <th style={{ padding: '8px 6px' }}>Cadência</th>
                 <th style={{ padding: '8px 6px' }}>Última Execução</th>
@@ -1162,9 +1162,9 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
             </thead>
             <tbody>
               {bgStatuses.map((st: any) => (
-                <tr key={st.jobKey} style={{ borderBottom: '1px solid #0F1E33', color: '#E2E8F0' }}>
+                <tr key={st.jobKey} style={{ borderBottom: '1px solid #23221f', color: '#ebe6da' }}>
                   <td style={{ padding: '10px 6px', fontWeight: 700 }}>{st.jobLabel}</td>
-                  <td style={{ padding: '10px 6px', color: '#8EADC7' }}>{st.cadenceDescription}</td>
+                  <td style={{ padding: '10px 6px', color: '#a8a39a' }}>{st.cadenceDescription}</td>
                   <td style={{ padding: '10px 6px' }}>
                     {st.lastRunAt
                       ? new Date(st.lastRunAt).toLocaleString('pt-BR')
@@ -1179,11 +1179,11 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
                         Erro: {st.lastError || 'Falha na última execução'}
                       </span>
                     ) : st.lastStatus === 'ok' ? (
-                      <span style={{ color: '#20C997', fontWeight: 700 }}>
+                      <span style={{ color: '#5fd0a0', fontWeight: 700 }}>
                         OK ({st.itemsProcessed} item(ns) processado(s))
                       </span>
                     ) : (
-                      <span style={{ color: '#94A3B8' }}>Pronto (Sem erros)</span>
+                      <span style={{ color: '#a8a39a' }}>Pronto (Sem erros)</span>
                     )}
                   </td>
                 </tr>
@@ -1204,7 +1204,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(2, 8, 19, 0.78)',
+            background: 'rgba(20, 20, 19, 0.78)',
             backdropFilter: 'blur(4px)',
             zIndex: 1000,
             display: 'flex',
@@ -1216,8 +1216,8 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
           <form
             onSubmit={handleSaveMember}
             style={{
-              background: '#091526',
-              border: '1px solid #1C2E46',
+              background: '#0b0b0a',
+              border: '1px solid #20201f',
               borderRadius: 16,
               maxWidth: 480,
               width: '100%',
@@ -1228,13 +1228,13 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 17, color: '#F8FBFF' }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#f6f2e8' }}>
                 Adicionar Membro à Equipe
               </h3>
               <button
                 type="button"
                 onClick={() => setShowMemberModal(false)}
-                style={{ background: 'none', border: 'none', color: '#8EADC7', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#a8a39a', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -1274,7 +1274,7 @@ export function UltimateIntelligenceHub({ mode, onSelectOfferForCopier }: Props)
             </label>
 
             {memberRole === 'colaborador' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#CBD5E1' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#ddd8cc' }}>
                 <strong>Permissões do Colaborador:</strong>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input type="checkbox" checked={permPost} onChange={(e) => setPermPost(e.target.checked)} />

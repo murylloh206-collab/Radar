@@ -79,8 +79,8 @@ export default function ImageDropZone({
           cursor: busy ? 'progress' : 'pointer',
           textAlign: 'left',
           color: 'inherit',
-          background: over ? 'rgba(69,211,199,0.12)' : 'rgba(255,255,255,0.03)',
-          border: `1.5px dashed ${over ? '#45d3c7' : 'rgba(255,255,255,0.22)'}`,
+          background: over ? 'rgba(238, 186, 42,0.12)' : 'rgba(255,255,255,0.03)',
+          border: `1.5px dashed ${over ? '#eeba2a' : 'rgba(255,255,255,0.22)'}`,
           transition: 'background .15s, border-color .15s',
         }}
       >

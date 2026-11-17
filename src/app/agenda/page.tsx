@@ -91,17 +91,17 @@ export default function AgendaPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#F8FBFF] tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-black text-[#f6f2e8] tracking-tight">
             Agenda de Disparos
           </h1>
-          <p className="text-xs sm:text-sm text-[#8EADC7] mt-0.5">
+          <p className="text-xs sm:text-sm text-[#a8a39a] mt-0.5">
             Acompanhe postagens agendadas, disparadas e eventuais tentativas de reenvio.
           </p>
         </div>
 
         <button
           onClick={loadJobs}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#0D1B31] border border-[#18334D] text-[#8EADC7] hover:text-[#1CCAF2] self-start sm:self-auto"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#161616] border border-[#2c2c2c] text-[#a8a39a] hover:text-[#f5c542] self-start sm:self-auto"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Atualizar</span>
@@ -113,8 +113,8 @@ export default function AgendaPage() {
         <div
           className={`p-4 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-fade-in ${
             feedback.type === 'success'
-              ? 'bg-[#20C997]/15 border-[#20C997]/30 text-[#20C997]'
-              : 'bg-[#F87171]/15 border-[#F87171]/30 text-[#F87171]'
+              ? 'bg-[#5fd0a0]/15 border-[#5fd0a0]/30 text-[#5fd0a0]'
+              : 'bg-[#f07878]/15 border-[#f07878]/30 text-[#f07878]'
           }`}
         >
           <div className="flex items-center gap-2.5">
@@ -149,8 +149,8 @@ export default function AgendaPage() {
             onClick={() => setFilterStatus(item.val)}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
               filterStatus === item.val
-                ? 'bg-[#1CCAF2] text-[#061225]'
-                : 'bg-[#0D1B31] border border-[#18334D] text-[#8EADC7] hover:text-[#F8FBFF]'
+                ? 'bg-[#f5c542] text-[#0c0c0d]'
+                : 'bg-[#161616] border border-[#2c2c2c] text-[#a8a39a] hover:text-[#f6f2e8]'
             }`}
           >
             {item.label}
@@ -161,20 +161,20 @@ export default function AgendaPage() {
       {/* Lista de Jobs */}
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-8 text-center text-[#8EADC7]">
+          <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-8 text-center text-[#a8a39a]">
             <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-xs font-bold text-[#F8FBFF]">Nenhum disparo encontrado</p>
+            <p className="text-xs font-bold text-[#f6f2e8]">Nenhum disparo encontrado</p>
             <p className="text-[11px] mt-0.5">Nenhum job registrado com o filtro selecionado.</p>
           </div>
         ) : (
           filtered.map((job) => (
             <div
               key={job.id}
-              className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[#1CCAF2]/30 transition-colors"
+              className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[#f5c542]/30 transition-colors"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#1CCAF2]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#f5c542]">
                     Destino: {job.targetName}
                   </span>
                   <StatusBadge
@@ -192,24 +192,24 @@ export default function AgendaPage() {
                   />
                 </div>
 
-                <p className="text-xs text-[#F8FBFF] mt-1 line-clamp-2 leading-relaxed">
+                <p className="text-xs text-[#f6f2e8] mt-1 line-clamp-2 leading-relaxed">
                   {job.messageText}
                 </p>
 
-                <div className="mt-2 flex items-center gap-3 text-[11px] text-[#8EADC7]">
+                <div className="mt-2 flex items-center gap-3 text-[11px] text-[#a8a39a]">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
                     Programado para: {new Date(job.scheduledFor).toLocaleString('pt-BR')}
                   </span>
                   {job.sentAt && (
-                    <span className="text-[#20C997]">
+                    <span className="text-[#5fd0a0]">
                       Disparado às: {new Date(job.sentAt).toLocaleTimeString('pt-BR')}
                     </span>
                   )}
                 </div>
 
                 {job.errorDetails && (
-                  <p className="mt-1 text-[10px] text-[#F87171] bg-[#F87171]/10 px-2 py-0.5 rounded">
+                  <p className="mt-1 text-[10px] text-[#f07878] bg-[#f07878]/10 px-2 py-0.5 rounded">
                     Erro: {job.errorDetails}
                   </p>
                 )}
@@ -220,13 +220,13 @@ export default function AgendaPage() {
                 <div className="flex items-center gap-2 self-end sm:self-auto">
                   <button
                     onClick={() => handleCancel(job.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#061225] border border-[#18334D] text-[#8EADC7] hover:text-[#F87171]"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0c0c0d] border border-[#2c2c2c] text-[#a8a39a] hover:text-[#f07878]"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={() => handleSendNow(job.id)}
-                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1CCAF2] text-[#061225] hover:opacity-90 flex items-center gap-1"
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#f5c542] text-[#0c0c0d] hover:opacity-90 flex items-center gap-1"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Disparar Agora</span>

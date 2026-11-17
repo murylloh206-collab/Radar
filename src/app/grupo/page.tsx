@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#080f1d',
+  themeColor: '#0b0b0a',
 };
 
 export default function GrupoRadarDeOfertasPage() {
@@ -100,13 +100,13 @@ export default function GrupoRadarDeOfertasPage() {
             <svg viewBox="0 0 560 450" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <linearGradient id="ticket" x2="1" y2="1" gradientUnits="objectBoundingBox">
-                  <stop stopColor="#b6f2ff" />
-                  <stop offset=".56" stopColor="#45d6fa" />
-                  <stop offset="1" stopColor="#389fee" />
+                  <stop stopColor="#ffe7a3" />
+                  <stop offset=".56" stopColor="#faca45" />
+                  <stop offset="1" stopColor="#efbe37" />
                 </linearGradient>
                 <linearGradient id="tag" x2="1" y2="1" gradientUnits="objectBoundingBox">
-                  <stop stopColor="#f1fdff" />
-                  <stop offset="1" stopColor="#73dafa" />
+                  <stop stopColor="#f8f8f8" />
+                  <stop offset="1" stopColor="#fad673" />
                 </linearGradient>
                 <pattern
                   id="lines"
@@ -115,23 +115,23 @@ export default function GrupoRadarDeOfertasPage() {
                   patternUnits="userSpaceOnUse"
                   patternTransform="rotate(34)"
                 >
-                  <path d="M0 0v8" stroke="#0c3b67" strokeOpacity=".19" strokeWidth="2" />
+                  <path d="M0 0v8" stroke="#3c3a37" strokeOpacity=".19" strokeWidth="2" />
                 </pattern>
                 <filter id="shadow" x="-.4" y="-.5" width="1.8" height="2">
                   <feDropShadow
                     dx="0"
                     dy="15"
                     stdDeviation="13"
-                    floodColor="#030914"
+                    floodColor="#0c0c0b"
                     floodOpacity=".6"
                   />
                 </filter>
               </defs>
-              <g fill="none" stroke="#70d6ff" strokeOpacity=".29">
+              <g fill="none" stroke="#ffd970" strokeOpacity=".29">
                 <circle cx="281" cy="222" r="158" strokeDasharray="3 8" />
                 <circle cx="281" cy="222" r="181" />
               </g>
-              <g fill="#b5f4ff">
+              <g fill="#ffe7a3">
                 <path
                   className="sparkle"
                   d="M441 74q2 16 18 18-16 2-18 18-2-16-18-18 16-2 18-18Z"
@@ -149,13 +149,13 @@ export default function GrupoRadarDeOfertasPage() {
                   width="288"
                   height="174"
                   rx="18"
-                  fill="#122c45"
-                  stroke="#4b8bb4"
+                  fill="#2a2209"
+                  stroke="#ecb213"
                   strokeWidth="1.5"
                 />
                 <path
                   d="M227 14v146"
-                  stroke="#4b8bb4"
+                  stroke="#ecb213"
                   strokeOpacity=".55"
                   strokeDasharray="4 6"
                 />
@@ -171,7 +171,7 @@ export default function GrupoRadarDeOfertasPage() {
                 />
                 <path
                   d="M264 13v154"
-                  stroke="#0d3e64"
+                  stroke="#3b3936"
                   strokeWidth="1.5"
                   strokeDasharray="4 6"
                   opacity=".62"
@@ -179,7 +179,7 @@ export default function GrupoRadarDeOfertasPage() {
                 <text
                   x="32"
                   y="42"
-                  fill="#0b3558"
+                  fill="#34322f"
                   fontFamily="monospace"
                   fontSize="14"
                   fontWeight="700"
@@ -188,23 +188,23 @@ export default function GrupoRadarDeOfertasPage() {
                 <text
                   x="29"
                   y="102"
-                  fill="#071a31"
+                  fill="#1d1c1b"
                   fontFamily="system-ui, sans-serif"
                   fontWeight="950"
                   fontSize="55"
                   letterSpacing="-4"
                 >ACHADO!</text>
-                <path d="M33 121h198" stroke="#0d3e64" strokeOpacity=".4" />
+                <path d="M33 121h198" stroke="#3b3936" strokeOpacity=".4" />
                 <text
                   x="33"
                   y="145"
-                  fill="#0b3558"
+                  fill="#34322f"
                   fontFamily="monospace"
                   fontSize="13"
                   fontWeight="700"
                   letterSpacing="2"
                 >CUPONS E PROMOÇÕES</text>
-                <g transform="translate(282 31)" fill="#0c2848">
+                <g transform="translate(282 31)" fill="#2c2b28">
                   <path d="M0 0h3v118H0zm6 0h2v118H6zm5 0h5v118h-5zm8 0h2v118h-2zm5 0h4v118h-4zm8 0h2v118h-2z" />
                 </g>
               </g>
@@ -213,11 +213,11 @@ export default function GrupoRadarDeOfertasPage() {
                   d="M12 0h61l38 42-38 42H12A12 12 0 0 1 0 72V12A12 12 0 0 1 12 0Z"
                   fill="url(#tag)"
                 />
-                <circle cx="92" cy="42" r="5" fill="#0b3558" />
+                <circle cx="92" cy="42" r="5" fill="#34322f" />
                 <path
                   d="M32 56l30-28"
                   fill="none"
-                  stroke="#0b3558"
+                  stroke="#34322f"
                   strokeWidth="4.5"
                   strokeLinecap="round"
                 />
@@ -226,7 +226,7 @@ export default function GrupoRadarDeOfertasPage() {
                   cy="31"
                   r="6.5"
                   fill="none"
-                  stroke="#0b3558"
+                  stroke="#34322f"
                   strokeWidth="4"
                 />
                 <circle
@@ -234,12 +234,12 @@ export default function GrupoRadarDeOfertasPage() {
                   cy="53"
                   r="6.5"
                   fill="none"
-                  stroke="#0b3558"
+                  stroke="#34322f"
                   strokeWidth="4"
                 />
               </g>
               <g
-                fill="#a0dcf6"
+                fill="#f7e09f"
                 opacity=".84"
                 fontFamily="monospace"
                 fontSize="10"
@@ -252,7 +252,7 @@ export default function GrupoRadarDeOfertasPage() {
               <path
                 d="M25 397v21h22m467-384h22v21"
                 fill="none"
-                stroke="#66b4d8"
+                stroke="#f1c54d"
                 strokeOpacity=".6"
               />
             </svg>

@@ -424,7 +424,7 @@ export default function WhatsAppGroupsPanel() {
                       type="button"
                       className="wa-btn-sm"
                       onClick={() => handleReconnectConnection(conn)}
-                      style={{ color: '#39bee6' }}
+                      style={{ color: '#f5c542' }}
                     >
                       <QrCode size={13} style={{ marginRight: 4, display: 'inline' }} />
                       Conectar WhatsApp
@@ -445,7 +445,7 @@ export default function WhatsAppGroupsPanel() {
                     className="wa-btn-sm"
                     onClick={() => setConfirmAction({ type: 'delete', connection: conn })}
                     title="Excluir conta permanentemente"
-                    style={{ color: '#f87171' }}
+                    style={{ color: '#f07878' }}
                   >
                     <Trash2 size={13} aria-hidden="true" />
                   </button>
@@ -668,7 +668,7 @@ export default function WhatsAppGroupsPanel() {
                       required
                       autoFocus
                     />
-                    <p style={{ fontSize: 11, color: '#8fa2af', margin: '6px 0 0' }}>
+                    <p style={{ fontSize: 11, color: '#a1a09d', margin: '6px 0 0' }}>
                       Cada número terá uma instância isolada e segura configurada automaticamente.
                     </p>
                   </div>
@@ -701,9 +701,9 @@ export default function WhatsAppGroupsPanel() {
 
               {modalStep === 'preparing' && (
                 <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                  <RefreshCw size={36} className="wa-spin" style={{ color: '#39bee6', margin: '0 auto 16px' }} />
+                  <RefreshCw size={36} className="wa-spin" style={{ color: '#f5c542', margin: '0 auto 16px' }} />
                   <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Preparando conexão com o WhatsApp</h4>
-                  <p style={{ fontSize: 12, color: '#8fa2af', margin: 0 }}>
+                  <p style={{ fontSize: 12, color: '#a1a09d', margin: 0 }}>
                     Consultando instância e gerando QR Code no gateway...
                   </p>
                 </div>
@@ -711,7 +711,7 @@ export default function WhatsAppGroupsPanel() {
 
               {modalStep === 'qrcode' && (
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, color: '#c5d5e2', margin: '0 0 16px' }}>
+                  <p style={{ fontSize: 13, color: '#d5d4d2', margin: '0 0 16px' }}>
                     Abra o <strong>WhatsApp</strong> no celular &gt; <strong>Aparelhos conectados</strong> &gt; <strong>Conectar um aparelho</strong> e aponte para a tela:
                   </p>
 
@@ -726,7 +726,7 @@ export default function WhatsAppGroupsPanel() {
                     )}
                   </div>
 
-                  <p style={{ fontSize: 11, color: '#8fa2af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px 0 0' }}>
+                  <p style={{ fontSize: 11, color: '#a1a09d', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px 0 0' }}>
                     <RefreshCw size={12} className="wa-spin" />
                     Aguardando leitura do código pelo aparelho celular...
                   </p>
@@ -750,7 +750,7 @@ export default function WhatsAppGroupsPanel() {
                     <Check size={28} />
                   </div>
                   <h4 style={{ margin: '0 0 6px', fontSize: 16 }}>Conta vinculada com sucesso!</h4>
-                  <p style={{ margin: '0 0 12px', fontSize: 13, color: '#9eb0bc' }}>
+                  <p style={{ margin: '0 0 12px', fontSize: 13, color: '#afaeab' }}>
                     {activeNewConn.profileName || activeNewConn.label} ({phoneLabel(activeNewConn.phoneNumber)})
                   </p>
                   <p style={{ fontSize: 11, color: '#68d391' }}>
@@ -833,25 +833,25 @@ export default function WhatsAppGroupsPanel() {
             </div>
             <div className="wa-modal-body">
               {confirmAction.type === 'disconnect' ? (
-                <p style={{ fontSize: 13, lineHeight: 1.6, color: '#c6d5df', margin: 0 }}>
+                <p style={{ fontSize: 13, lineHeight: 1.6, color: '#d4d3d1', margin: 0 }}>
                   Deseja desconectar a sessão de <strong>{confirmAction.connection.label}</strong> ({phoneLabel(confirmAction.connection.phoneNumber)})?
                   <br /><br />
                   Os grupos cadastrados serão mantidos e você poderá reconectar a qualquer momento via QR Code.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <p style={{ fontSize: 13, lineHeight: 1.5, color: '#c6d5df', margin: 0 }}>
+                  <p style={{ fontSize: 13, lineHeight: 1.5, color: '#d4d3d1', margin: 0 }}>
                     Tem certeza de que deseja excluir permanentemente o cadastro de <strong>{confirmAction.connection.label}</strong>?
                     <br />
-                    <span style={{ color: '#8fa2af', fontSize: 12 }}>
+                    <span style={{ color: '#a1a09d', fontSize: 12 }}>
                       Número: {phoneLabel(confirmAction.connection.phoneNumber)}
                     </span>
                   </p>
 
                   {/* Vínculos Afetados */}
-                  <div style={{ background: '#161b1f', border: '1px solid #2e383f', borderRadius: 8, padding: 12, fontSize: 12 }}>
-                    <div style={{ fontWeight: 600, color: '#a0b3c2', marginBottom: 6 }}>Vínculos afetados:</div>
-                    <ul style={{ margin: 0, paddingLeft: 18, color: '#8fa2af', lineHeight: 1.6 }}>
+                  <div style={{ background: '#1b1b1a', border: '1px solid #383735', borderRadius: 8, padding: 12, fontSize: 12 }}>
+                    <div style={{ fontWeight: 600, color: '#b3b2af', marginBottom: 6 }}>Vínculos afetados:</div>
+                    <ul style={{ margin: 0, paddingLeft: 18, color: '#a1a09d', lineHeight: 1.6 }}>
                       <li><strong>{confirmAction.connection.groupsCount ?? 0}</strong> grupos vinculados serão removidos.</li>
                       <li><strong>{confirmAction.connection.sourcesCount ?? 0}</strong> regras de envio serão <span style={{ color: '#fca5a5' }}>pausadas</span> para impedir novos disparos.</li>
                       <li><strong>{confirmAction.connection.jobsCount ?? 0}</strong> mensagens e postagens do histórico serão <span style={{ color: '#86efac' }}>preservadas</span>.</li>
@@ -864,7 +864,7 @@ export default function WhatsAppGroupsPanel() {
                     </div>
                   )}
 
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                  <p style={{ fontSize: 12, color: '#a8a39a', margin: 0 }}>
                     Esta ação também encerrará a sessão do WhatsApp e removerá a instância no gateway Evolution.
                   </p>
 

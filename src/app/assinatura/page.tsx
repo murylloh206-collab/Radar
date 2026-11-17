@@ -17,22 +17,22 @@ type Sub = {
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const muted = { color: '#8ea6b0' };
+const muted = { color: '#a1a09d' };
 
 function situacao(s: Sub): { text: string; color: string } {
   const now = Date.now();
   if (s.status === 'cancelled') {
     return s.accessUntil && Date.parse(s.accessUntil) > now
       ? { text: `Cancelada. Seu acesso continua até ${fmtDate(s.accessUntil)}.`, color: '#f2b84b' }
-      : { text: 'Cancelada.', color: '#8ea6b0' };
+      : { text: 'Cancelada.', color: '#a1a09d' };
   }
   if (s.lastPaymentStatus === 'approved' && s.accessUntil && Date.parse(s.accessUntil) > now) {
     if (s.paidUntil && Date.parse(s.paidUntil) < now) return { text: `Pagamento em atraso. Seu acesso fica liberado até ${fmtDate(s.accessUntil)}.`, color: '#f2b84b' };
-    return { text: 'Ativa e paga.', color: '#45d3c7' };
+    return { text: 'Ativa e paga.', color: '#eeba2a' };
   }
   if (s.lastPaymentStatus === 'rejected') return { text: 'Último pagamento recusado. Atualize o cartão no Mercado Pago.', color: '#ef7b6b' };
   if (s.accessUntil && Date.parse(s.accessUntil) <= now) return { text: 'Vencida. Os envios automáticos estão pausados; seus dados continuam salvos.', color: '#ef7b6b' };
-  return { text: 'Aguardando a confirmação do primeiro pagamento.', color: '#8ea6b0' };
+  return { text: 'Aguardando a confirmação do primeiro pagamento.', color: '#a1a09d' };
 }
 
 export default function MinhaAssinaturaPage() {
@@ -41,6 +41,24 @@ export default function MinhaAssinaturaPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const demo = process.env.NEXT_PUBLIC_PREVIA === '1' ? new URLSearchParams(window.location.search).get('demo') : null;
+    if (demo) {
+      // Estados de DEMONSTRAÇÃO (somente na prévia local): nada é consultado nem cobrado.
+      const day = 86_400_000;
+      const base: Sub = { hasSubscription: true, planName: 'Plus (demonstração)', amount: 59.9, status: 'authorized', lastPaymentStatus: 'approved',
+        paidUntil: new Date(Date.now() + 20 * day).toISOString(), accessUntil: new Date(Date.now() + 22 * day).toISOString(),
+        nextPaymentDate: new Date(Date.now() + 20 * day).toISOString(), environment: 'test' };
+      const states: Record<string, Partial<Sub>> = {
+        ativa: {},
+        atraso: { paidUntil: new Date(Date.now() - day).toISOString(), accessUntil: new Date(Date.now() + day).toISOString() },
+        recusada: { lastPaymentStatus: 'rejected' },
+        cancelada: { status: 'cancelled' },
+        vencida: { lastPaymentStatus: 'pending', accessUntil: new Date(Date.now() - 3 * day).toISOString() },
+      };
+      if (demo === 'carregando') return;
+      setSub({ ...base, ...(states[demo] || {}) });
+      return;
+    }
     const res = await fetch('/api/billing/status?refresh=1', { cache: 'no-store' }).catch(() => null);
     const data = res ? await res.json().catch(() => null) : null;
     if (data?.ok) setSub(data.subscription);
@@ -64,48 +82,86 @@ export default function MinhaAssinaturaPage() {
 
   const sit = sub?.hasSubscription ? situacao(sub) : null;
 
+  const tone = !sit ? 'muted' : sit.color === '#eeba2a' ? 'good' : sit.color === '#ef7b6b' ? 'bad' : sit.color === '#f2b84b' ? 'warn' : 'muted';
+
   return (
-    <main className="min-h-screen p-6 flex justify-center" style={{ background: '#14232b', color: '#e6f0f3' }}>
-      <section className="w-full max-w-lg rounded-2xl p-7 h-fit" style={{ background: '#1b2e37', border: '1px solid #2b4350' }}>
-        <h1 className="text-2xl font-semibold">Minha assinatura</h1>
-        {sub?.environment === 'test' && <p className="text-xs mt-1" style={{ color: '#f2b84b' }}>Ambiente de teste: nenhuma cobrança real.</p>}
-        {!sub && !msg && <p className="mt-4" style={muted}>Consultando o Mercado Pago…</p>}
-        {sub && !sub.hasSubscription && (
-          <>
-            <p className="mt-4" style={muted}>Você ainda não tem assinatura. Escolha um plano para liberar os envios automáticos.</p>
-            <Link href="/planos" className="inline-block mt-5 rounded-lg px-4 py-2 font-semibold" style={{ background: '#45d3c7', color: '#0d2a2d' }}>Ver planos</Link>
-          </>
-        )}
-        {sub?.hasSubscription && sit && (
-          <dl className="mt-5 grid gap-3">
+    <div className="rp-page rv4-narrow">
+      <div className="rp-head">
+        <div>
+          <span className="rp-step">Conta</span>
+          <h1>Minha assinatura</h1>
+          <p>Plano, situação do pagamento e próxima cobrança, direto do Mercado Pago.</p>
+        </div>
+        <Link href="/planos" className="rp-btn">Ver planos</Link>
+      </div>
+
+      {sub?.environment === 'test' && (
+        <div className="rv4-note" data-tone="warn">Ambiente de teste: nenhuma cobrança real.</div>
+      )}
+
+      {!sub && !msg && (
+        <section className="rp-panel rv4-loading" aria-busy="true">
+          <span className="rv4-radar" aria-hidden="true" />
+          <div>
+            <h2>Consultando o Mercado Pago…</h2>
+            <p className="rp-sub">Isso leva só alguns segundos.</p>
+          </div>
+        </section>
+      )}
+
+      {sub && !sub.hasSubscription && (
+        <section className="rp-panel rp-empty">
+          <h2>Você ainda não tem assinatura</h2>
+          <p>Escolha um plano para liberar os envios automáticos.</p>
+          <Link href="/planos" className="rp-btn rp-primary">Ver planos</Link>
+        </section>
+      )}
+
+      {sub?.hasSubscription && sit && (
+        <section className="rp-panel rv4-sub">
+          <div className="rv4-sub-top">
             <div>
-              <dt className="text-xs" style={muted}>Plano</dt>
-              <dd className="text-lg font-semibold">{sub.planName}, {brl(sub.amount || 0)}/mês</dd>
+              <small>Plano atual</small>
+              <strong className="rv4-sub-plan">{sub.planName}</strong>
             </div>
-            <div>
-              <dt className="text-xs" style={muted}>Situação</dt>
-              <dd style={{ color: sit.color }}>{sit.text}</dd>
+            <div className="rv4-sub-price">
+              <strong>{brl(sub.amount || 0)}</strong>
+              <span>por mês</span>
             </div>
+          </div>
+          <div className="rv4-status" data-tone={tone} role="status">
+            <span className="rv4-status-dot" aria-hidden="true" />
+            {sit.text}
+          </div>
+          <dl className="rv4-sub-facts">
             <div>
-              <dt className="text-xs" style={muted}>Próxima cobrança</dt>
+              <dt>Próxima cobrança</dt>
               <dd>{sub.nextPaymentDate ? fmtDate(sub.nextPaymentDate) : 'O Mercado Pago ainda não informou.'}</dd>
             </div>
+            {sub.accessUntil && (
+              <div>
+                <dt>Acesso liberado até</dt>
+                <dd>{fmtDate(sub.accessUntil)}</dd>
+              </div>
+            )}
           </dl>
-        )}
-        {sub?.hasSubscription && sub.status !== 'cancelled' && (
-          <div className="mt-6 flex flex-wrap gap-4 items-center">
-            <button type="button" onClick={cancel} disabled={busy} className="rounded-lg px-4 py-2 text-sm" style={{ border: '1px solid #2b4350' }}>
-              {busy ? 'Cancelando…' : 'Cancelar assinatura'}
-            </button>
-          </div>
-        )}
-        {sub?.hasSubscription && (
-          <p className="text-xs mt-4" style={muted}>
-            Troca de plano com valor proporcional ainda não existe. Para trocar, cancele e assine o novo plano.
-          </p>
-        )}
-        {msg && <p className="mt-4 text-sm" role="status" style={{ color: '#f2b84b' }}>{msg}</p>}
-      </section>
-    </main>
+          {sub.status !== 'cancelled' && (
+            <div className="rp-footer" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="rp-sub" style={{ margin: 0, maxWidth: 380 }}>
+                Troca de plano com valor proporcional ainda não existe. Para trocar, cancele e assine o novo plano.
+              </span>
+              <button type="button" onClick={cancel} disabled={busy} className="rp-btn rp-quiet rv4-danger">
+                {busy ? 'Cancelando…' : 'Cancelar assinatura'}
+              </button>
+            </div>
+          )}
+          {sub.status === 'cancelled' && (
+            <p className="rp-sub">Troca de plano com valor proporcional ainda não existe. Para voltar, assine um novo plano.</p>
+          )}
+        </section>
+      )}
+
+      {msg && <div className="rv4-note" data-tone="warn" role="status">{msg}</div>}
+    </div>
   );
 }

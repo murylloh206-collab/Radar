@@ -136,11 +136,11 @@ interface DashboardData {
 }
 
 const ORIGIN_LABELS: Record<ClickOrigin, { label: string; color: string }> = {
-  whatsapp: { label: 'WhatsApp', color: '#20C997' },
-  telegram: { label: 'Telegram', color: '#38BDF8' },
-  vitrine: { label: 'Vitrine /@slug', color: '#818CF8' },
+  whatsapp: { label: 'WhatsApp', color: '#5fd0a0' },
+  telegram: { label: 'Telegram', color: '#f5c542' },
+  vitrine: { label: 'Vitrine /@slug', color: '#f9dc85' },
   card: { label: 'Card (Feed/Story)', color: '#F472B6' },
-  outro: { label: 'Direto / Outro', color: '#94A3B8' },
+  outro: { label: 'Direto / Outro', color: '#a8a39a' },
 };
 
 function formatBRL(val: number): string {
@@ -185,6 +185,7 @@ function EstatisticasContent() {
   const [isTestCsv, setIsTestCsv] = useState<boolean>(false);
   const [importingCsv, setImportingCsv] = useState(false);
   const [clearingTest, setClearingTest] = useState(false);
+  const [view, setView] = useState<'resumo' | 'cliques' | 'vendas' | 'equipe'>('resumo');
 
   const loadMetrics = async (
     selectedPeriod: string,
@@ -365,101 +366,48 @@ function EstatisticasContent() {
       style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}
     >
       {/* Cabeçalho */}
-      <header
-        className="rp-head"
-        style={{
-          marginBottom: 20,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: 16,
-        }}
-      >
+      <header className="rv6-head">
         <div>
-          <span
-            className="rp-step"
-            style={{ color: '#1CCAF2', fontWeight: 700, fontSize: 12, letterSpacing: 0.5 }}
-          >
-            RADAR DE OFERTAS / ESTATÍSTICAS ({(data?.effectivePlan || subscription.plano).toUpperCase()})
-          </span>
-          <h1
-            style={{
-              fontSize: 26,
-              fontWeight: 800,
-              margin: '4px 0 6px',
-              color: '#F8FBFF',
-              letterSpacing: '-0.03em',
-            }}
-          >
-            Desempenho, Cliques e Vendas por Plano
-          </h1>
-          <p className="rp-sub" style={{ margin: 0, fontSize: 13, color: '#8EADC7' }}>
-            {data?.metricsTier === 'impulse' &&
-              'Plano Impulse: visualizando métricas básicas do WhatsApp.'}
-            {data?.metricsTier === 'plus' &&
-              'Plano Plus: visualizando métricas básicas da plataforma (total de cliques, ofertas postadas, cliques 7d e origens) + WhatsApp.'}
-            {data?.metricsTier === 'ultimate' &&
-              'Plano Ultimate: métricas completas por loja cadastrada, vendas convertidas (API Oficial Shopee + CSV), médias diária/semanal/mensal e filtro de datas.'}
+          <h1>Estatísticas</h1>
+          <p>
+            {data?.metricsTier === 'impulse' && 'Plano Impulse: números dos seus grupos de WhatsApp.'}
+            {data?.metricsTier === 'plus' && 'Plano Plus: grupos de WhatsApp e cliques por canal.'}
+            {data?.metricsTier === 'ultimate' && 'Plano Ultimate: grupos, cliques por canal e vendas por loja.'}
+            {!data?.metricsTier && 'Acompanhe grupos, cliques e vendas no mesmo lugar.'}
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => loadMetrics(period, true)}
-            disabled={refreshing || loading}
-            style={{
-              background: '#0D1B31',
-              border: '1px solid #1C2E46',
-              borderRadius: 8,
-              padding: '7px 12px',
-              color: '#8EADC7',
-              fontSize: 12,
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              cursor: 'pointer',
-            }}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Atualizando…' : 'Atualizar'}
-          </button>
-
-          <label className="rp-field" style={{ margin: 0 }}>
-            <select
-              value={period}
-              onChange={(e) => handlePeriodChange(e.target.value)}
-              style={{
-                background: '#061225',
-                border: '1px solid #1C2E46',
-                borderRadius: 8,
-                padding: '7px 14px',
-                color: '#F8FBFF',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
+        <div className="rv6-head-actions">
+          <label className="rv6-select">
+            <select value={period} onChange={(e) => handlePeriodChange(e.target.value)} aria-label="Período">
               <option value="today">Hoje</option>
               <option value="7d">Últimos 7 dias</option>
               <option value="30d">Últimos 30 dias</option>
               <option value="all">Últimos 90 dias</option>
-              {data?.metricsTier === 'ultimate' && (
-                <option value="custom">📅 Filtro de datas personalizado (Ultimate)</option>
-              )}
+              {data?.metricsTier === 'ultimate' && <option value="custom">Datas personalizadas</option>}
             </select>
           </label>
+          <button type="button" className="rp-btn" onClick={() => loadMetrics(period, true)} disabled={refreshing || loading}>
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {refreshing ? 'Atualizando…' : 'Atualizar'}
+          </button>
         </div>
       </header>
+
+      <div className="rp-tabs" role="tablist" aria-label="Área das estatísticas">
+        {([['resumo', 'Grupos'], ['cliques', 'Cliques'], ['vendas', 'Vendas'], ['equipe', 'Relatório e equipe']] as const).map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={view === key} onClick={() => setView(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Filtro de Datas Personalizado (Exclusivo Ultimate) */}
       {period === 'custom' && data?.metricsTier === 'ultimate' && (
         <div
           style={{
-            background: '#091526',
-            border: '1px solid #1CCAF2',
+            background: '#0b0b0a',
+            border: '1px solid #f5c542',
             borderRadius: 12,
             padding: 14,
             marginBottom: 20,
@@ -469,37 +417,37 @@ function EstatisticasContent() {
             flexWrap: 'wrap',
           }}
         >
-          <Calendar className="w-4 h-4 text-[#1CCAF2]" />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FBFF' }}>
+          <Calendar className="w-4 h-4 text-[#f5c542]" />
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#f6f2e8' }}>
             Intervalo de datas:
           </span>
-          <label style={{ fontSize: 12, color: '#8EADC7', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 12, color: '#a8a39a', display: 'flex', alignItems: 'center', gap: 6 }}>
             De:
             <input
               type="date"
               value={customStartDate}
               onChange={(e) => setCustomStartDate(e.target.value)}
               style={{
-                background: '#040C1A',
-                border: '1px solid #1C2E46',
+                background: '#090908',
+                border: '1px solid #20201f',
                 borderRadius: 6,
                 padding: '4px 8px',
-                color: '#F8FBFF',
+                color: '#f6f2e8',
               }}
             />
           </label>
-          <label style={{ fontSize: 12, color: '#8EADC7', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: 12, color: '#a8a39a', display: 'flex', alignItems: 'center', gap: 6 }}>
             Até:
             <input
               type="date"
               value={customEndDate}
               onChange={(e) => setCustomEndDate(e.target.value)}
               style={{
-                background: '#040C1A',
-                border: '1px solid #1C2E46',
+                background: '#090908',
+                border: '1px solid #20201f',
                 borderRadius: 6,
                 padding: '4px 8px',
-                color: '#F8FBFF',
+                color: '#f6f2e8',
               }}
             />
           </label>
@@ -518,7 +466,7 @@ function EstatisticasContent() {
         <div
           className="rp-panel rp-section"
           style={{
-            borderColor: '#1CCAF2',
+            borderColor: '#f5c542',
             marginBottom: 20,
             display: 'flex',
             justifyContent: 'space-between',
@@ -542,12 +490,13 @@ function EstatisticasContent() {
         </div>
       )}
 
+      {view === 'equipe' && (<>
       {/* SIMULADOR DE CLIQUES DE TESTE (/r/[code]) — EXCLUSIVO EM DESENVOLVIMENTO (NODE_ENV !== 'production') */}
       {data?.isDevMode && (
         <div
           style={{
-            background: 'rgba(28, 202, 242, 0.06)',
-            border: '1px dashed rgba(28, 202, 242, 0.4)',
+            background: 'rgba(245, 197, 66, 0.06)',
+            border: '1px dashed rgba(245, 197, 66, 0.4)',
             borderRadius: 14,
             padding: 16,
             marginBottom: 24,
@@ -555,12 +504,12 @@ function EstatisticasContent() {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <FlaskConical className="w-5 h-5 text-[#1CCAF2]" />
+              <FlaskConical className="w-5 h-5 text-[#f5c542]" />
               <div>
-                <strong style={{ fontSize: 14, color: '#F8FBFF', display: 'block' }}>
+                <strong style={{ fontSize: 14, color: '#f6f2e8', display: 'block' }}>
                   Gerador de Cliques de Teste no Redirecionador (/r/[code]) · Modo Dev
                 </strong>
-                <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                <span style={{ fontSize: 12, color: '#a8a39a' }}>
                   Todo clique e venda de exemplo gerado aqui é marcado com <code>is_test = true</code> e automaticamente excluído em produção.
                 </span>
               </div>
@@ -639,12 +588,14 @@ function EstatisticasContent() {
         </div>
       )}
 
+      </>)}
+      {view === 'resumo' && (<>
       {/* ========================================================================
           CAMADA 1: MÉTRICAS BÁSICAS DO WHATSAPP (IMPULSE, PLUS E ULTIMATE)
       ======================================================================== */}
       <div style={{ marginBottom: 12 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F8FBFF', margin: '0 0 12px' }}>
-          📱 Métricas Básicas do WhatsApp (Disponível em todos os planos)
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f6f2e8', margin: '0 0 12px' }}>
+          Seus grupos de WhatsApp
         </h2>
       </div>
 
@@ -656,68 +607,70 @@ function EstatisticasContent() {
           marginBottom: 28,
         }}
       >
-        <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
+        <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>Integrantes no WhatsApp</span>
-            <Users className="w-4 h-4 text-[#1CCAF2]" />
+            <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>Integrantes no WhatsApp</span>
+            <Users className="w-4 h-4 text-[#f5c542]" />
           </div>
-          <div style={{ fontSize: 30, fontWeight: 900, color: '#F8FBFF' }}>
+          <div style={{ fontSize: 30, fontWeight: 900, color: '#f6f2e8' }}>
             {loading ? '…' : (data?.summary.totalMembers || 0).toLocaleString('pt-BR')}
           </div>
-          <div style={{ fontSize: 11, color: '#20C997', marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: '#5fd0a0', marginTop: 6 }}>
             {data?.summary.destinationGroupsCount || 0} grupo(s) de destino ativo(s)
           </div>
         </div>
 
-        <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
+        <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>Ofertas Postadas (WhatsApp)</span>
-            <Send className="w-4 h-4 text-[#20C997]" />
+            <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>Ofertas Postadas (WhatsApp)</span>
+            <Send className="w-4 h-4 text-[#5fd0a0]" />
           </div>
-          <div style={{ fontSize: 30, fontWeight: 900, color: '#F8FBFF' }}>
+          <div style={{ fontSize: 30, fontWeight: 900, color: '#f6f2e8' }}>
             {loading ? '…' : (data?.summary.totalSent || 0).toLocaleString('pt-BR')}
           </div>
-          <div style={{ fontSize: 11, color: '#8EADC7', marginTop: 6 }}>
-            Hoje: <strong style={{ color: '#F8FBFF' }}>{data?.summary.sentToday || 0}</strong> · 7 dias:{' '}
-            <strong style={{ color: '#F8FBFF' }}>{data?.summary.sentWeek || 0}</strong>
+          <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 6 }}>
+            Hoje: <strong style={{ color: '#f6f2e8' }}>{data?.summary.sentToday || 0}</strong> · 7 dias:{' '}
+            <strong style={{ color: '#f6f2e8' }}>{data?.summary.sentWeek || 0}</strong>
           </div>
         </div>
 
-        <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
+        <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>Taxa de Entrega WhatsApp</span>
+            <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>Taxa de Entrega WhatsApp</span>
             <CheckCircle2 className="w-4 h-4 text-[#F59E0B]" />
           </div>
-          <div style={{ fontSize: 30, fontWeight: 900, color: '#F8FBFF' }}>
+          <div style={{ fontSize: 30, fontWeight: 900, color: '#f6f2e8' }}>
             {loading ? '…' : `${data?.summary.successRate ?? 100}%`}
           </div>
-          <div style={{ fontSize: 11, color: '#8EADC7', marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 6 }}>
             {data?.summary.totalFailed
               ? `${data.summary.totalFailed} falha(s) no período`
               : 'Nenhuma falha de envio'}
           </div>
         </div>
 
-        <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
+        <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>Cliques vindos do WhatsApp (7d)</span>
-            <MousePointerClick className="w-4 h-4 text-[#1CCAF2]" />
+            <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>Cliques vindos do WhatsApp (7d)</span>
+            <MousePointerClick className="w-4 h-4 text-[#f5c542]" />
           </div>
-          <div style={{ fontSize: 30, fontWeight: 900, color: '#F8FBFF' }}>
+          <div style={{ fontSize: 30, fontWeight: 900, color: '#f6f2e8' }}>
             {loading ? '…' : (data?.summary.whatsappClicks7d || 0).toLocaleString('pt-BR')}
           </div>
-          <div style={{ fontSize: 11, color: '#8EADC7', marginTop: 6 }}>
-            Rastreados via <code style={{ color: '#1CCAF2' }}>/r/[code]?src=whatsapp</code>
+          <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 6 }}>
+            Rastreados via <code style={{ color: '#f5c542' }}>/r/[code]?src=whatsapp</code>
           </div>
         </div>
       </div>
 
+      </>)}
+      {view === 'cliques' && (<>
       {/* ========================================================================
           CAMADA 2: MÉTRICAS BÁSICAS DA PLATAFORMA (PLUS E ULTIMATE)
       ======================================================================== */}
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F8FBFF', margin: '0 0 12px' }}>
-          🌐 Métricas Básicas da Plataforma (Plus e Ultimate)
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f6f2e8', margin: '0 0 12px' }}>
+          Cliques nos seus links
         </h2>
 
         <PlanGateCard
@@ -735,46 +688,46 @@ function EstatisticasContent() {
                   gap: 16,
                 }}
               >
-                <div style={{ background: '#091526', border: '1px solid #1C314B', borderRadius: 14, padding: 18 }}>
-                  <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 18 }}>
+                  <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                     Total de Cliques na Plataforma
                   </span>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: '#1CCAF2', marginTop: 6 }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: '#f5c542', marginTop: 6 }}>
                     {data.platformBasic.totalClicksAllTime.toLocaleString('pt-BR')}
                   </div>
-                  <span style={{ fontSize: 11, color: '#8EADC7' }}>
+                  <span style={{ fontSize: 11, color: '#a8a39a' }}>
                     Todos os canais somados (/r/[code])
                   </span>
                 </div>
 
-                <div style={{ background: '#091526', border: '1px solid #1C314B', borderRadius: 14, padding: 18 }}>
-                  <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 18 }}>
+                  <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                     Ofertas Postadas (Total)
                   </span>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: '#20C997', marginTop: 6 }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: '#5fd0a0', marginTop: 6 }}>
                     {data.platformBasic.totalOffersPosted.toLocaleString('pt-BR')}
                   </div>
-                  <span style={{ fontSize: 11, color: '#8EADC7' }}>
+                  <span style={{ fontSize: 11, color: '#a8a39a' }}>
                     Publicações enviadas pela plataforma
                   </span>
                 </div>
 
-                <div style={{ background: '#091526', border: '1px solid #1C314B', borderRadius: 14, padding: 18 }}>
-                  <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 18 }}>
+                  <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                     Cliques nos Últimos 7 Dias
                   </span>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: '#F8FBFF', marginTop: 6 }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: '#f6f2e8', marginTop: 6 }}>
                     {data.platformBasic.clicksLast7Days.toLocaleString('pt-BR')}
                   </div>
-                  <span style={{ fontSize: 11, color: '#8EADC7' }}>
+                  <span style={{ fontSize: 11, color: '#a8a39a' }}>
                     Média de {data.platformBasic.dailyAverageClicks} cliques/dia no período
                   </span>
                 </div>
               </div>
 
               {/* Distribuição por Origem (WhatsApp, Telegram, Vitrine /@slug, Card, Outro) */}
-              <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#F8FBFF', margin: '0 0 12px' }}>
+              <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#f6f2e8', margin: '0 0 12px' }}>
                   Cliques por Canal de Origem (/r/[code])
                 </h3>
                 <div
@@ -791,8 +744,8 @@ function EstatisticasContent() {
                       <div
                         key={orig}
                         style={{
-                          background: '#050E1C',
-                          border: '1px solid #18283D',
+                          background: '#090908',
+                          border: '1px solid #20201f',
                           borderRadius: 10,
                           padding: 12,
                         }}
@@ -800,7 +753,7 @@ function EstatisticasContent() {
                         <span style={{ fontSize: 11, color: info.color, fontWeight: 700 }}>
                           {info.label}
                         </span>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: '#F8FBFF', marginTop: 4 }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#f6f2e8', marginTop: 4 }}>
                           {count}
                         </div>
                       </div>
@@ -811,13 +764,13 @@ function EstatisticasContent() {
                 {/* Últimos Cliques Rastreados */}
                 {data.platformBasic.recentClicks.length > 0 && (
                   <div style={{ marginTop: 18 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: '#8EADC7', margin: '0 0 8px' }}>
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: '#a8a39a', margin: '0 0 8px' }}>
                       Últimos cliques registrados (Data, Loja, Produto e Origem)
                     </h4>
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
-                          <tr style={{ borderBottom: '1px solid #18283D', color: '#8EADC7', textAlign: 'left' }}>
+                          <tr style={{ borderBottom: '1px solid #20201f', color: '#a8a39a', textAlign: 'left' }}>
                             <th style={{ padding: '8px 6px' }}>Data / Hora</th>
                             <th style={{ padding: '8px 6px' }}>Código</th>
                             <th style={{ padding: '8px 6px' }}>Produto</th>
@@ -827,7 +780,7 @@ function EstatisticasContent() {
                         </thead>
                         <tbody>
                           {data.platformBasic.recentClicks.slice(0, 8).map((c) => (
-                            <tr key={c.id} style={{ borderBottom: '1px solid #0F1E33', color: '#E2E8F0' }}>
+                            <tr key={c.id} style={{ borderBottom: '1px solid #23221f', color: '#ebe6da' }}>
                               <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
                                 {new Date(c.createdAt).toLocaleString('pt-BR', {
                                   day: '2-digit',
@@ -836,7 +789,7 @@ function EstatisticasContent() {
                                   minute: '2-digit',
                                 })}
                               </td>
-                              <td style={{ padding: '8px 6px', fontFamily: 'monospace', color: '#1CCAF2' }}>
+                              <td style={{ padding: '8px 6px', fontFamily: 'monospace', color: '#f5c542' }}>
                                 /r/{c.code}
                               </td>
                               <td style={{ padding: '8px 6px', fontWeight: 600 }}>{c.productTitle}</td>
@@ -849,7 +802,7 @@ function EstatisticasContent() {
                                     fontSize: 11,
                                     fontWeight: 700,
                                     background: 'rgba(255,255,255,0.06)',
-                                    color: ORIGIN_LABELS[c.origin]?.color || '#94A3B8',
+                                    color: ORIGIN_LABELS[c.origin]?.color || '#a8a39a',
                                   }}
                                 >
                                   {ORIGIN_LABELS[c.origin]?.label || c.origin}
@@ -868,6 +821,8 @@ function EstatisticasContent() {
         </PlanGateCard>
       </div>
 
+      </>)}
+      {view === 'vendas' && (<>
       {/* ========================================================================
           CAMADA 3: MÉTRICAS COMPLETAS POR LOJA + VENDAS CONVERTIDAS (ULTIMATE)
       ======================================================================== */}
@@ -882,7 +837,7 @@ function EstatisticasContent() {
             marginBottom: 12,
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F8FBFF', margin: 0 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f6f2e8', margin: 0 }}>
             🏆 Cliques, Vendas Convertidas e Médias por Loja (Exclusivo Ultimate)
           </h2>
 
@@ -928,68 +883,68 @@ function EstatisticasContent() {
                   gap: 16,
                 }}
               >
-                <div style={{ background: '#091526', border: '1px solid #1E3A5F', borderRadius: 14, padding: 20 }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #42403b', borderRadius: 14, padding: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                    <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                       Total Geral de Cliques (Período)
                     </span>
-                    <TrendingUp className="w-4 h-4 text-[#1CCAF2]" />
+                    <TrendingUp className="w-4 h-4 text-[#f5c542]" />
                   </div>
-                  <div style={{ fontSize: 30, fontWeight: 900, color: '#F8FBFF', margin: '8px 0' }}>
+                  <div style={{ fontSize: 30, fontWeight: 900, color: '#f6f2e8', margin: '8px 0' }}>
                     {data.ultimateMetrics.totals.clicks.toLocaleString('pt-BR')}
                   </div>
-                  <div style={{ fontSize: 11, color: '#8EADC7', lineHeight: 1.5 }}>
-                    Média Diária: <strong style={{ color: '#1CCAF2' }}>{data.ultimateMetrics.totals.dailyAvgClicks}</strong> ·
-                    Semanal: <strong style={{ color: '#1CCAF2' }}>{data.ultimateMetrics.totals.weeklyAvgClicks}</strong> ·
-                    Mensal: <strong style={{ color: '#1CCAF2' }}>{data.ultimateMetrics.totals.monthlyAvgClicks}</strong>
+                  <div style={{ fontSize: 11, color: '#a8a39a', lineHeight: 1.5 }}>
+                    Média Diária: <strong style={{ color: '#f5c542' }}>{data.ultimateMetrics.totals.dailyAvgClicks}</strong> ·
+                    Semanal: <strong style={{ color: '#f5c542' }}>{data.ultimateMetrics.totals.weeklyAvgClicks}</strong> ·
+                    Mensal: <strong style={{ color: '#f5c542' }}>{data.ultimateMetrics.totals.monthlyAvgClicks}</strong>
                   </div>
                 </div>
 
-                <div style={{ background: '#091526', border: '1px solid #1E3A5F', borderRadius: 14, padding: 20 }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #42403b', borderRadius: 14, padding: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                    <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                       Vendas Convertidas (Quantidade)
                     </span>
-                    <ShoppingBag className="w-4 h-4 text-[#20C997]" />
+                    <ShoppingBag className="w-4 h-4 text-[#5fd0a0]" />
                   </div>
-                  <div style={{ fontSize: 30, fontWeight: 900, color: '#20C997', margin: '8px 0' }}>
+                  <div style={{ fontSize: 30, fontWeight: 900, color: '#5fd0a0', margin: '8px 0' }}>
                     {data.ultimateMetrics.totals.salesCount.toLocaleString('pt-BR')}
                   </div>
-                  <div style={{ fontSize: 11, color: '#8EADC7', lineHeight: 1.5 }}>
-                    Média Diária: <strong style={{ color: '#F8FBFF' }}>{data.ultimateMetrics.totals.dailyAvgSalesCount}</strong> ·
-                    Semanal: <strong style={{ color: '#F8FBFF' }}>{data.ultimateMetrics.totals.weeklyAvgSalesCount}</strong> ·
-                    Mensal: <strong style={{ color: '#F8FBFF' }}>{data.ultimateMetrics.totals.monthlyAvgSalesCount}</strong>
+                  <div style={{ fontSize: 11, color: '#a8a39a', lineHeight: 1.5 }}>
+                    Média Diária: <strong style={{ color: '#f6f2e8' }}>{data.ultimateMetrics.totals.dailyAvgSalesCount}</strong> ·
+                    Semanal: <strong style={{ color: '#f6f2e8' }}>{data.ultimateMetrics.totals.weeklyAvgSalesCount}</strong> ·
+                    Mensal: <strong style={{ color: '#f6f2e8' }}>{data.ultimateMetrics.totals.monthlyAvgSalesCount}</strong>
                   </div>
                 </div>
 
-                <div style={{ background: '#091526', border: '1px solid #1E3A5F', borderRadius: 14, padding: 20 }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #42403b', borderRadius: 14, padding: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                    <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                       Valor Total Vendido (GMV)
                     </span>
                     <DollarSign className="w-4 h-4 text-[#F59E0B]" />
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: '#F8FBFF', margin: '8px 0' }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: '#f6f2e8', margin: '8px 0' }}>
                     {formatBRL(data.ultimateMetrics.totals.totalOrderValue)}
                   </div>
-                  <div style={{ fontSize: 11, color: '#8EADC7', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 11, color: '#a8a39a', lineHeight: 1.5 }}>
                     Média Diária: <strong style={{ color: '#F59E0B' }}>{formatBRL(data.ultimateMetrics.totals.dailyAvgSalesValue)}</strong> ·
                     Semanal: <strong style={{ color: '#F59E0B' }}>{formatBRL(data.ultimateMetrics.totals.weeklyAvgSalesValue)}</strong> ·
                     Mensal: <strong style={{ color: '#F59E0B' }}>{formatBRL(data.ultimateMetrics.totals.monthlyAvgSalesValue)}</strong>
                   </div>
                 </div>
 
-                <div style={{ background: '#091526', border: '1px solid #1E3A5F', borderRadius: 14, padding: 20 }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #42403b', borderRadius: 14, padding: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                    <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                       Comissões Afiliado Confirmadas
                     </span>
-                    <ShieldCheck className="w-4 h-4 text-[#20C997]" />
+                    <ShieldCheck className="w-4 h-4 text-[#5fd0a0]" />
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: '#20C997', margin: '8px 0' }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: '#5fd0a0', margin: '8px 0' }}>
                     {formatBRL(data.ultimateMetrics.totals.totalCommissionValue)}
                   </div>
-                  <div style={{ fontSize: 11, color: '#8EADC7', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 11, color: '#a8a39a', lineHeight: 1.5 }}>
                     Dados reais (API Oficial Shopee + Relatórios CSV importados)
                   </div>
                 </div>
@@ -1003,8 +958,8 @@ function EstatisticasContent() {
                   gap: 18,
                 }}
               >
-                <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 700, color: '#F8FBFF', margin: '0 0 14px' }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, color: '#f6f2e8', margin: '0 0 14px' }}>
                     📊 Evolução de Cliques e Disparos (Últimos 7 dias)
                   </h3>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140, paddingTop: 10 }}>
@@ -1023,7 +978,7 @@ function EstatisticasContent() {
                             justifyContent: 'flex-end',
                           }}
                         >
-                          <span style={{ fontSize: 10, color: '#1CCAF2', fontWeight: 700 }}>
+                          <span style={{ fontSize: 10, color: '#f5c542', fontWeight: 700 }}>
                             {t.clicks}
                           </span>
                           <div
@@ -1032,19 +987,19 @@ function EstatisticasContent() {
                               width: '100%',
                               maxWidth: 34,
                               height: `${clickHeightPct}%`,
-                              background: 'linear-gradient(180deg, #1CCAF2 0%, #0879DF 100%)',
+                              background: 'linear-gradient(180deg, #f5c542 0%, #d9a520 100%)',
                               borderRadius: '6px 6px 2px 2px',
                             }}
                           />
-                          <span style={{ fontSize: 10, color: '#8EADC7' }}>{t.label}</span>
+                          <span style={{ fontSize: 10, color: '#a8a39a' }}>{t.label}</span>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 700, color: '#F8FBFF', margin: '0 0 14px' }}>
+                <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, color: '#f6f2e8', margin: '0 0 14px' }}>
                     💰 Valor de Vendas Convertidas por Dia (Últimos 7 dias)
                   </h3>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140, paddingTop: 10 }}>
@@ -1066,7 +1021,7 @@ function EstatisticasContent() {
                             justifyContent: 'flex-end',
                           }}
                         >
-                          <span style={{ fontSize: 10, color: '#20C997', fontWeight: 700 }}>
+                          <span style={{ fontSize: 10, color: '#5fd0a0', fontWeight: 700 }}>
                             {t.salesValue > 0 ? `R$${Math.round(t.salesValue)}` : '0'}
                           </span>
                           <div
@@ -1077,12 +1032,12 @@ function EstatisticasContent() {
                               height: `${valHeightPct}%`,
                               background:
                                 t.salesValue > 0
-                                  ? 'linear-gradient(180deg, #20C997 0%, #0D9488 100%)'
-                                  : '#162436',
+                                  ? 'linear-gradient(180deg, #5fd0a0 0%, #d4a011 100%)'
+                                  : '#282724',
                               borderRadius: '6px 6px 2px 2px',
                             }}
                           />
-                          <span style={{ fontSize: 10, color: '#8EADC7' }}>{t.label}</span>
+                          <span style={{ fontSize: 10, color: '#a8a39a' }}>{t.label}</span>
                         </div>
                       );
                     })}
@@ -1091,18 +1046,18 @@ function EstatisticasContent() {
               </div>
 
               {/* Tabela Separada por Loja Cadastrada + Total Geral */}
-              <div style={{ background: '#091526', border: '1px solid #18283D', borderRadius: 14, padding: 20 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#F8FBFF', margin: '0 0 6px' }}>
+              <div style={{ background: '#0b0b0a', border: '1px solid #20201f', borderRadius: 14, padding: 20 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f6f2e8', margin: '0 0 6px' }}>
                   Desempenho Separado por Loja Cadastrada + Total Geral
                 </h3>
-                <p style={{ margin: '0 0 14px', fontSize: 12, color: '#8EADC7' }}>
+                <p style={{ margin: '0 0 14px', fontSize: 12, color: '#a8a39a' }}>
                   Cada loja indica transparentemente a origem dos seus dados (API Oficial Shopee ou Importação de Relatório CSV).
                 </p>
 
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid #18283D', color: '#8EADC7', textAlign: 'left' }}>
+                      <tr style={{ borderBottom: '1px solid #20201f', color: '#a8a39a', textAlign: 'left' }}>
                         <th style={{ padding: '10px 8px' }}>Loja</th>
                         <th style={{ padding: '10px 8px' }}>Fonte dos Dados</th>
                         <th style={{ padding: '10px 8px' }}>Cliques (Total)</th>
@@ -1115,7 +1070,7 @@ function EstatisticasContent() {
                     </thead>
                     <tbody>
                       {data.ultimateMetrics.byStore.map((st) => (
-                        <tr key={st.storeSlug} style={{ borderBottom: '1px solid #112236', color: '#F8FBFF' }}>
+                        <tr key={st.storeSlug} style={{ borderBottom: '1px solid #252422', color: '#f6f2e8' }}>
                           <td style={{ padding: '10px 8px', fontWeight: 700 }}>
                             {st.storeName}
                             {st.isCredsConnected ? (
@@ -1125,8 +1080,8 @@ function EstatisticasContent() {
                                   fontSize: 10,
                                   padding: '1px 6px',
                                   borderRadius: 999,
-                                  background: 'rgba(32, 201, 151, 0.15)',
-                                  color: '#20C997',
+                                  background: 'rgba(95, 208, 160, 0.15)',
+                                  color: '#5fd0a0',
                                 }}
                               >
                                 Conectada
@@ -1145,7 +1100,7 @@ function EstatisticasContent() {
                               </Link>
                             )}
                           </td>
-                          <td style={{ padding: '10px 8px', fontSize: 11, color: '#94A3B8' }}>
+                          <td style={{ padding: '10px 8px', fontSize: 11, color: '#a8a39a' }}>
                             {st.activeDataSources.includes('api_oficial_shopee') && (
                               <span className="rp-tag rp-good" style={{ marginRight: 4 }}>
                                 API Oficial Shopee
@@ -1160,10 +1115,10 @@ function EstatisticasContent() {
                               <span>{st.sourceDescription}</span>
                             )}
                           </td>
-                          <td style={{ padding: '10px 8px', fontWeight: 700, color: '#1CCAF2' }}>
+                          <td style={{ padding: '10px 8px', fontWeight: 700, color: '#f5c542' }}>
                             {st.clicks}
                           </td>
-                          <td style={{ padding: '10px 8px', color: '#CBD5E1' }}>
+                          <td style={{ padding: '10px 8px', color: '#ddd8cc' }}>
                             {st.dailyAvgClicks} / {st.weeklyAvgClicks} / {st.monthlyAvgClicks}
                           </td>
                           <td style={{ padding: '10px 8px', fontWeight: 700 }}>
@@ -1172,10 +1127,10 @@ function EstatisticasContent() {
                           <td style={{ padding: '10px 8px', fontWeight: 700 }}>
                             {formatBRL(st.totalOrderValue)}
                           </td>
-                          <td style={{ padding: '10px 8px', fontWeight: 700, color: '#20C997' }}>
+                          <td style={{ padding: '10px 8px', fontWeight: 700, color: '#5fd0a0' }}>
                             {formatBRL(st.totalCommissionValue)}
                           </td>
-                          <td style={{ padding: '10px 8px', color: '#CBD5E1', fontSize: 11 }}>
+                          <td style={{ padding: '10px 8px', color: '#ddd8cc', fontSize: 11 }}>
                             {formatBRL(st.dailyAvgSalesValue)} / {formatBRL(st.weeklyAvgSalesValue)} /{' '}
                             {formatBRL(st.monthlyAvgSalesValue)}
                           </td>
@@ -1185,17 +1140,17 @@ function EstatisticasContent() {
                       {/* Linha de Total Geral */}
                       <tr
                         style={{
-                          background: 'rgba(28, 202, 242, 0.08)',
-                          borderTop: '2px solid #1CCAF2',
-                          color: '#F8FBFF',
+                          background: 'rgba(245, 197, 66, 0.08)',
+                          borderTop: '2px solid #f5c542',
+                          color: '#f6f2e8',
                           fontWeight: 800,
                         }}
                       >
                         <td style={{ padding: '12px 8px' }}>TOTAL GERAL</td>
-                        <td style={{ padding: '12px 8px', fontSize: 11, color: '#1CCAF2' }}>
+                        <td style={{ padding: '12px 8px', fontSize: 11, color: '#f5c542' }}>
                           Todas as lojas consolidadas
                         </td>
-                        <td style={{ padding: '12px 8px', color: '#1CCAF2' }}>
+                        <td style={{ padding: '12px 8px', color: '#f5c542' }}>
                           {data.ultimateMetrics.totals.clicks}
                         </td>
                         <td style={{ padding: '12px 8px' }}>
@@ -1203,13 +1158,13 @@ function EstatisticasContent() {
                           {data.ultimateMetrics.totals.weeklyAvgClicks} /{' '}
                           {data.ultimateMetrics.totals.monthlyAvgClicks}
                         </td>
-                        <td style={{ padding: '12px 8px', color: '#20C997' }}>
+                        <td style={{ padding: '12px 8px', color: '#5fd0a0' }}>
                           {data.ultimateMetrics.totals.salesCount}
                         </td>
                         <td style={{ padding: '12px 8px' }}>
                           {formatBRL(data.ultimateMetrics.totals.totalOrderValue)}
                         </td>
-                        <td style={{ padding: '12px 8px', color: '#20C997' }}>
+                        <td style={{ padding: '12px 8px', color: '#5fd0a0' }}>
                           {formatBRL(data.ultimateMetrics.totals.totalCommissionValue)}
                         </td>
                         <td style={{ padding: '12px 8px', fontSize: 11 }}>
@@ -1244,7 +1199,7 @@ function EstatisticasContent() {
                         <strong style={{ fontSize: 13, color: '#FDE68A', display: 'block' }}>
                           Nenhuma venda convertida registrada neste período (dados 100% reais, sem números falsos)
                         </strong>
-                        <span style={{ fontSize: 12, color: '#CBD5E1' }}>
+                        <span style={{ fontSize: 12, color: '#ddd8cc' }}>
                           Conecte sua conta de afiliado da Shopee em Conexões para puxar vendas via API Oficial ou clique em &quot;Importar Relatório de Vendas (CSV)&quot; para importar vendas do Mercado Livre, Amazon ou Shopee.
                         </span>
                       </div>
@@ -1270,8 +1225,11 @@ function EstatisticasContent() {
         </PlanGateCard>
       </div>
 
+      </>)}
+      {view === 'equipe' && (<>
       {/* Relatório Semanal Automático, Equipe & Status dos Trabalhos em Segundo Plano */}
       <UltimateIntelligenceHub mode="operations" />
+      </>)}
 
       {/* Modal de Importação de Relatório CSV (Fecha ao clicar fora) */}
       {showCsvModal && (
@@ -1284,7 +1242,7 @@ function EstatisticasContent() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(2, 8, 19, 0.78)',
+            background: 'rgba(20, 20, 19, 0.78)',
             backdropFilter: 'blur(4px)',
             zIndex: 1000,
             display: 'flex',
@@ -1295,8 +1253,8 @@ function EstatisticasContent() {
         >
           <div
             style={{
-              background: '#091526',
-              border: '1px solid #1C2E46',
+              background: '#0b0b0a',
+              border: '1px solid #20201f',
               borderRadius: 16,
               maxWidth: 600,
               width: '100%',
@@ -1308,23 +1266,23 @@ function EstatisticasContent() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <span style={{ fontSize: 11, color: '#1CCAF2', fontWeight: 700 }}>
+                <span style={{ fontSize: 11, color: '#f5c542', fontWeight: 700 }}>
                   IMPORTAÇÃO DE CONVERSÕES REAIS (CSV)
                 </span>
-                <h3 style={{ margin: '2px 0 0', fontSize: 18, color: '#F8FBFF' }}>
+                <h3 style={{ margin: '2px 0 0', fontSize: 18, color: '#f6f2e8' }}>
                   Importar Relatório de Vendas de Afiliado
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCsvModal(false)}
-                style={{ background: 'none', border: 'none', color: '#8EADC7', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#a8a39a', cursor: 'pointer' }}
               >
                 <X size={20} />
               </button>
             </div>
 
-            <p style={{ margin: 0, fontSize: 12, color: '#8EADC7' }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#a8a39a' }}>
               Importe o arquivo CSV exportado do painel de afiliados do Mercado Livre, Amazon Associados, Shopee ou Netshoes. Cada venda será identificada como <strong>Fonte: CSV Importado</strong>.
             </p>
 
@@ -1348,7 +1306,7 @@ function EstatisticasContent() {
 
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600 }}>
+                <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600 }}>
                   Conteúdo CSV (cabeçalho: pedido, produto, valor, comissao, data):
                 </span>
                 {data?.isDevMode && (
@@ -1378,11 +1336,11 @@ function EstatisticasContent() {
                 placeholder="pedido,produto,valor,comissao,quantidade,data&#10;MLB-901,Cafeteira Expresso,349.90,27.99,1,2026-11-06"
                 style={{
                   width: '100%',
-                  background: '#040C1A',
-                  border: '1px solid #18283D',
+                  background: '#090908',
+                  border: '1px solid #20201f',
                   borderRadius: 10,
                   padding: 12,
-                  color: '#F8FBFF',
+                  color: '#f6f2e8',
                   fontFamily: 'monospace',
                   fontSize: 12,
                 }}

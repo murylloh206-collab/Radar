@@ -75,47 +75,47 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
   return (
     <>
       <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-        <div className="relative w-full max-w-4xl bg-[#091526] border border-[#18334D] rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden my-auto">
+        <div className="relative w-full max-w-4xl bg-[#0b0b0a] border border-[#2c2c2c] rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden my-auto">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[#18334D] bg-[#061225] shrink-0">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[#2c2c2c] bg-[#0c0c0d] shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#0879DF] to-[#1CCAF2] flex items-center justify-center shadow-lg shadow-[#1CCAF2]/20">
-                <History className="w-5 h-5 text-[#061225]" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#d9a520] to-[#f5c542] flex items-center justify-center shadow-lg shadow-[#f5c542]/20">
+                <History className="w-5 h-5 text-[#0c0c0d]" />
               </div>
               <div>
-                <h2 className="text-sm sm:text-base font-black text-[#F8FBFF]">
+                <h2 className="text-sm sm:text-base font-black text-[#f6f2e8]">
                   Histórico de Ofertas Copiadas
                 </h2>
-                <p className="text-[11px] sm:text-xs text-[#8EADC7]">
+                <p className="text-[11px] sm:text-xs text-[#a8a39a]">
                   Ofertas capturadas, convertidas e enviadas pelo Copiador com opção de Story direto.
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-[#8EADC7] hover:text-[#F8FBFF] hover:bg-[#18334D]/60 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-[#a8a39a] hover:text-[#f6f2e8] hover:bg-[#2c2c2c]/60 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Barra de Busca e Filtros */}
-          <div className="px-5 py-3 border-b border-[#18334D] bg-[#0B1A30]/50 shrink-0 flex items-center gap-3">
+          <div className="px-5 py-3 border-b border-[#2c2c2c] bg-[#1f1e1c]/50 shrink-0 flex items-center gap-3">
             <form onSubmit={handleSearchSubmit} className="flex-1 relative">
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar produto por nome..."
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl pl-9 pr-3 py-2 text-xs text-[#F8FBFF] placeholder-[#8EADC7]/50 focus:outline-none focus:border-[#1CCAF2]"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl pl-9 pr-3 py-2 text-xs text-[#f6f2e8] placeholder-[#a8a39a]/50 focus:outline-none focus:border-[#f5c542]"
               />
-              <Search className="w-4 h-4 text-[#8EADC7] absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-[#a8a39a] absolute left-3 top-2.5" />
             </form>
 
             <button
               type="button"
               onClick={() => fetchHistory(search)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#061225] border border-[#18334D] hover:border-[#1CCAF2]/60 text-xs font-bold text-[#8EADC7] hover:text-[#F8FBFF] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] hover:border-[#f5c542]/60 text-xs font-bold text-[#a8a39a] hover:text-[#f6f2e8] transition-all cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Atualizar
@@ -125,14 +125,14 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
           {/* Lista de Ofertas */}
           <div className="p-5 overflow-y-auto space-y-3 flex-1">
             {loading ? (
-              <div className="py-16 text-center text-xs text-[#8EADC7]">
-                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1CCAF2]" />
+              <div className="py-16 text-center text-xs text-[#a8a39a]">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#f5c542]" />
                 Carregando ofertas copiadas...
               </div>
             ) : items.length === 0 ? (
-              <div className="py-16 text-center text-xs text-[#8EADC7] bg-[#0D1B31] border border-[#18334D] rounded-xl p-8">
-                <History className="w-8 h-8 mx-auto mb-2 opacity-40 text-[#1CCAF2]" />
-                <p className="font-bold text-[#F8FBFF] text-sm">Nenhuma oferta encontrada</p>
+              <div className="py-16 text-center text-xs text-[#a8a39a] bg-[#161616] border border-[#2c2c2c] rounded-xl p-8">
+                <History className="w-8 h-8 mx-auto mb-2 opacity-40 text-[#f5c542]" />
+                <p className="font-bold text-[#f6f2e8] text-sm">Nenhuma oferta encontrada</p>
                 <p className="mt-1">
                   Assim que o Copiador processar e enviar produtos de grupos do WhatsApp, eles aparecerão aqui.
                 </p>
@@ -143,12 +143,12 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
                 return (
                   <div
                     key={item.id}
-                    className="p-4 rounded-xl bg-[#0D1B31] border border-[#18334D] hover:border-[#1CCAF2]/40 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    className="p-4 rounded-xl bg-[#161616] border border-[#2c2c2c] hover:border-[#f5c542]/40 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                   >
                     {/* Imagem + Infos */}
                     <div className="flex items-center gap-3.5 flex-1 min-w-0">
                       {item.mediaUrl ? (
-                        <div className="w-16 h-16 rounded-xl bg-white border border-[#18334D] shrink-0 p-1 overflow-hidden flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-xl bg-white border border-[#2c2c2c] shrink-0 p-1 overflow-hidden flex items-center justify-center">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={item.mediaUrl}
@@ -157,17 +157,17 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
                           />
                         </div>
                       ) : (
-                        <div className="w-16 h-16 rounded-xl bg-[#061225] border border-[#18334D] shrink-0 flex items-center justify-center text-xs text-[#8EADC7]">
+                        <div className="w-16 h-16 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] shrink-0 flex items-center justify-center text-xs text-[#a8a39a]">
                           Sem foto
                         </div>
                       )}
 
                       <div className="space-y-1 min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase text-[#1CCAF2] tracking-wider">
+                          <span className="text-[10px] font-black uppercase text-[#f5c542] tracking-wider">
                             {item.store}
                           </span>
-                          <span className="text-[10px] text-[#8EADC7] flex items-center gap-1">
+                          <span className="text-[10px] text-[#a8a39a] flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {new Date(item.sentAt).toLocaleDateString('pt-BR')} às{' '}
                             {new Date(item.sentAt).toLocaleTimeString('pt-BR', {
@@ -177,26 +177,26 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
                           </span>
                         </div>
 
-                        <h3 className="text-xs sm:text-sm font-bold text-[#F8FBFF] truncate" title={item.title}>
+                        <h3 className="text-xs sm:text-sm font-bold text-[#f6f2e8] truncate" title={item.title}>
                           {item.title}
                         </h3>
 
                         <div className="flex items-baseline gap-2 pt-0.5">
                           {item.priceOriginal && (
-                            <span className="text-[11px] text-[#8EADC7] line-through">
+                            <span className="text-[11px] text-[#a8a39a] line-through">
                               De: R$ {item.priceOriginal}
                             </span>
                           )}
-                          <span className="text-xs sm:text-sm font-black text-[#1CCAF2]">
+                          <span className="text-xs sm:text-sm font-black text-[#f5c542]">
                             Por: R$ {item.priceCurrent}
                           </span>
                           {discount && (
-                            <span className="text-[10px] font-bold text-[#20C997] bg-[#20C997]/15 px-1.5 py-0.2 rounded">
+                            <span className="text-[10px] font-bold text-[#5fd0a0] bg-[#5fd0a0]/15 px-1.5 py-0.2 rounded">
                               -{discount}% OFF
                             </span>
                           )}
                           {item.coupon && (
-                            <span className="text-[10px] font-bold text-[#1CCAF2] bg-[#1CCAF2]/15 px-1.5 py-0.2 rounded">
+                            <span className="text-[10px] font-bold text-[#f5c542] bg-[#f5c542]/15 px-1.5 py-0.2 rounded">
                               🎟️ {item.coupon}
                             </span>
                           )}
@@ -205,21 +205,21 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
                     </div>
 
                     {/* Ações */}
-                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 border-[#18334D]/60 pt-2 sm:pt-0">
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 border-[#2c2c2c]/60 pt-2 sm:pt-0">
                       <button
                         type="button"
                         onClick={() => handleCopyLink(item)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#061225] border border-[#18334D] hover:border-[#1CCAF2]/60 text-xs font-bold text-[#F8FBFF] transition-all cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] hover:border-[#f5c542]/60 text-xs font-bold text-[#f6f2e8] transition-all cursor-pointer"
                         title="Copiar Link de Afiliado"
                       >
                         {copiedId === item.id ? (
                           <>
-                            <Check className="w-3.5 h-3.5 text-[#20C997]" />
-                            <span className="text-[#20C997]">Copiado!</span>
+                            <Check className="w-3.5 h-3.5 text-[#5fd0a0]" />
+                            <span className="text-[#5fd0a0]">Copiado!</span>
                           </>
                         ) : (
                           <>
-                            <Copy className="w-3.5 h-3.5 text-[#8EADC7]" />
+                            <Copy className="w-3.5 h-3.5 text-[#a8a39a]" />
                             <span>Link</span>
                           </>
                         )}
@@ -231,10 +231,10 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
                           setSelectedOfferForStory(item);
                           setActiveModalTab('feed');
                         }}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#061225] border border-[#18334D] hover:border-[#1CCAF2]/60 text-xs font-bold text-[#F8FBFF] transition-all cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] hover:border-[#f5c542]/60 text-xs font-bold text-[#f6f2e8] transition-all cursor-pointer"
                         title="Criar Post de Feed com legenda gerada automaticamente"
                       >
-                        <FileText className="w-3.5 h-3.5 text-[#1CCAF2]" />
+                        <FileText className="w-3.5 h-3.5 text-[#f5c542]" />
                         <span>Criar Post</span>
                       </button>
 

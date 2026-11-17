@@ -285,10 +285,10 @@ export default function WatermarkAndSafeDispatchPanel() {
                 marginTop: 12,
                 padding: '12px 14px',
                 borderRadius: 12,
-                background: 'rgba(99, 102, 241, 0.12)',
-                border: '1px solid rgba(99, 102, 241, 0.3)',
+                background: 'rgba(245, 197, 66, 0.12)',
+                border: '1px solid rgba(245, 197, 66, 0.3)',
                 fontSize: 12,
-                color: '#e0e7ff',
+                color: '#fef8e3',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -306,7 +306,7 @@ export default function WatermarkAndSafeDispatchPanel() {
                 style={{
                   padding: '5px 10px',
                   borderRadius: 8,
-                  background: '#6366f1',
+                  background: '#f5c542',
                   color: '#fff',
                   fontWeight: 700,
                   border: 'none',
@@ -463,7 +463,7 @@ export default function WatermarkAndSafeDispatchPanel() {
                     onChange={(e) => setAccentColor(e.target.value)}
                     style={{ width: 42, height: 36, padding: 2, borderRadius: 8, cursor: canCustomize ? 'pointer' : 'not-allowed' }}
                   />
-                  <span style={{ fontSize: 12, color: '#cbd5e1' }}>
+                  <span style={{ fontSize: 12, color: '#ddd8cc' }}>
                     {canCustomize ? accentColor : '#6366f1 (Padrão)'}
                   </span>
                 </div>
@@ -502,7 +502,7 @@ export default function WatermarkAndSafeDispatchPanel() {
               Prévia ao vivo (1:1 WhatsApp)
             </h2>
             {canCustomize && (
-              <span style={{ fontSize: 11, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 11, color: '#a8a39a', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <Move className="w-3.5 h-3.5" /> Arraste a marca na imagem
               </span>
             )}
@@ -540,16 +540,16 @@ export default function WatermarkAndSafeDispatchPanel() {
             }}
           >
             {/* Produto ilustrativo para prévia da marca d'água */}
-            <div style={{ textAlign: 'center', padding: 24, color: '#1e293b', pointerEvents: 'none' }}>
+            <div style={{ textAlign: 'center', padding: 24, color: '#20201f', pointerEvents: 'none' }}>
               <img
                 src="/icon.png"
                 alt="Produto exemplo"
                 style={{ width: 120, height: 120, objectFit: 'contain', margin: '0 auto 12px', opacity: 0.9 }}
               />
-              <strong style={{ display: 'block', fontSize: 14, color: '#0f172a' }}>
+              <strong style={{ display: 'block', fontSize: 14, color: '#0c0c0d' }}>
                 Fotografia do Produto (1080×1080)
               </strong>
-              <span style={{ fontSize: 12, color: '#64748b' }}>
+              <span style={{ fontSize: 12, color: '#7a7875' }}>
                 Enquadramento seguro sem cortes no WhatsApp
               </span>
             </div>
@@ -566,8 +566,8 @@ export default function WatermarkAndSafeDispatchPanel() {
                   gap: 8,
                   padding: '5px 13px 5px 6px',
                   borderRadius: 999,
-                  background: 'linear-gradient(90deg, rgba(6,18,37,0.96) 0%, rgba(11,26,48,0.96) 100%)',
-                  border: '1.5px solid rgba(28, 202, 242, 0.8)',
+                  background: 'linear-gradient(90deg, rgba(23, 22, 20,0.96) 0%, rgba(31, 30, 28,0.96) 100%)',
+                  border: '1.5px solid rgba(245, 197, 66, 0.8)',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.28)',
                   pointerEvents: 'none',
                   whiteSpace: 'nowrap',
@@ -586,7 +586,7 @@ export default function WatermarkAndSafeDispatchPanel() {
                     style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover' }}
                   />
                 )}
-                <span style={{ width: 1, height: 16, background: 'rgba(28, 202, 242, 0.45)' }} />
+                <span style={{ width: 1, height: 16, background: 'rgba(245, 197, 66, 0.45)' }} />
                 <span style={{ color: '#ffffff', fontWeight: 700, fontSize: 13, letterSpacing: 0.2 }}>
                   {displayHandle}
                 </span>
@@ -640,7 +640,7 @@ export default function WatermarkAndSafeDispatchPanel() {
                 value={safeDispatchDelaySec}
                 onChange={(e) => setSafeDispatchDelaySec(Number(e.target.value))}
               />
-              <small style={{ color: '#94a3b8', fontSize: 11 }}>
+              <small style={{ color: '#a8a39a', fontSize: 11 }}>
                 Recomendado: entre 30 e 60 segundos para evitar bloqueios no WhatsApp.
               </small>
             </label>
@@ -654,7 +654,7 @@ export default function WatermarkAndSafeDispatchPanel() {
                 value={safeDispatchHourlyLimit}
                 onChange={(e) => setSafeDispatchHourlyLimit(Number(e.target.value))}
               />
-              <small style={{ color: '#94a3b8', fontSize: 11 }}>
+              <small style={{ color: '#a8a39a', fontSize: 11 }}>
                 Recomendado: até 30 mensagens por hora por número conectado.
               </small>
             </label>

@@ -16,7 +16,7 @@ export function MetricCard({
   value,
   subtitle,
   icon: Icon,
-  color = '#1CCAF2',
+  color = '#f5c542',
   trend,
   trendPositive,
   highlight = false,
@@ -37,22 +37,22 @@ export function MetricCard({
     <div
       className={`relative overflow-hidden rounded-2xl border p-3.5 sm:p-4 transition-all duration-200 ${
         highlight
-          ? 'bg-gradient-to-br from-[#0D1B31] to-[#0A2244] border-[#1CCAF2]/40 shadow-lg shadow-[#1CCAF2]/10'
-          : 'bg-[#0D1B31] border-[#18334D] hover:border-[#1CCAF2]/30'
+          ? 'bg-gradient-to-br from-[#161616] to-[#292825] border-[#f5c542]/40 shadow-lg shadow-[#f5c542]/10'
+          : 'bg-[#161616] border-[#2c2c2c] hover:border-[#f5c542]/30'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#8EADC7] truncate">
+          <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#a8a39a] truncate">
             {title}
           </p>
-          <h3 className="mt-1 text-lg sm:text-2xl font-black tracking-tight text-[#F8FBFF] truncate">
+          <h3 className="mt-1 text-lg sm:text-2xl font-black tracking-tight text-[#f6f2e8] truncate">
             {value}
           </h3>
         </div>
         {Icon && (
           <div
-            className="flex h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#061225] border border-[#18334D]"
+            className="flex h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#0c0c0d] border border-[#2c2c2c]"
             style={{ color }}
           >
             {renderIcon()}
@@ -65,13 +65,13 @@ export function MetricCard({
           {trend && (
             <span
               className={`font-semibold flex-shrink-0 ${
-                trendPositive ? 'text-[#20C997]' : 'text-[#F87171]'
+                trendPositive ? 'text-[#5fd0a0]' : 'text-[#f07878]'
               }`}
             >
               {trend}
             </span>
           )}
-          {subtitle && <span className="text-[#8EADC7] truncate">{subtitle}</span>}
+          {subtitle && <span className="text-[#a8a39a] truncate">{subtitle}</span>}
         </div>
       )}
     </div>

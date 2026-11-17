@@ -28,6 +28,9 @@ import { useWhatsAppWorkspace } from '@/components/WhatsAppWorkspaceProvider';
 import { usePlan } from '@/components/PlanProvider';
 import { PlanId } from '@/lib/plans-config';
 import { BrandLogo } from '@/components/BrandLogo';
+import { MotionLayer } from '@/components/MotionLayer';
+import { AccountStudio } from '@/components/avatar/AccountStudio';
+import { RadarAvatar, useSavedAvatar } from '@/components/avatar/RadarAvatar';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -37,7 +40,7 @@ const STANDALONE_PAGES = ['/', '/login', '/cadastro', '/termos', '/privacidade',
 
 function isStandalonePage(pathname: string | null): boolean {
   if (!pathname) return false;
-  if (STANDALONE_PAGES.includes(pathname) || pathname.startsWith('/grupo/')) return true;
+  if (STANDALONE_PAGES.includes(pathname) || pathname.startsWith('/grupo/') || pathname === '/previa' || pathname.startsWith('/previa/')) return true;
   if (
     pathname.startsWith('/r/') ||
     pathname.startsWith('/u/') ||
@@ -72,7 +75,7 @@ export function AppShell({ children }: AppShellProps) {
   // Branding personalizado do painel (Plus e Ultimate)
   const [customPanelName, setCustomPanelName] = useState<string>('Radar de Ofertas');
   const [customPanelLogoUrl, setCustomPanelLogoUrl] = useState<string | null>(null);
-  const [customAccentColor, setCustomAccentColor] = useState<string>('#1CCAF2');
+  const [customAccentColor, setCustomAccentColor] = useState<string>('#f5c542');
 
   // Informações de autenticação e conexão reais
   const [userName, setUserName] = useState<string>('Minha Conta');
@@ -80,9 +83,8 @@ export function AppShell({ children }: AppShellProps) {
   const [waConnected, setWaConnected] = useState<boolean>(false);
   const [waStatusLabel, setWaStatusLabel] = useState('Consultando WhatsApp…');
   const [waPhone, setWaPhone] = useState<string>('');
-  const [prefNightPause, setPrefNightPause] = useState(true);
-  const [prefInterval, setPrefInterval] = useState(30);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const savedProfile = useSavedAvatar();
 
   // Escuta evento customizado para abrir o diálogo de lojas de qualquer lugar
   useEffect(() => {
@@ -117,7 +119,7 @@ export function AppShell({ children }: AppShellProps) {
           if (data.ok && data.settings) {
             setCustomPanelName(data.settings.panelName || 'Radar de Ofertas');
             setCustomPanelLogoUrl(data.settings.panelLogoUrl || null);
-            setCustomAccentColor(data.settings.accentColor || '#1CCAF2');
+            setCustomAccentColor(data.settings.accentColor || '#f5c542');
           }
         })
         .catch(() => {});
@@ -161,6 +163,7 @@ export function AppShell({ children }: AppShellProps) {
     if (pathname.startsWith('/pagina-publica') || pathname.startsWith('/bio-link')) return 'Página pública';
     if (pathname.startsWith('/conexoes') || pathname.startsWith('/conexao-whatsapp') || pathname.startsWith('/conectar-lojas') || pathname.startsWith('/ajustes')) return 'Conexões';
     if (pathname.startsWith('/planos')) return 'Planos e Assinatura';
+    if (pathname.startsWith('/assinatura')) return 'Minha assinatura';
     return 'Início';
   };
 
@@ -180,6 +183,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="rdv3-app" data-menu-open={menuOpen ? 'true' : 'false'}>
+      <MotionLayer />
       {/* Backdrop móvel */}
       <button
         className="rdv3-menu-backdrop"
@@ -222,7 +226,7 @@ export function AppShell({ children }: AppShellProps) {
             </span>
           )}
           <span>
-            <strong style={canUsePanelBranding ? { color: '#f8fbff' } : undefined}>
+            <strong style={canUsePanelBranding ? { color: '#f6f2e8' } : undefined}>
               {canUsePanelBranding && customPanelName
                 ? customPanelName.split(' ')[0].toUpperCase()
                 : 'RADAR'}
@@ -345,21 +349,10 @@ export function AppShell({ children }: AppShellProps) {
             aria-current={isCurrent('/planos') ? 'page' : undefined}
           >
             <span className="nav-icon">
-              <Sparkles className="w-3.5 h-3.5 text-[#818cf8]" />
+              <Sparkles className="w-3.5 h-3.5" />
             </span>
             Planos
-            <span
-              style={{
-                marginLeft: 'auto',
-                fontSize: 10,
-                padding: '2px 6px',
-                borderRadius: 999,
-                background: 'rgba(99, 102, 241, 0.2)',
-                border: '1px solid rgba(99, 102, 241, 0.35)',
-                color: '#c7d2fe',
-                fontWeight: 600,
-              }}
-            >
+            <span className="rv4-plan-badge">
               {planDefinition.name}
             </span>
           </Link>
@@ -375,10 +368,10 @@ export function AppShell({ children }: AppShellProps) {
             aria-expanded={accountMenuOpen}
             aria-label="Abrir menu de conta"
           >
-            <span className="rdv3-avatar">{userInitials}</span>
+            {savedProfile.avatar ? <RadarAvatar config={savedProfile.avatar} size={38} /> : <span className="rdv3-avatar">{userInitials}</span>}
             <span>
               <small>Minha conta</small>
-              <strong>{userName}</strong>
+              <strong>{savedProfile.name || userName}</strong>
             </span>
             <span className="rdv3-chevron" aria-hidden="true">
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${accountMenuOpen ? 'rotate-180' : ''}`} />
@@ -394,7 +387,7 @@ export function AppShell({ children }: AppShellProps) {
                   setShowAccountDialog(true);
                 }}
               >
-                <Sliders className="w-3.5 h-3.5 text-[#39bee6]" />
+                <Sliders className="w-3.5 h-3.5 text-[#f5c542]" />
                 Minha conta e preferências
               </button>
 
@@ -403,7 +396,7 @@ export function AppShell({ children }: AppShellProps) {
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-200 hover:bg-white/5 rounded-lg"
                 onClick={() => setAccountMenuOpen(false)}
               >
-                <Sliders className="w-3.5 h-3.5 text-[#39bee6]" />
+                <Sliders className="w-3.5 h-3.5 text-[#f5c542]" />
                 Minha assinatura
               </a>
 
@@ -414,7 +407,7 @@ export function AppShell({ children }: AppShellProps) {
                   setShowHelpDialog(true);
                 }}
               >
-                <HelpCircle className="w-3.5 h-3.5 text-[#aab2b7]" />
+                <HelpCircle className="w-3.5 h-3.5 text-[#a8a39a]" />
                 Ajuda
               </button>
 
@@ -481,37 +474,22 @@ export function AppShell({ children }: AppShellProps) {
       <main className="rdv3-content">
         <div className="rdv3-top" style={{ flexWrap: 'wrap', gap: 10 }}>
           <span className="rdv3-crumb">
-            Radar de Ofertas / <span className="rp-location">{pageTitle}</span>
+            Radar de Ofertas <span aria-hidden="true">/</span> <span className="rp-location">{pageTitle}</span>
           </span>
 
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginLeft: 'auto' }}>
             {/* Contador diário de ofertas do plano */}
             <Link
               href="/planos"
+              className="rv4-chip"
+              data-tone={quota.limitReached ? 'bad' : undefined}
               title="Limite diário de ofertas postadas no seu plano atual"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '5px 10px',
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 600,
-                textDecoration: 'none',
-                background: quota.limitReached
-                  ? 'rgba(239, 68, 68, 0.16)'
-                  : 'rgba(99, 102, 241, 0.14)',
-                border: quota.limitReached
-                  ? '1px solid rgba(239, 68, 68, 0.45)'
-                  : '1px solid rgba(99, 102, 241, 0.32)',
-                color: quota.limitReached ? '#fca5a5' : '#e0e7ff',
-              }}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Plano {planDefinition.name}:</span>
+              <span>Plano {planDefinition.name}</span>
               <strong>
                 {quota.dailyLimit === null
-                  ? `${quota.postedToday} hoje (Ilimitado)`
+                  ? `${quota.postedToday} hoje · ilimitado`
                   : `${quota.postedToday}/${quota.dailyLimit} ofertas hoje`}
               </strong>
               {quota.limitReached && (
@@ -522,27 +500,19 @@ export function AppShell({ children }: AppShellProps) {
             {/* Seletor "Plano de teste" — VISÍVEL E FUNCIONAL EXCLUSIVAMENTE EM DESENVOLVIMENTO (NODE_ENV !== 'production') */}
             {isDevMode && (
               <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '3px 8px',
-                  borderRadius: 999,
-                  background: 'rgba(245, 158, 11, 0.14)',
-                  border: '1px solid rgba(245, 158, 11, 0.4)',
-                  fontSize: 11,
-                  color: '#fde68a',
-                }}
+                className="rv4-chip"
+                data-tone="dev"
                 title="Visível apenas em ambiente de desenvolvimento (NODE_ENV !== production)"
               >
-                <FlaskConical className="w-3.5 h-3.5 text-amber-400" />
-                <span style={{ fontWeight: 600 }}>Plano de teste (DEV):</span>
-                {(['impulse', 'plus', 'ultimate'] as PlanId[]).map((pid) => {
-                  const active = subscription.plano === pid;
-                  return (
+                <FlaskConical className="w-3.5 h-3.5" />
+                <span>Plano de teste</span>
+                <span className="rv4-seg">
+                  {(['impulse', 'plus', 'ultimate'] as PlanId[]).map((pid) => (
                     <button
                       key={pid}
                       type="button"
+                      aria-pressed={subscription.plano === pid}
+                      style={{ textTransform: 'capitalize' }}
                       onClick={async () => {
                         const ok = await setTestPlan(pid, subscription.ciclo);
                         if (ok) {
@@ -550,29 +520,19 @@ export function AppShell({ children }: AppShellProps) {
                           setTimeout(() => setFeedback(null), 3000);
                         }
                       }}
-                      style={{
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        border: active ? '1px solid #fbbf24' : '1px solid transparent',
-                        background: active ? '#f59e0b' : 'rgba(0,0,0,0.25)',
-                        color: active ? '#090d16' : '#fef3c7',
-                        fontWeight: active ? 700 : 500,
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        textTransform: 'capitalize',
-                      }}
                     >
                       {pid}
                     </button>
-                  );
-                })}
+                  ))}
+                </span>
               </div>
             )}
 
             <span
-              className={waConnected ? 'rdv3-connected' : 'rdv3-connected rdv3-disconnected'}
+              className="rv4-chip"
               title={waConnected ? `Conectado via ${waPhone || 'WhatsApp'}` : 'WhatsApp desconectado'}
             >
+              <span className="rv4-dot" data-on={waConnected ? 'true' : 'false'} />
               {waStatusLabel}
             </span>
           </div>
@@ -619,126 +579,45 @@ export function AppShell({ children }: AppShellProps) {
             <a href="https://shopee.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <BrandLogo brand="shopee" size={24} containerSize={36} />
               <span style={{ fontWeight: 500 }}>Shopee</span>
-              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
+              <span style={{ marginLeft: 'auto', color: '#a8a39a' }}>↗</span>
             </a>
             <a href="https://www.netshoes.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <BrandLogo brand="netshoes" size={24} containerSize={36} />
               <span style={{ fontWeight: 500 }}>Netshoes</span>
-              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
+              <span style={{ marginLeft: 'auto', color: '#a8a39a' }}>↗</span>
             </a>
             <a href="https://www.amazon.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <BrandLogo brand="amazon" size={24} containerSize={36} />
               <span style={{ fontWeight: 500 }}>Amazon</span>
-              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
+              <span style={{ marginLeft: 'auto', color: '#a8a39a' }}>↗</span>
             </a>
             <a href="https://www.mercadolivre.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <BrandLogo brand="mercadolivre" size={24} containerSize={36} />
               <span style={{ fontWeight: 500 }}>Mercado Livre</span>
-              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
+              <span style={{ marginLeft: 'auto', color: '#a8a39a' }}>↗</span>
             </a>
             <a href="https://www.magazineluiza.com.br" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <BrandLogo brand="magalu" size={24} containerSize={36} />
               <span style={{ fontWeight: 500 }}>Magalu</span>
-              <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>↗</span>
+              <span style={{ marginLeft: 'auto', color: '#a8a39a' }}>↗</span>
             </a>
           </div>
         </dialog>
       )}
 
-      {/* Modal: Minha conta e preferências */}
+      {/* Minha conta: perfil e avatar (salvo neste aparelho) */}
       {showAccountDialog && (
-        <dialog
-          className="rp-dialog"
-          open
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowAccountDialog(false);
+        <AccountStudio
+          userName={savedProfile.name || userName}
+          userEmail={userEmail}
+          waPhone={waPhone}
+          onClose={() => setShowAccountDialog(false)}
+          onSaved={() => {
+            setShowAccountDialog(false);
+            setFeedback('Perfil salvo neste aparelho.');
+            setTimeout(() => setFeedback(null), 3500);
           }}
-        >
-          <div className="rdv3-dialog-head">
-            <div>
-              <span className="rp-step">Perfil & Preferências</span>
-              <h2>Minha Conta</h2>
-            </div>
-            <button
-              className="rdv3-close-stores"
-              type="button"
-              aria-label="Fechar"
-              onClick={() => setShowAccountDialog(false)}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="rp-stack rp-section">
-            <label className="rp-field">
-              Nome do titular
-              <input
-                type="text"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-              />
-            </label>
-
-            <label className="rp-field">
-              E-mail da conta
-              <input
-                type="email"
-                value={userEmail || 'Não informado'}
-                disabled
-              />
-            </label>
-
-            <label className="rp-field">
-              WhatsApp vinculado
-              <input
-                type="text"
-                value={waPhone ? `+${waPhone}` : 'Nenhum número pareado'}
-                disabled
-              />
-            </label>
-
-            <label className="rp-check">
-              <input
-                type="checkbox"
-                checked={prefNightPause}
-                onChange={(e) => setPrefNightPause(e.target.checked)}
-              />
-              Pausa noturna de envios (22h30 às 07h30)
-            </label>
-
-            <label className="rp-field">
-              Intervalo mínimo entre envios (segundos)
-              <input
-                type="number"
-                min={10}
-                max={300}
-                value={prefInterval}
-                onChange={(e) => setPrefInterval(Number(e.target.value))}
-              />
-            </label>
-
-            <div className="rp-row rp-section">
-              <button
-                type="button"
-                className="rp-btn rp-primary"
-                onClick={() => {
-                  setShowAccountDialog(false);
-                  setFeedback('Preferências salvas com sucesso.');
-                  setTimeout(() => setFeedback(null), 3500);
-                }}
-              >
-                Salvar preferências
-              </button>
-              <button
-                type="button"
-                className="rp-btn rp-quiet"
-                onClick={() => setShowAccountDialog(false)}
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </dialog>
+        />
       )}
 
       {/* Modal: Ajuda */}
@@ -765,7 +644,7 @@ export function AppShell({ children }: AppShellProps) {
             </button>
           </div>
 
-          <div className="rp-stack rp-section" style={{ fontSize: 12, lineHeight: 1.6, color: '#c6ccce' }}>
+          <div className="rp-stack rp-section" style={{ fontSize: 12, lineHeight: 1.6, color: '#cacaca' }}>
             <p>
               <strong>Planos SaaS (Impulse, Plus e Ultimate):</strong>
               <br />• <strong>Impulse:</strong> Copiador de grupos, modelos de mensagem, imagens originais do anúncio, agendamento, histórico de envios e métricas básicas do WhatsApp.

@@ -1,9 +1,9 @@
 .panel {
-  --sh-bg: #14232b;
-  --sh-line: #2b4350;
-  --sh-text: #e6f0f3;
-  --sh-muted: #8ea6b0;
-  --sh-signal: #45d3c7;
+  --sh-bg: #21201e;
+  --sh-line: #403e3b;
+  --sh-text: #ededec;
+  --sh-muted: #a1a09d;
+  --sh-signal: #eeba2a;
   --sh-warn: #f2b84b;
   --sh-fail: #ef7b6b;
   background: var(--sh-bg);

@@ -148,15 +148,15 @@ export function AiCaptionGenerator({
                   style={{
                     padding: '10px 8px',
                     borderRadius: 10,
-                    border: active ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.12)',
-                    background: active ? 'rgba(99, 102, 241, 0.22)' : 'rgba(255,255,255,0.03)',
+                    border: active ? '1px solid #f5c542' : '1px solid rgba(255,255,255,0.12)',
+                    background: active ? 'rgba(245, 197, 66, 0.22)' : 'rgba(255,255,255,0.03)',
                     color: '#fff',
                     textAlign: 'left',
                     cursor: 'pointer',
                   }}
                 >
                   <strong style={{ display: 'block', fontSize: 13 }}>{item.label}</strong>
-                  <small style={{ fontSize: 11, color: '#94a3b8' }}>{item.desc}</small>
+                  <small style={{ fontSize: 11, color: '#a8a39a' }}>{item.desc}</small>
                 </button>
               );
             })}
@@ -188,8 +188,8 @@ export function AiCaptionGenerator({
                     gap: 6,
                     padding: '10px 12px',
                     borderRadius: 10,
-                    border: active ? '1px solid #39bee6' : '1px solid rgba(255,255,255,0.12)',
-                    background: active ? 'rgba(57, 190, 230, 0.18)' : 'rgba(255,255,255,0.03)',
+                    border: active ? '1px solid #f5c542' : '1px solid rgba(255,255,255,0.12)',
+                    background: active ? 'rgba(245, 197, 66, 0.18)' : 'rgba(255,255,255,0.03)',
                     color: '#fff',
                     fontWeight: active ? 700 : 500,
                     fontSize: 13,
@@ -356,11 +356,11 @@ export function AiCaptionGenerator({
               borderRadius: 14,
               border: '1px dashed rgba(255,255,255,0.15)',
               textAlign: 'center',
-              color: '#94a3b8',
+              color: '#a8a39a',
             }}
           >
             <Sparkles className="w-8 h-8 mx-auto mb-2 text-indigo-400 opacity-80" />
-            <strong style={{ display: 'block', color: '#e2e8f0', marginBottom: 4 }}>
+            <strong style={{ display: 'block', color: '#ebe6da', marginBottom: 4 }}>
               Nenhuma legenda gerada ainda
             </strong>
             <p style={{ fontSize: 13 }}>

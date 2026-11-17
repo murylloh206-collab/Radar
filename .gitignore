@@ -57,3 +57,4 @@ tests/fixtures/
 
 # Cópia local extraída do zip da extensão (não publicar)
 public/downloads/radar-conector/
+/.previa/

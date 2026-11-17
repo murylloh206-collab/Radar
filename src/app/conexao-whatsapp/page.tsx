@@ -393,17 +393,17 @@ export default function WhatsAppConnectionPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto animate-fade-in">
       {/* Topo / Título */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#18334D]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#2c2c2c]">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0879DF] to-[#1CCAF2] flex items-center justify-center text-[#061225] shadow-lg shadow-[#1CCAF2]/20">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#d9a520] to-[#f5c542] flex items-center justify-center text-[#0c0c0d] shadow-lg shadow-[#f5c542]/20">
               <QrCode className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-[#F8FBFF] tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-black text-[#f6f2e8] tracking-tight">
                 Conexão WhatsApp
               </h1>
-              <p className="text-xs sm:text-sm text-[#8EADC7]">
+              <p className="text-xs sm:text-sm text-[#a8a39a]">
                 Pareamento e sincronização segura de grupos para o Radar de Ofertas
               </p>
             </div>
@@ -414,18 +414,18 @@ export default function WhatsAppConnectionPage() {
           <button
             onClick={() => loadStatus()}
             disabled={loading}
-            className="px-3.5 py-2 rounded-xl bg-[#0D1B31] border border-[#18334D] hover:border-[#1CCAF2]/40 text-xs font-semibold text-[#8EADC7] hover:text-[#1CCAF2] transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl bg-[#161616] border border-[#2c2c2c] hover:border-[#f5c542]/40 text-xs font-semibold text-[#a8a39a] hover:text-[#f5c542] transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             title="Revalidar estado da conexão"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#1CCAF2]' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#f5c542]' : ''}`} />
             <span>Verificar Agora</span>
           </button>
 
           <Link
             href="/copiador"
-            className="px-3.5 py-2 rounded-xl bg-[#0D1B31] border border-[#18334D] hover:border-[#1CCAF2]/40 text-xs font-semibold text-[#8EADC7] hover:text-[#F8FBFF] transition-all flex items-center gap-2"
+            className="px-3.5 py-2 rounded-xl bg-[#161616] border border-[#2c2c2c] hover:border-[#f5c542]/40 text-xs font-semibold text-[#a8a39a] hover:text-[#f6f2e8] transition-all flex items-center gap-2"
           >
-            <Copy className="w-4 h-4 text-[#1CCAF2]" />
+            <Copy className="w-4 h-4 text-[#f5c542]" />
             <span>Ir ao Copiador</span>
           </Link>
         </div>
@@ -436,10 +436,10 @@ export default function WhatsAppConnectionPage() {
         <div
           className={`p-4 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-fade-in ${
             feedback.type === 'success'
-              ? 'bg-[#20C997]/15 border-[#20C997]/30 text-[#20C997]'
+              ? 'bg-[#5fd0a0]/15 border-[#5fd0a0]/30 text-[#5fd0a0]'
               : feedback.type === 'warning'
-              ? 'bg-[#F7B84B]/15 border-[#F7B84B]/30 text-[#F7B84B]'
-              : 'bg-[#F87171]/15 border-[#F87171]/30 text-[#F87171]'
+              ? 'bg-[#e8b65c]/15 border-[#e8b65c]/30 text-[#e8b65c]'
+              : 'bg-[#f07878]/15 border-[#f07878]/30 text-[#f07878]'
           }`}
         >
           <div className="flex items-center gap-2.5">
@@ -458,9 +458,9 @@ export default function WhatsAppConnectionPage() {
                   loadStatus();
                   loadGroups(true);
                 }}
-                className="px-3 py-1.5 rounded-lg bg-[#061225] border border-[#18334D] hover:border-[#1CCAF2] text-xs font-bold text-[#F8FBFF] transition-colors cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+                className="px-3 py-1.5 rounded-lg bg-[#0c0c0d] border border-[#2c2c2c] hover:border-[#f5c542] text-xs font-bold text-[#f6f2e8] transition-colors cursor-pointer flex items-center gap-1.5 flex-shrink-0"
               >
-                <RefreshCw className="w-3.5 h-3.5 text-[#1CCAF2]" />
+                <RefreshCw className="w-3.5 h-3.5 text-[#f5c542]" />
                 <span>Tentar novamente</span>
               </button>
             )}
@@ -477,10 +477,10 @@ export default function WhatsAppConnectionPage() {
       {/* CARD 1: ESTADO DA CONEXÃO & PAREAMENTO */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Painel Esquerdo: Estado da Conexão */}
-        <div className="lg:col-span-7 bg-[#0D1B31] border border-[#18334D] rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
+        <div className="lg:col-span-7 bg-[#161616] border border-[#2c2c2c] rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h2 className="text-sm sm:text-base font-bold text-[#F8FBFF] flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-[#1CCAF2]" />
+            <h2 className="text-sm sm:text-base font-bold text-[#f6f2e8] flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-[#f5c542]" />
               <span>Status do Dispositivo</span>
             </h2>
 
@@ -488,23 +488,23 @@ export default function WhatsAppConnectionPage() {
             <div className="flex items-center gap-2">
               {isUnreachable ? (
                 <span
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#F7B84B]/15 text-[#F7B84B] border border-[#F7B84B]/30"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#e8b65c]/15 text-[#e8b65c] border border-[#e8b65c]/30"
                   title="Gateway temporariamente indisponível ou tempo limite esgotado. A última conexão foi preservada."
                 >
                   <Clock className="w-3.5 h-3.5" />
                   <span>Não foi possível verificar agora</span>
                 </span>
               ) : isConnected ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#20C997]/15 text-[#20C997] border border-[#20C997]/30 shadow-sm">
-                  <span className="w-2 h-2 rounded-full bg-[#20C997] animate-ping" />
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#5fd0a0]/15 text-[#5fd0a0] border border-[#5fd0a0]/30 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-[#5fd0a0] animate-ping" />
                   <span>Conectado Online</span>
                 </span>
               ) : hasQr ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#F7B84B]/15 text-[#F7B84B] border border-[#F7B84B]/30 animate-pulse">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#e8b65c]/15 text-[#e8b65c] border border-[#e8b65c]/30 animate-pulse">
                   <span>Aguardando Leitura...</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#F87171]/15 text-[#F87171] border border-[#F87171]/30">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#f07878]/15 text-[#f07878] border border-[#f07878]/30">
                   <WifiOff className="w-3.5 h-3.5" />
                   <span>Desconectado</span>
                 </span>
@@ -515,32 +515,32 @@ export default function WhatsAppConnectionPage() {
           {/* ESTADO CONECTADO (OU ÚLTIMA CONEXÃO CONFIRMADA PRESERVADA) */}
           {isConnected && (
             <div className="space-y-5">
-              <div className="p-5 rounded-2xl bg-[#061225] border border-[#18334D] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="p-5 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div
                     className={`w-14 h-14 rounded-2xl border flex items-center justify-center shadow-inner ${
                       isUnreachable
-                        ? 'bg-[#F7B84B]/10 border-[#F7B84B]/40 text-[#F7B84B]'
-                        : 'bg-gradient-to-tr from-[#20C997]/20 to-[#1CCAF2]/20 border-[#20C997]/40 text-[#20C997]'
+                        ? 'bg-[#e8b65c]/10 border-[#e8b65c]/40 text-[#e8b65c]'
+                        : 'bg-gradient-to-tr from-[#5fd0a0]/20 to-[#f5c542]/20 border-[#5fd0a0]/40 text-[#5fd0a0]'
                     }`}
                   >
                     <Wifi className="w-7 h-7" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-[#F8FBFF]">
+                    <h3 className="text-base font-bold text-[#f6f2e8]">
                         {wa?.phoneNumber ? `WhatsApp +${wa.phoneNumber}` : 'Conta WhatsApp conectada'}
                     </h3>
-                      <p className="text-xs text-[#8EADC7] mt-0.5">
+                      <p className="text-xs text-[#a8a39a] mt-0.5">
                         {wa?.profileName ? `Nome do perfil: ${wa.profileName}` : 'Nome do perfil não informado pelo gateway'}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
                       {isUnreachable ? (
-                        <span className="text-[#F7B84B] font-semibold flex items-center gap-1">
+                        <span className="text-[#e8b65c] font-semibold flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" />
                           <span>Não foi possível verificar agora (preservado)</span>
                         </span>
                       ) : (
-                        <span className="text-[#20C997] font-semibold flex items-center gap-1">
+                        <span className="text-[#5fd0a0] font-semibold flex items-center gap-1">
                           <ShieldCheck className="w-3.5 h-3.5" />
                           <span>Sessão ativa e sincronizada</span>
                         </span>
@@ -556,7 +556,7 @@ export default function WhatsAppConnectionPage() {
                       loadGroups(true);
                     }}
                     disabled={loading || loadingGroups}
-                    className="px-3.5 py-2 rounded-xl bg-[#0D1B31] border border-[#18334D] hover:border-[#1CCAF2]/40 text-xs font-semibold text-[#1CCAF2] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-3.5 py-2 rounded-xl bg-[#161616] border border-[#2c2c2c] hover:border-[#f5c542]/40 text-xs font-semibold text-[#f5c542] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loading || loadingGroups ? 'animate-spin' : ''}`} />
                     <span>Tentar novamente</span>
@@ -564,7 +564,7 @@ export default function WhatsAppConnectionPage() {
 
                   <button
                     onClick={handleDisconnect}
-                    className="px-3.5 py-2 rounded-xl bg-[#F87171]/10 border border-[#F87171]/30 hover:bg-[#F87171]/20 text-xs font-semibold text-[#F87171] transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-[#f07878]/10 border border-[#f07878]/30 hover:bg-[#f07878]/20 text-xs font-semibold text-[#f07878] transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Desconectar</span>
@@ -574,30 +574,30 @@ export default function WhatsAppConnectionPage() {
 
               {/* Informações da Conexão e Verificação */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-xl bg-[#061225] border border-[#18334D]">
-                  <p className="text-[11px] text-[#8EADC7] font-semibold flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-[#1CCAF2]" />
+                <div className="p-3.5 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c]">
+                  <p className="text-[11px] text-[#a8a39a] font-semibold flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#f5c542]" />
                     <span>Última Verificação</span>
                   </p>
-                  <p className="text-xs font-bold text-[#F8FBFF] mt-1 truncate" title={wa?.lastPingAt}>
+                  <p className="text-xs font-bold text-[#f6f2e8] mt-1 truncate" title={wa?.lastPingAt}>
                     {formatDateTime(wa?.lastPingAt)}
                   </p>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#061225] border border-[#18334D]">
-                  <p className="text-[11px] text-[#8EADC7] font-semibold flex items-center gap-1">
-                    <Users className="w-3 h-3 text-[#20C997]" />
+                <div className="p-3.5 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c]">
+                  <p className="text-[11px] text-[#a8a39a] font-semibold flex items-center gap-1">
+                    <Users className="w-3 h-3 text-[#5fd0a0]" />
                     <span>Total de Grupos</span>
                   </p>
-                  <p className="text-base font-black text-[#F8FBFF] mt-0.5">{groups.length}</p>
+                  <p className="text-base font-black text-[#f6f2e8] mt-0.5">{groups.length}</p>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#061225] border border-[#18334D]">
-                  <p className="text-[11px] text-[#8EADC7] font-semibold flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-[#1CCAF2]" />
+                <div className="p-3.5 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c]">
+                  <p className="text-[11px] text-[#a8a39a] font-semibold flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-[#f5c542]" />
                     <span>Envio Liberado</span>
                   </p>
-                  <p className="text-base font-black text-[#1CCAF2] mt-0.5">
+                  <p className="text-base font-black text-[#f5c542] mt-0.5">
                     {groups.filter((g) => g.canPost).length} grupos
                   </p>
                 </div>
@@ -609,7 +609,7 @@ export default function WhatsAppConnectionPage() {
           {!isConnected && (
             <div className="space-y-6">
               {hasQr ? (
-                <div className="flex flex-col items-center justify-center space-y-4 p-6 rounded-3xl bg-[#061225] border border-[#18334D]">
+                <div className="flex flex-col items-center justify-center space-y-4 p-6 rounded-3xl bg-[#0c0c0d] border border-[#2c2c2c]">
                   <div className="relative p-3 bg-white rounded-2xl shadow-2xl flex items-center justify-center">
                     {/* Imagem do QR Code */}
                     {wa?.qrCodeBase64?.startsWith('data:') ? (
@@ -631,16 +631,16 @@ export default function WhatsAppConnectionPage() {
 
                   {pairingCode && (
                     <div className="text-center">
-                      <p className="text-xs text-[#8EADC7]">Código de Pareamento por Número:</p>
-                      <p className="text-sm font-mono font-bold text-[#1CCAF2] tracking-widest mt-1 bg-[#0D1B31] px-3 py-1 rounded-lg border border-[#18334D]">
+                      <p className="text-xs text-[#a8a39a]">Código de Pareamento por Número:</p>
+                      <p className="text-sm font-mono font-bold text-[#f5c542] tracking-widest mt-1 bg-[#161616] px-3 py-1 rounded-lg border border-[#2c2c2c]">
                         {pairingCode}
                       </p>
                     </div>
                   )}
 
                   <div className="text-center space-y-2">
-                    <p className="text-xs font-semibold text-[#8EADC7] flex items-center justify-center gap-1.5">
-                      <RefreshCw className="w-3.5 h-3.5 text-[#1CCAF2] animate-spin" />
+                    <p className="text-xs font-semibold text-[#a8a39a] flex items-center justify-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 text-[#f5c542] animate-spin" />
                       <span>Aguardando leitura no WhatsApp... A tela mudará automaticamente.</span>
                     </p>
 
@@ -648,7 +648,7 @@ export default function WhatsAppConnectionPage() {
                       <button
                         onClick={handleStartPairing}
                         disabled={connecting}
-                        className="px-4 py-2 rounded-xl bg-[#0D1B31] border border-[#18334D] hover:border-[#1CCAF2]/40 text-xs font-bold text-[#1CCAF2] transition-all cursor-pointer disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl bg-[#161616] border border-[#2c2c2c] hover:border-[#f5c542]/40 text-xs font-bold text-[#f5c542] transition-all cursor-pointer disabled:opacity-50"
                       >
                         {connecting ? 'Gerando novo QR...' : '🔄 Gerar Novo QR Code'}
                       </button>
@@ -656,7 +656,7 @@ export default function WhatsAppConnectionPage() {
                       <button
                         onClick={() => loadStatus()}
                         disabled={loading}
-                        className="px-4 py-2 rounded-xl bg-[#0D1B31] border border-[#18334D] hover:border-[#1CCAF2]/40 text-xs font-bold text-[#8EADC7] hover:text-[#F8FBFF] transition-all cursor-pointer"
+                        className="px-4 py-2 rounded-xl bg-[#161616] border border-[#2c2c2c] hover:border-[#f5c542]/40 text-xs font-bold text-[#a8a39a] hover:text-[#f6f2e8] transition-all cursor-pointer"
                       >
                         Tentar novamente
                       </button>
@@ -664,16 +664,16 @@ export default function WhatsAppConnectionPage() {
                   </div>
                 </div>
               ) : (
-                <div className="p-8 rounded-3xl bg-[#061225] border border-[#18334D] text-center space-y-4">
-                  <div className="w-16 h-16 rounded-3xl bg-[#0D1B31] border border-[#18334D] flex items-center justify-center text-[#1CCAF2] mx-auto shadow-xl">
+                <div className="p-8 rounded-3xl bg-[#0c0c0d] border border-[#2c2c2c] text-center space-y-4">
+                  <div className="w-16 h-16 rounded-3xl bg-[#161616] border border-[#2c2c2c] flex items-center justify-center text-[#f5c542] mx-auto shadow-xl">
                     <QrCode className="w-8 h-8" />
                   </div>
 
                   <div className="max-w-md mx-auto space-y-1.5">
-                    <h3 className="text-base sm:text-lg font-bold text-[#F8FBFF]">
+                    <h3 className="text-base sm:text-lg font-bold text-[#f6f2e8]">
                       Pronto para Conectar o WhatsApp
                     </h3>
-                    <p className="text-xs sm:text-sm text-[#8EADC7]">
+                    <p className="text-xs sm:text-sm text-[#a8a39a]">
                       Clique abaixo para validar o estado da instância e iniciar o pareamento direto pelo painel.
                     </p>
                   </div>
@@ -682,7 +682,7 @@ export default function WhatsAppConnectionPage() {
                     <button
                       onClick={handleStartPairing}
                       disabled={connecting || loading}
-                      className="w-full sm:w-auto px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-bold bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-lg shadow-[#1CCAF2]/20 hover:opacity-95 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+                      className="w-full sm:w-auto px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-bold bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] shadow-lg shadow-[#f5c542]/20 hover:opacity-95 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
                     >
                       <Play className="w-4 h-4 fill-current" />
                       <span>{connecting ? 'Determinando estado...' : 'Iniciar Conexão do WhatsApp'}</span>
@@ -691,15 +691,15 @@ export default function WhatsAppConnectionPage() {
                     <button
                       onClick={() => loadStatus()}
                       disabled={loading}
-                      className="w-full sm:w-auto px-5 py-3.5 rounded-2xl text-xs sm:text-sm font-semibold bg-[#0D1B31] border border-[#18334D] text-[#8EADC7] hover:text-[#1CCAF2] hover:border-[#1CCAF2]/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="w-full sm:w-auto px-5 py-3.5 rounded-2xl text-xs sm:text-sm font-semibold bg-[#161616] border border-[#2c2c2c] text-[#a8a39a] hover:text-[#f5c542] hover:border-[#f5c542]/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#1CCAF2]' : ''}`} />
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#f5c542]' : ''}`} />
                       <span>Tentar novamente</span>
                     </button>
                   </div>
 
                   {wa?.lastPingAt && (
-                    <p className="text-[11px] text-[#8EADC7]/70 pt-2">
+                    <p className="text-[11px] text-[#a8a39a]/70 pt-2">
                       Última verificação bem-sucedida: {formatDateTime(wa.lastPingAt)}
                     </p>
                   )}
@@ -710,68 +710,68 @@ export default function WhatsAppConnectionPage() {
         </div>
 
         {/* Painel Direito: Instruções no Celular */}
-        <div className="lg:col-span-5 bg-[#0D1B31] border border-[#18334D] rounded-3xl p-5 sm:p-7 shadow-xl space-y-5">
-          <h2 className="text-sm sm:text-base font-bold text-[#F8FBFF] flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-[#1CCAF2]" />
+        <div className="lg:col-span-5 bg-[#161616] border border-[#2c2c2c] rounded-3xl p-5 sm:p-7 shadow-xl space-y-5">
+          <h2 className="text-sm sm:text-base font-bold text-[#f6f2e8] flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-[#f5c542]" />
             <span>Como Conectar pelo Celular</span>
           </h2>
 
           <div className="space-y-3.5">
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#061225] border border-[#18334D]">
-              <div className="w-7 h-7 rounded-xl bg-[#0879DF]/20 text-[#1CCAF2] font-black text-xs flex items-center justify-center flex-shrink-0">
+            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c]">
+              <div className="w-7 h-7 rounded-xl bg-[#d9a520]/20 text-[#f5c542] font-black text-xs flex items-center justify-center flex-shrink-0">
                 1
               </div>
               <div className="space-y-0.5">
-                <p className="text-xs font-bold text-[#F8FBFF]">Abra o WhatsApp no seu smartphone</p>
-                <p className="text-[11px] text-[#8EADC7]">
+                <p className="text-xs font-bold text-[#f6f2e8]">Abra o WhatsApp no seu smartphone</p>
+                <p className="text-[11px] text-[#a8a39a]">
                   Use a conta oficial que deseja utilizar para os disparos automáticos.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#061225] border border-[#18334D]">
-              <div className="w-7 h-7 rounded-xl bg-[#0879DF]/20 text-[#1CCAF2] font-black text-xs flex items-center justify-center flex-shrink-0">
+            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c]">
+              <div className="w-7 h-7 rounded-xl bg-[#d9a520]/20 text-[#f5c542] font-black text-xs flex items-center justify-center flex-shrink-0">
                 2
               </div>
               <div className="space-y-0.5">
-                <p className="text-xs font-bold text-[#F8FBFF]">Acesse os Aparelhos Conectados</p>
-                <p className="text-[11px] text-[#8EADC7]">
-                  Toque nos <strong className="text-[#F8FBFF]">três pontinhos</strong> (Android) ou em <strong className="text-[#F8FBFF]">Configurações</strong> (iPhone) e selecione <strong className="text-[#1CCAF2]">Aparelhos Conectados</strong>.
+                <p className="text-xs font-bold text-[#f6f2e8]">Acesse os Aparelhos Conectados</p>
+                <p className="text-[11px] text-[#a8a39a]">
+                  Toque nos <strong className="text-[#f6f2e8]">três pontinhos</strong> (Android) ou em <strong className="text-[#f6f2e8]">Configurações</strong> (iPhone) e selecione <strong className="text-[#f5c542]">Aparelhos Conectados</strong>.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#061225] border border-[#18334D]">
-              <div className="w-7 h-7 rounded-xl bg-[#0879DF]/20 text-[#1CCAF2] font-black text-xs flex items-center justify-center flex-shrink-0">
+            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c]">
+              <div className="w-7 h-7 rounded-xl bg-[#d9a520]/20 text-[#f5c542] font-black text-xs flex items-center justify-center flex-shrink-0">
                 3
               </div>
               <div className="space-y-0.5">
-                <p className="text-xs font-bold text-[#F8FBFF]">Toque em &quot;Conectar um aparelho&quot;</p>
-                <p className="text-[11px] text-[#8EADC7]">
+                <p className="text-xs font-bold text-[#f6f2e8]">Toque em &quot;Conectar um aparelho&quot;</p>
+                <p className="text-[11px] text-[#a8a39a]">
                   Desbloqueie a tela com sua biometria ou PIN para habilitar a câmera.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#061225] border border-[#18334D]">
-              <div className="w-7 h-7 rounded-xl bg-[#0879DF]/20 text-[#1CCAF2] font-black text-xs flex items-center justify-center flex-shrink-0">
+            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c]">
+              <div className="w-7 h-7 rounded-xl bg-[#d9a520]/20 text-[#f5c542] font-black text-xs flex items-center justify-center flex-shrink-0">
                 4
               </div>
               <div className="space-y-0.5">
-                <p className="text-xs font-bold text-[#F8FBFF]">Aponte a câmera para o QR Code</p>
-                <p className="text-[11px] text-[#8EADC7]">
+                <p className="text-xs font-bold text-[#f6f2e8]">Aponte a câmera para o QR Code</p>
+                <p className="text-[11px] text-[#a8a39a]">
                   Assim que a leitura for realizada, o Radar de Ofertas sincroniza os dados automaticamente.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#061225]/80 border border-[#18334D] space-y-1.5">
-            <p className="text-xs font-bold text-[#1CCAF2] flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-[#20C997]" />
+          <div className="p-4 rounded-2xl bg-[#0c0c0d]/80 border border-[#2c2c2c] space-y-1.5">
+            <p className="text-xs font-bold text-[#f5c542] flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#5fd0a0]" />
               <span>Conexão Própria e Segura</span>
             </p>
-            <p className="text-[11px] text-[#8EADC7] leading-relaxed">
+            <p className="text-[11px] text-[#a8a39a] leading-relaxed">
               O pareamento é direto com seu WhatsApp. A instância oficial configurada no servidor é preservada mesmo durante instabilidades temporárias de rede.
             </p>
           </div>
@@ -779,24 +779,24 @@ export default function WhatsAppConnectionPage() {
       </div>
 
       {/* CARD 2: LISTA DE GRUPOS SINCRONIZADOS */}
-      <div className="bg-[#0D1B31] border border-[#18334D] rounded-3xl p-5 sm:p-7 shadow-xl space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#18334D]">
+      <div className="bg-[#161616] border border-[#2c2c2c] rounded-3xl p-5 sm:p-7 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#2c2c2c]">
           <div>
             <div className="flex items-center gap-2.5">
-              <h2 className="text-base sm:text-lg font-bold text-[#F8FBFF] flex items-center gap-2">
-                <Users className="w-5 h-5 text-[#1CCAF2]" />
+              <h2 className="text-base sm:text-lg font-bold text-[#f6f2e8] flex items-center gap-2">
+                <Users className="w-5 h-5 text-[#f5c542]" />
                 <span>Grupos e Canais Acessíveis</span>
               </h2>
 
               {/* Indicador de Lista Atual vs Cache Local */}
               {groupsLive ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#20C997]/15 text-[#20C997] border border-[#20C997]/30">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#5fd0a0]/15 text-[#5fd0a0] border border-[#5fd0a0]/30">
                   <CheckCircle2 className="w-3 h-3" />
                   <span>Atualizada ao vivo</span>
                 </span>
               ) : (
                 <span
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#0879DF]/15 text-[#1CCAF2] border border-[#0879DF]/30"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#d9a520]/15 text-[#f5c542] border border-[#d9a520]/30"
                   title={`Última sincronização: ${formatDateTime(groupsCachedAt)}`}
                 >
                   <Database className="w-3 h-3" />
@@ -804,15 +804,15 @@ export default function WhatsAppConnectionPage() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-[#8EADC7] mt-0.5">
-              Última sincronização da lista: <strong className="text-[#F8FBFF]">{formatDateTime(groupsCachedAt)}</strong>
+            <p className="text-xs text-[#a8a39a] mt-0.5">
+              Última sincronização da lista: <strong className="text-[#f6f2e8]">{formatDateTime(groupsCachedAt)}</strong>
             </p>
           </div>
 
           <button
             onClick={() => loadGroups(true)}
             disabled={loadingGroups}
-            className="px-4 py-2.5 rounded-xl bg-[#061225] border border-[#18334D] hover:border-[#1CCAF2]/40 text-xs font-bold text-[#1CCAF2] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
+            className="px-4 py-2.5 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] hover:border-[#f5c542]/40 text-xs font-bold text-[#f5c542] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingGroups ? 'animate-spin' : ''}`} />
             <span>{loadingGroups ? 'Sincronizando Grupos...' : 'Sincronizar Grupos com Gateway'}</span>
@@ -820,34 +820,34 @@ export default function WhatsAppConnectionPage() {
         </div>
 
         {groupsWarning && (
-          <div className="rounded-xl border border-[#F7B84B]/40 bg-[#F7B84B]/10 px-4 py-3 text-xs text-[#F7B84B]">
+          <div className="rounded-xl border border-[#e8b65c]/40 bg-[#e8b65c]/10 px-4 py-3 text-xs text-[#e8b65c]">
             {groupsWarning}
           </div>
         )}
 
         {/* Guia Explicativo de Papéis no Radar de Ofertas */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#061225] border border-[#18334D] space-y-3">
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c] space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider text-[#1CCAF2]">
+            <span className="text-xs font-black uppercase tracking-wider text-[#f5c542]">
               Regras de Funcionamento dos Grupos
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="p-3 rounded-xl bg-[#0D1B31] border border-[#18334D]/80 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[#1CCAF2]">
+            <div className="p-3 rounded-xl bg-[#161616] border border-[#2c2c2c]/80 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#f5c542]">
                 <span>📥</span>
                 <span>Origem = Ler Ofertas</span>
               </div>
-              <p className="text-[11px] text-[#8EADC7] leading-relaxed">
+              <p className="text-[11px] text-[#a8a39a] leading-relaxed">
                 Grupo onde você monitora promoções. O Radar captura as mensagens recebidas para converter seus links de afiliado.
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-[#0D1B31] border border-[#18334D]/80 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[#20C997]">
+            <div className="p-3 rounded-xl bg-[#161616] border border-[#2c2c2c]/80 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#5fd0a0]">
                 <span>📤</span>
                 <span>Destino = Grupos para Publicar</span>
               </div>
-              <p className="text-[11px] text-[#8EADC7] leading-relaxed">
+              <p className="text-[11px] text-[#a8a39a] leading-relaxed">
                 Grupos onde sua conta possui permissão para enviar mensagens com suas ofertas e links de afiliado convertidos.
               </p>
             </div>
@@ -857,13 +857,13 @@ export default function WhatsAppConnectionPage() {
         {/* Barra de Filtros e Busca */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[#8EADC7] absolute left-3.5 top-3" />
+            <Search className="w-4 h-4 text-[#a8a39a] absolute left-3.5 top-3" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar grupo pelo nome..."
-              className="w-full bg-[#061225] border border-[#18334D] rounded-xl pl-10 pr-3 py-2 text-xs text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2]"
+              className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl pl-10 pr-3 py-2 text-xs text-[#f6f2e8] placeholder-[#a8a39a]/40 focus:outline-none focus:border-[#f5c542]"
             />
           </div>
 
@@ -872,8 +872,8 @@ export default function WhatsAppConnectionPage() {
               onClick={() => setRoleFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 roleFilter === 'all'
-                  ? 'bg-[#1CCAF2] text-[#061225]'
-                  : 'bg-[#061225] text-[#8EADC7] border border-[#18334D]'
+                  ? 'bg-[#f5c542] text-[#0c0c0d]'
+                  : 'bg-[#0c0c0d] text-[#a8a39a] border border-[#2c2c2c]'
               }`}
             >
               Todos ({groups.length})
@@ -882,8 +882,8 @@ export default function WhatsAppConnectionPage() {
               onClick={() => setRoleFilter('can_post')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 roleFilter === 'can_post'
-                  ? 'bg-[#20C997] text-[#061225]'
-                  : 'bg-[#061225] text-[#8EADC7] border border-[#18334D]'
+                  ? 'bg-[#5fd0a0] text-[#0c0c0d]'
+                  : 'bg-[#0c0c0d] text-[#a8a39a] border border-[#2c2c2c]'
               }`}
             >
               Posso Publicar ({groups.filter((g) => g.canPost === true).length})
@@ -892,8 +892,8 @@ export default function WhatsAppConnectionPage() {
               onClick={() => setRoleFilter('read_only')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 roleFilter === 'read_only'
-                  ? 'bg-[#F7B84B] text-[#061225]'
-                  : 'bg-[#061225] text-[#8EADC7] border border-[#18334D]'
+                  ? 'bg-[#e8b65c] text-[#0c0c0d]'
+                  : 'bg-[#0c0c0d] text-[#a8a39a] border border-[#2c2c2c]'
               }`}
             >
               Somente Leitura ({groups.filter((g) => g.canPost === false).length})
@@ -903,15 +903,15 @@ export default function WhatsAppConnectionPage() {
 
         {/* Lista de Grupos */}
         {loadingGroups ? (
-          <div className="p-12 text-center text-xs text-[#8EADC7] space-y-2">
-            <RefreshCw className="w-6 h-6 text-[#1CCAF2] animate-spin mx-auto" />
+          <div className="p-12 text-center text-xs text-[#a8a39a] space-y-2">
+            <RefreshCw className="w-6 h-6 text-[#f5c542] animate-spin mx-auto" />
             <p>Sincronizando grupos da sua conta WhatsApp...</p>
           </div>
         ) : filteredGroups.length === 0 ? (
-          <div className="p-8 rounded-2xl bg-[#061225] border border-[#18334D] text-center space-y-2">
-            <Users className="w-8 h-8 text-[#8EADC7]/40 mx-auto" />
-            <p className="text-xs sm:text-sm font-semibold text-[#F8FBFF]">Nenhum grupo encontrado</p>
-            <p className="text-xs text-[#8EADC7]">
+          <div className="p-8 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c] text-center space-y-2">
+            <Users className="w-8 h-8 text-[#a8a39a]/40 mx-auto" />
+            <p className="text-xs sm:text-sm font-semibold text-[#f6f2e8]">Nenhum grupo encontrado</p>
+            <p className="text-xs text-[#a8a39a]">
               {searchQuery
                 ? 'Nenhum grupo corresponde ao termo buscado.'
                 : 'Conecte sua conta do WhatsApp e clique em "Sincronizar Grupos com Gateway".'}
@@ -926,18 +926,18 @@ export default function WhatsAppConnectionPage() {
               return (
                 <div
                   key={group.id || group.groupJid}
-                  className="p-4 rounded-2xl border transition-all space-y-3 bg-[#061225] border-[#18334D] hover:border-[#1CCAF2]/30"
+                  className="p-4 rounded-2xl border transition-all space-y-3 bg-[#0c0c0d] border-[#2c2c2c] hover:border-[#f5c542]/30"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-[#0D1B31] border border-[#18334D] flex items-center justify-center text-[#1CCAF2] flex-shrink-0 mt-0.5">
+                      <div className="w-10 h-10 rounded-xl bg-[#161616] border border-[#2c2c2c] flex items-center justify-center text-[#f5c542] flex-shrink-0 mt-0.5">
                         <Users className="w-5 h-5" />
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-xs sm:text-sm font-bold text-[#F8FBFF] truncate">
+                        <h4 className="text-xs sm:text-sm font-bold text-[#f6f2e8] truncate">
                           {group.name}
                         </h4>
-                        <p className="text-[11px] text-[#8EADC7] mt-0.5">
+                        <p className="text-[11px] text-[#a8a39a] mt-0.5">
                           {group.participantCount} participantes
                         </p>
                       </div>
@@ -945,27 +945,27 @@ export default function WhatsAppConnectionPage() {
 
                     <div className="flex-shrink-0">
                       {group.permissionStatus === 'verified_admin' || (group.isAdmin && canPost) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#20C997]/15 text-[#20C997] border border-[#20C997]/30">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#5fd0a0]/15 text-[#5fd0a0] border border-[#5fd0a0]/30">
                           <ShieldCheck className="w-3 h-3" />
                           <span>{group.roleDescription || 'Administrador'}</span>
                         </span>
                       ) : group.permissionStatus === 'verified_member' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#0879DF]/15 text-[#1CCAF2] border border-[#0879DF]/30">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#d9a520]/15 text-[#f5c542] border border-[#d9a520]/30">
                           <ShieldCheck className="w-3 h-3" />
                           <span>Membro liberado</span>
                         </span>
                       ) : group.permissionStatus === 'restricted_readonly' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#F7B84B]/15 text-[#F7B84B] border border-[#F7B84B]/30" title="Grupo restrito: apenas administradores podem postar">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#e8b65c]/15 text-[#e8b65c] border border-[#e8b65c]/30" title="Grupo restrito: apenas administradores podem postar">
                           <ShieldAlert className="w-3 h-3" />
                           <span>Somente Leitura (Restrito)</span>
                         </span>
                       ) : isUnverified ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-neutral-800 text-[#8EADC7] border border-neutral-700" title="Identidade do participante pendente de verificação">
-                          <Clock className="w-3 h-3 text-[#8EADC7]" />
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-neutral-800 text-[#a8a39a] border border-neutral-700" title="Identidade do participante pendente de verificação">
+                          <Clock className="w-3 h-3 text-[#a8a39a]" />
                           <span>{group.isAnnounce ? 'Permissão não verificada (Restrito)' : 'Permissão não verificada'}</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#F7B84B]/15 text-[#F7B84B] border border-[#F7B84B]/30">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#e8b65c]/15 text-[#e8b65c] border border-[#e8b65c]/30">
                           <ShieldAlert className="w-3 h-3" />
                           <span>Somente Leitura</span>
                         </span>
@@ -973,15 +973,15 @@ export default function WhatsAppConnectionPage() {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-[#18334D]/80 flex items-center justify-between gap-2 text-[11px]">
+                  <div className="pt-2 border-t border-[#2c2c2c]/80 flex items-center justify-between gap-2 text-[11px]">
                     <div className="flex items-center gap-2">
                       {canPost ? (
-                        <span className="text-[#20C997] font-semibold flex items-center gap-1">
+                        <span className="text-[#5fd0a0] font-semibold flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Apto para Destino de Postagem</span>
                         </span>
                       ) : (
-                        <span className="text-[#8EADC7] flex items-center gap-1">
+                        <span className="text-[#a8a39a] flex items-center gap-1">
                           <span>Apto como Origem de Cópia</span>
                         </span>
                       )}
@@ -989,7 +989,7 @@ export default function WhatsAppConnectionPage() {
 
                     <Link
                       href="/copiador"
-                      className="px-2.5 py-1 rounded-lg bg-[#0D1B31] border border-[#18334D] hover:border-[#1CCAF2]/40 text-[#8EADC7] hover:text-[#1CCAF2] font-semibold transition-colors flex items-center gap-1"
+                      className="px-2.5 py-1 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#f5c542]/40 text-[#a8a39a] hover:text-[#f5c542] font-semibold transition-colors flex items-center gap-1"
                     >
                       <span>Usar no Copiador</span>
                       <ArrowRight className="w-3 h-3" />
@@ -1001,16 +1001,16 @@ export default function WhatsAppConnectionPage() {
           </div>
         )}
 
-        <div className="p-4 rounded-2xl bg-[#061225] border border-[#18334D] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="p-4 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div>
-            <p className="font-bold text-[#F8FBFF]">Grupos sincronizados prontos para a operação</p>
-            <p className="text-[11px] text-[#8EADC7] mt-0.5">
+            <p className="font-bold text-[#f6f2e8]">Grupos sincronizados prontos para a operação</p>
+            <p className="text-[11px] text-[#a8a39a] mt-0.5">
               Escolha a origem de garimpo e o grupo de destino diretamente no Copiador WhatsApp.
             </p>
           </div>
           <Link
             href="/copiador"
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] font-bold shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-2 flex-shrink-0 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] font-bold shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-2 flex-shrink-0 cursor-pointer"
           >
             <span>Configurar Copiador Agora</span>
             <ArrowRight className="w-4 h-4" />
@@ -1018,16 +1018,16 @@ export default function WhatsAppConnectionPage() {
         </div>
 
         {/* Área Opcional de Diagnóstico Técnico e Testes */}
-        <details className="p-4 rounded-2xl bg-[#061225]/60 border border-[#18334D]/60 text-xs text-[#8EADC7] space-y-3">
-          <summary className="font-bold text-[#8EADC7] hover:text-[#F8FBFF] cursor-pointer flex items-center justify-between">
+        <details className="p-4 rounded-2xl bg-[#0c0c0d]/60 border border-[#2c2c2c]/60 text-xs text-[#a8a39a] space-y-3">
+          <summary className="font-bold text-[#a8a39a] hover:text-[#f6f2e8] cursor-pointer flex items-center justify-between">
             <span>⚙️ Diagnóstico Técnico e Opções Opcionais</span>
-            <span className="text-[10px] uppercase font-semibold text-[#8EADC7]/60">Clique para expandir</span>
+            <span className="text-[10px] uppercase font-semibold text-[#a8a39a]/60">Clique para expandir</span>
           </summary>
-          <div className="pt-3 border-t border-[#18334D]/60 space-y-2 text-[11px]">
-            <p><strong className="text-[#F8FBFF]">Instância Evolution:</strong> {wa?.instanceName || 'radar_ofertas'}</p>
-            <p><strong className="text-[#F8FBFF]">Último Ping:</strong> {formatDateTime(wa?.lastPingAt)}</p>
-            <p><strong className="text-[#F8FBFF]">Identificador da Conta (JID):</strong> {groups[0]?.userId || 'Conectado'}</p>
-            <p className="text-[#8EADC7]/80">
+          <div className="pt-3 border-t border-[#2c2c2c]/60 space-y-2 text-[11px]">
+            <p><strong className="text-[#f6f2e8]">Instância Evolution:</strong> {wa?.instanceName || 'radar_ofertas'}</p>
+            <p><strong className="text-[#f6f2e8]">Último Ping:</strong> {formatDateTime(wa?.lastPingAt)}</p>
+            <p><strong className="text-[#f6f2e8]">Identificador da Conta (JID):</strong> {groups[0]?.userId || 'Conectado'}</p>
+            <p className="text-[#a8a39a]/80">
               Esta área reúne parâmetros técnicos da Evolution API. A operação diária não necessita alterar esses dados.
             </p>
           </div>

@@ -371,7 +371,7 @@ function ConexoesContent() {
           <h1 style={{ fontSize: 26, letterSpacing: '-0.04em', margin: '4px 0 6px', fontWeight: 700 }}>
             Suas conexões.
           </h1>
-          <p className="rp-sub" style={{ margin: 0, fontSize: 13, color: '#aab3ba' }}>
+          <p className="rp-sub" style={{ margin: 0, fontSize: 13, color: '#b3b2b1' }}>
             Tudo pronto para transformar achados em oportunidades.
           </p>
         </div>
@@ -391,7 +391,7 @@ function ConexoesContent() {
       </header>
 
       {notice && (
-        <div className="rp-panel rp-section" style={{ borderColor: '#39bee6' }}>
+        <div className="rp-panel rp-section" style={{ borderColor: '#f5c542' }}>
           <p>{notice}</p>
         </div>
       )}
@@ -617,7 +617,7 @@ function ConexoesContent() {
               </button>
             </div>
 
-            <p className="rp-sub" style={{ marginTop: 22, fontSize: 11, color: '#94a3ad' }}>
+            <p className="rp-sub" style={{ marginTop: 22, fontSize: 11, color: '#a2a19f' }}>
               Cada loja tem seu próprio processo de conexão. A validação do link acontece antes da publicação.
             </p>
           </div>
@@ -649,7 +649,7 @@ function ConexoesContent() {
               <div>
                 <span className="cc-kicker">RADAR CONECTOR</span>
                 <h2 id="tutorial-modal-title">Vamos instalar sua extensão.</h2>
-                <p className="rp-sub" style={{ fontSize: 12, margin: 0, color: '#aab3ba' }}>
+                <p className="rp-sub" style={{ fontSize: 12, margin: 0, color: '#b3b2b1' }}>
                   Instale no navegador do computador. Depois, gerencie suas conexões pelo painel.
                 </p>
               </div>
@@ -752,11 +752,11 @@ function ConexoesContent() {
             {copyFeedback && (
               <div
                 style={{
-                  background: 'rgba(57, 190, 230, 0.15)',
-                  border: '1px solid #39bee6',
+                  background: 'rgba(245, 197, 66, 0.15)',
+                  border: '1px solid #f5c542',
                   borderRadius: 8,
                   padding: '9px 12px',
-                  color: '#cae3eb',
+                  color: '#f8e3aa',
                   fontSize: 11,
                   marginTop: 12,
                 }}

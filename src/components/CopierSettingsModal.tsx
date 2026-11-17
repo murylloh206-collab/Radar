@@ -539,7 +539,7 @@ export default function CopierSettingsModal({
 
             {(customDelayInput !== '' || !PRESET_DELAYS.some((p) => p.seconds === delaySeconds)) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                <label style={{ fontSize: 12, color: '#9bb0be' }}>Intervalo personalizado (segundos):</label>
+                <label style={{ fontSize: 12, color: '#afadaa' }}>Intervalo personalizado (segundos):</label>
                 <input
                   type="number"
                   min="5"
@@ -555,13 +555,13 @@ export default function CopierSettingsModal({
                     width: 100,
                     padding: '6px 10px',
                     borderRadius: 8,
-                    background: '#151b20',
-                    border: '1px solid #374652',
-                    color: '#edf2f5',
+                    background: '#1b1b1a',
+                    border: '1px solid #464543',
+                    color: '#f1f1f1',
                     fontSize: 13,
                   }}
                 />
-                <span style={{ fontSize: 11, color: '#8fa2b1' }}>
+                <span style={{ fontSize: 11, color: '#a2a19e' }}>
                   (~{Math.round(delaySeconds / 60)} min)
                 </span>
               </div>
@@ -738,7 +738,7 @@ export default function CopierSettingsModal({
                   <div className="csm-card-icon" aria-hidden="true">
                     <Camera size={18} />
                   </div>
-                  <span className="csm-card-badge" style={{ background: 'rgba(57, 190, 230, 0.15)', color: '#39bee6' }}>
+                  <span className="csm-card-badge" style={{ background: 'rgba(245, 197, 66, 0.15)', color: '#f5c542' }}>
                     Recomendado
                   </span>
                 </div>
@@ -774,15 +774,15 @@ export default function CopierSettingsModal({
             {/* Controle da Marca d'Água com Logo Oficial */}
             {imageMode !== 'none' && (
               <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div className="csm-watermark-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#0D1B31', border: '1px solid #18334D', borderRadius: 12, gap: 12, flexWrap: 'wrap' }}>
+                <div className="csm-watermark-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#161616', border: '1px solid #2c2c2c', borderRadius: 12, gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <img
                       src="/radar-logo.jpg"
                       alt="Logo Radar de Ofertas"
-                      style={{ width: 38, height: 38, borderRadius: 10, border: '1.5px solid #1CCAF2', objectFit: 'cover' }}
+                      style={{ width: 38, height: 38, borderRadius: 10, border: '1.5px solid #f5c542', objectFit: 'cover' }}
                     />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f5f5f5', display: 'flex', alignItems: 'center', gap: 8 }}>
                         Marca d&apos;água na foto do produto
                         {!canCustomizeWatermark && (
                           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.35)' }}>
@@ -790,7 +790,7 @@ export default function CopierSettingsModal({
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                      <div style={{ fontSize: 11, color: '#a8a39a' }}>
                         {canCustomizeWatermark
                           ? 'Aplica sua marca personalizada configurada em Conexões → Marca d’Água & Envio Seguro.'
                           : 'No plano Impulse é aplicada a marca oficial @radar.ofertas.br1. Faça upgrade para o Plus para usar seu logo, @ e posição livre.'}
@@ -932,7 +932,7 @@ export default function CopierSettingsModal({
                   <div className="csm-card-icon">
                     <Plus size={18} />
                   </div>
-                  <span className="csm-card-badge" style={{ color: '#39bee6' }}>Personalizado</span>
+                  <span className="csm-card-badge" style={{ color: '#f5c542' }}>Personalizado</span>
                 </div>
                 <h4 className="csm-card-title">Criar meu template</h4>
                 <p className="csm-card-desc">
@@ -945,7 +945,7 @@ export default function CopierSettingsModal({
             <div className="csm-editor-panel">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label htmlFor="csm-tpl-name" style={{ fontSize: 12, color: '#9bb0be', fontWeight: 600 }}>
+                  <label htmlFor="csm-tpl-name" style={{ fontSize: 12, color: '#afadaa', fontWeight: 600 }}>
                     Nome do modelo:
                   </label>
                   <input
@@ -955,9 +955,9 @@ export default function CopierSettingsModal({
                     value={customTemplateName}
                     onChange={(e) => setCustomTemplateName(e.target.value)}
                     style={{
-                      background: '#1d252c',
-                      border: '1px solid #374652',
-                      color: '#edf2f5',
+                      background: '#252524',
+                      border: '1px solid #464543',
+                      color: '#f1f1f1',
                       padding: '5px 10px',
                       borderRadius: 8,
                       fontSize: 13,
@@ -982,7 +982,7 @@ export default function CopierSettingsModal({
 
               {/* Barra de Chips Clicáveis de Variáveis */}
               <div>
-                <span style={{ fontSize: 11, color: '#8fa2b1', display: 'block', marginBottom: 6 }}>
+                <span style={{ fontSize: 11, color: '#a2a19e', display: 'block', marginBottom: 6 }}>
                   Variáveis suportadas (clique no chip para inserir no texto):
                 </span>
                 <div className="csm-chips-bar">
@@ -1021,7 +1021,7 @@ export default function CopierSettingsModal({
               <div className="csm-preview-box">
                 <div className="csm-preview-head">
                   <span>Prévia do WhatsApp em tempo real</span>
-                  <span style={{ fontSize: 10, color: '#39bee6' }}>Exemplo real com dados modelo</span>
+                  <span style={{ fontSize: 10, color: '#f5c542' }}>Exemplo real com dados modelo</span>
                 </div>
                 <div className="csm-preview-bubble">
                   {livePreview}

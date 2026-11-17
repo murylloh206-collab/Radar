@@ -172,16 +172,16 @@ export default function AutomacaoPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#F8FBFF] tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-black text-[#f6f2e8] tracking-tight">
             Central de Automação
           </h1>
-          <p className="text-xs sm:text-sm text-[#8EADC7] mt-0.5">
+          <p className="text-xs sm:text-sm text-[#a8a39a] mt-0.5">
             Garimpo contínuo (Fila), disparos sequenciais programados (Lista) e curadoria estratégica por público (Curador).
           </p>
         </div>
 
         {saveStatus && (
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#20C997]/15 border border-[#20C997]/30 text-[#20C997] text-xs font-semibold animate-fade-in">
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#5fd0a0]/15 border border-[#5fd0a0]/30 text-[#5fd0a0] text-xs font-semibold animate-fade-in">
             <Check className="w-4 h-4" />
             <span>{saveStatus}</span>
           </div>
@@ -189,13 +189,13 @@ export default function AutomacaoPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-2xl bg-[#0D1B31] border border-[#18334D] p-1.5 gap-1.5">
+      <div className="flex rounded-2xl bg-[#161616] border border-[#2c2c2c] p-1.5 gap-1.5">
         <button
           onClick={() => setActiveTab('fila')}
           className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
             activeTab === 'fila'
-              ? 'bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-md shadow-[#1CCAF2]/15'
-              : 'text-[#8EADC7] hover:text-[#F8FBFF]'
+              ? 'bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] shadow-md shadow-[#f5c542]/15'
+              : 'text-[#a8a39a] hover:text-[#f6f2e8]'
           }`}
         >
           <Zap className="w-4 h-4" />
@@ -206,8 +206,8 @@ export default function AutomacaoPage() {
           onClick={() => setActiveTab('lista')}
           className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
             activeTab === 'lista'
-              ? 'bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-md shadow-[#1CCAF2]/15'
-              : 'text-[#8EADC7] hover:text-[#F8FBFF]'
+              ? 'bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] shadow-md shadow-[#f5c542]/15'
+              : 'text-[#a8a39a] hover:text-[#f6f2e8]'
           }`}
         >
           <ListOrdered className="w-4 h-4" />
@@ -218,8 +218,8 @@ export default function AutomacaoPage() {
           onClick={() => setActiveTab('curador')}
           className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all min-h-[44px] ${
             activeTab === 'curador'
-              ? 'bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-md shadow-[#1CCAF2]/15'
-              : 'text-[#8EADC7] hover:text-[#F8FBFF]'
+              ? 'bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] shadow-md shadow-[#f5c542]/15'
+              : 'text-[#a8a39a] hover:text-[#f6f2e8]'
           }`}
         >
           <Bot className="w-4 h-4" />
@@ -230,18 +230,18 @@ export default function AutomacaoPage() {
       {/* ABA 1: FILA */}
       {activeTab === 'fila' && (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 sm:p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#18334D] pb-4 mb-4">
+          <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2c2c2c] pb-4 mb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-[#F8FBFF]">Configuração da Fila Contínua</h2>
+                  <h2 className="text-sm font-bold text-[#f6f2e8]">Configuração da Fila Contínua</h2>
                   <StatusBadge
                     label={filaAtiva ? 'Fila Operacional' : 'Fila Pausada'}
                     variant={filaAtiva ? 'success' : 'neutral'}
                     size="sm"
                   />
                 </div>
-                <p className="text-xs text-[#8EADC7] mt-0.5">
+                <p className="text-xs text-[#a8a39a] mt-0.5">
                   Garimpo autônomo respeitando intervalo, diversidade de produtos e filtros mínimos de qualidade.
                 </p>
               </div>
@@ -255,8 +255,8 @@ export default function AutomacaoPage() {
                   }}
                   className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
                     filaAtiva
-                      ? 'bg-[#F87171]/15 text-[#F87171] border border-[#F87171]/30 hover:bg-[#F87171]/25'
-                      : 'bg-[#20C997] text-[#061225] hover:opacity-90'
+                      ? 'bg-[#f07878]/15 text-[#f07878] border border-[#f07878]/30 hover:bg-[#f07878]/25'
+                      : 'bg-[#5fd0a0] text-[#0c0c0d] hover:opacity-90'
                   }`}
                 >
                   {filaAtiva ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -265,7 +265,7 @@ export default function AutomacaoPage() {
 
                 <button
                   onClick={() => handleSaveQueue()}
-                  className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold bg-[#0D1B31] border border-[#1CCAF2]/40 text-[#1CCAF2] hover:bg-[#1CCAF2]/10 flex items-center gap-2"
+                  className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold bg-[#161616] border border-[#f5c542]/40 text-[#f5c542] hover:bg-[#f5c542]/10 flex items-center gap-2"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>Salvar</span>
@@ -275,11 +275,11 @@ export default function AutomacaoPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">Marketplace Principal</label>
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">Marketplace Principal</label>
                 <select
                   value={filaLoja}
                   onChange={(e) => setFilaLoja(e.target.value)}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 >
                   <option value="shopee">Shopee (Filtros de Vendas e Reputação)</option>
                   <option value="mercadolivre">Mercado Livre (Full & Melhores Preços)</option>
@@ -290,7 +290,7 @@ export default function AutomacaoPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                   Intervalo entre Envios (Minutos)
                 </label>
                 <input
@@ -299,18 +299,18 @@ export default function AutomacaoPage() {
                   max="180"
                   value={filaIntervalo}
                   onChange={(e) => setFilaIntervalo(Number(e.target.value))}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                   Modo de Diversidade de Produtos
                 </label>
                 <select
                   value={filaDiversidade}
                   onChange={(e) => setFilaDiversidade(e.target.value as any)}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 >
                   <option value="off">Desligado (Pode repetir nicho)</option>
                   <option value="moderate">Moderado (Alterna categorias sequencialmente)</option>
@@ -319,7 +319,7 @@ export default function AutomacaoPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                   Não Repetir o Mesmo Produto Antes de (Dias)
                 </label>
                 <input
@@ -328,12 +328,12 @@ export default function AutomacaoPage() {
                   max="60"
                   value={filaRepeticao}
                   onChange={(e) => setFilaRepeticao(Number(e.target.value))}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                   Nota Mínima do Produto
                 </label>
                 <input
@@ -343,12 +343,12 @@ export default function AutomacaoPage() {
                   max="5.0"
                   value={filaMinRating}
                   onChange={(e) => setFilaMinRating(Number(e.target.value))}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                   Avaliações Mínimas (Prova Social)
                 </label>
                 <input
@@ -357,25 +357,25 @@ export default function AutomacaoPage() {
                   max="1000"
                   value={filaMinReviews}
                   onChange={(e) => setFilaMinReviews(Number(e.target.value))}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-[#18334D] flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#F8FBFF]">
+            <div className="mt-4 pt-4 border-t border-[#2c2c2c] flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#f6f2e8]">
                 <input
                   type="checkbox"
                   checked={filaPausaNoturna}
                   onChange={(e) => setFilaPausaNoturna(e.target.checked)}
-                  className="rounded border-[#18334D] text-[#1CCAF2] focus:ring-0"
+                  className="rounded border-[#2c2c2c] text-[#f5c542] focus:ring-0"
                 />
                 <span>Respeitar Pausa Noturna (Silêncio das 22h30 às 07h30)</span>
               </label>
 
               <button
                 onClick={() => handleSaveQueue()}
-                className="min-h-[44px] px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-md shadow-[#1CCAF2]/15 hover:opacity-95 transition-all flex items-center gap-1.5"
+                className="min-h-[44px] px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] shadow-md shadow-[#f5c542]/15 hover:opacity-95 transition-all flex items-center gap-1.5"
               >
                 <Save className="w-4 h-4" />
                 <span>Salvar Configurações</span>
@@ -388,11 +388,11 @@ export default function AutomacaoPage() {
       {/* ABA 2: LISTA */}
       {activeTab === 'lista' && (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 sm:p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#18334D] pb-4 mb-4">
+          <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2c2c2c] pb-4 mb-4">
               <div>
-                <h2 className="text-sm font-bold text-[#F8FBFF]">Campanhas em Lista (Lote Programado)</h2>
-                <p className="text-xs text-[#8EADC7] mt-0.5">
+                <h2 className="text-sm font-bold text-[#f6f2e8]">Campanhas em Lista (Lote Programado)</h2>
+                <p className="text-xs text-[#a8a39a] mt-0.5">
                   Organize listas de produtos manuais para disparar em lote com intervalo constante.
                 </p>
               </div>
@@ -410,7 +410,7 @@ export default function AutomacaoPage() {
                   setListas([...listas, novaLista]);
                   triggerSaveNotification('Nova lista criada. Adicione links para iniciar os disparos.');
                 }}
-                className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] flex items-center gap-2"
+                className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 <span>Criar Nova Lista</span>
@@ -421,11 +421,11 @@ export default function AutomacaoPage() {
               {listas.map((lst) => (
                 <div
                   key={lst.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-[#061225] border border-[#18334D] gap-3"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] gap-3"
                 >
                   <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-[#F8FBFF]">{lst.name}</h3>
-                    <div className="flex items-center gap-3 text-[11px] text-[#8EADC7] mt-1">
+                    <h3 className="text-xs sm:text-sm font-bold text-[#f6f2e8]">{lst.name}</h3>
+                    <div className="flex items-center gap-3 text-[11px] text-[#a8a39a] mt-1">
                       <span>Progresso: {lst.sentCount} de {lst.itemsCount} disparados</span>
                       <span>•</span>
                       <span>Intervalo: {lst.intervalMinutes} min</span>
@@ -444,7 +444,7 @@ export default function AutomacaoPage() {
                         setListas(listas.map((l) => (l.id === lst.id ? { ...l, status: nextStatus } : l)));
                         triggerSaveNotification(`Lista ${lst.name} atualizada para: ${nextStatus}.`);
                       }}
-                      className="min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0D1B31] border border-[#18334D] text-[#8EADC7] hover:text-[#1CCAF2]"
+                      className="min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#161616] border border-[#2c2c2c] text-[#a8a39a] hover:text-[#f5c542]"
                     >
                       {lst.status === 'ativa' ? 'Pausar' : 'Retomar'}
                     </button>
@@ -459,15 +459,15 @@ export default function AutomacaoPage() {
       {/* ABA 3: CURADOR ESTRATÉGICO */}
       {activeTab === 'curador' && (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 sm:p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#18334D] pb-4 mb-4">
+          <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2c2c2c] pb-4 mb-4">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-[#1CCAF2]/15 text-[#1CCAF2]">
+                <div className="p-2.5 rounded-xl bg-[#f5c542]/15 text-[#f5c542]">
                   <Sliders className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-[#F8FBFF]">Curador Estratégico por Regras</h2>
-                  <p className="text-xs text-[#8EADC7]">
+                  <h2 className="text-sm font-bold text-[#f6f2e8]">Curador Estratégico por Regras</h2>
+                  <p className="text-xs text-[#a8a39a]">
                     Algoritmo de planejamento baseado no perfil de audiência e horários nobres de engajamento
                   </p>
                 </div>
@@ -482,27 +482,27 @@ export default function AutomacaoPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                   1. Descrição do Perfil e Interesses da sua Audiência
                 </label>
                 <textarea
                   rows={3}
                   value={curatorAudience}
                   onChange={(e) => setCuratorAudience(e.target.value)}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl p-3 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl p-3 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                   placeholder="Ex: Pessoas interessadas em achadinhos de tecnologia, casa inteligente e cupons de desconto..."
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                  <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                     2. Volume Máximo de Ofertas por Dia
                   </label>
                   <select
                     value={curatorDailyLimit}
                     onChange={(e) => setCuratorDailyLimit(Number(e.target.value))}
-                    className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                    className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                   >
                     <option value={5}>5 ofertas/dia (Modo Leve)</option>
                     <option value={10}>10 ofertas/dia (Moderado)</option>
@@ -512,13 +512,13 @@ export default function AutomacaoPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+                  <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                     3. Estratégia de Distribuição dos Horários
                   </label>
                   <select
                     value={curatorScheduleMode}
                     onChange={(e) => setCuratorScheduleMode(e.target.value as any)}
-                    className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2.5 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                    className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2.5 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                   >
                     <option value="fixo">Intervalo Uniforme (Espaçamento regular ao longo do dia)</option>
                     <option value="ia">Picos Nobres de Engajamento (11h-13h, 18h-21h)</option>
@@ -526,8 +526,8 @@ export default function AutomacaoPage() {
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-[#18334D] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-xs text-[#8EADC7]">
+              <div className="pt-3 border-t border-[#2c2c2c] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-xs text-[#a8a39a]">
                   Plano com proteção anti-ban e filtro de repetição de produtos ativo.
                 </span>
 
@@ -539,8 +539,8 @@ export default function AutomacaoPage() {
                   }}
                   className={`min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                     curatorActive
-                      ? 'bg-[#F87171]/15 text-[#F87171] border border-[#F87171]/30 hover:bg-[#F87171]/25'
-                      : 'bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-md shadow-[#1CCAF2]/15'
+                      ? 'bg-[#f07878]/15 text-[#f07878] border border-[#f07878]/30 hover:bg-[#f07878]/25'
+                      : 'bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] shadow-md shadow-[#f5c542]/15'
                   }`}
                 >
                   {curatorActive ? 'Pausar Plano do Curador' : 'Ativar Plano do Curador'}

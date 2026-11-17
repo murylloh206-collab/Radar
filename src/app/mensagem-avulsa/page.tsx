@@ -90,10 +90,10 @@ export default function MensagemAvulsaPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-black text-[#F8FBFF] tracking-tight">
+        <h1 className="text-xl sm:text-2xl font-black text-[#f6f2e8] tracking-tight">
           Mensagem Avulsa
         </h1>
-        <p className="text-xs sm:text-sm text-[#8EADC7] mt-0.5">
+        <p className="text-xs sm:text-sm text-[#a8a39a] mt-0.5">
           Envie comunicados livres, avisos de promoções ou mensagens personalizadas com imagem para seus canais.
         </p>
       </div>
@@ -101,9 +101,9 @@ export default function MensagemAvulsaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Editor */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 sm:p-5 space-y-3.5">
+          <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 sm:p-5 space-y-3.5">
             <div>
-              <label className="text-xs font-bold text-[#F8FBFF] block mb-1.5">
+              <label className="text-xs font-bold text-[#f6f2e8] block mb-1.5">
                 Texto da Mensagem (Formatação WhatsApp: *negrito*, _itálico_, ~tachado~)
               </label>
               <textarea
@@ -111,12 +111,12 @@ export default function MensagemAvulsaPage() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Digite seu comunicado ou mensagem especial aqui..."
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl p-3.5 text-xs text-[#F8FBFF] placeholder-[#8EADC7]/40 focus:outline-none focus:border-[#1CCAF2] resize-y"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl p-3.5 text-xs text-[#f6f2e8] placeholder-[#a8a39a]/40 focus:outline-none focus:border-[#f5c542] resize-y"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+              <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                 URL da Imagem (Opcional)
               </label>
               <div className="flex gap-2">
@@ -125,18 +125,18 @@ export default function MensagemAvulsaPage() {
                   value={mediaUrl}
                   onChange={(e) => setMediaUrl(e.target.value)}
                   placeholder="https://exemplo.com/banner-promocao.jpg"
-                  className="flex-1 bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="flex-1 bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
             </div>
           </div>
 
           {/* Destinos */}
-          <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 sm:p-5 space-y-3">
-            <h2 className="text-xs font-bold text-[#F8FBFF]">Destinos WhatsApp</h2>
-            <div className="space-y-1.5 max-h-36 overflow-y-auto p-2 bg-[#061225] rounded-xl border border-[#18334D]">
+          <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 sm:p-5 space-y-3">
+            <h2 className="text-xs font-bold text-[#f6f2e8]">Destinos WhatsApp</h2>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto p-2 bg-[#0c0c0d] rounded-xl border border-[#2c2c2c]">
               {groups.map((grp) => (
-                <label key={grp.groupJid} className="flex items-center gap-2 text-xs text-[#F8FBFF] cursor-pointer">
+                <label key={grp.groupJid} className="flex items-center gap-2 text-xs text-[#f6f2e8] cursor-pointer">
                   <input
                     type="checkbox"
                     checked={selectedGroups.includes(grp.groupJid)}
@@ -147,7 +147,7 @@ export default function MensagemAvulsaPage() {
                         setSelectedGroups(selectedGroups.filter((j) => j !== grp.groupJid));
                       }
                     }}
-                    className="rounded border-[#18334D] text-[#1CCAF2] focus:ring-0"
+                    className="rounded border-[#2c2c2c] text-[#f5c542] focus:ring-0"
                   />
                   <span>{grp.name}</span>
                 </label>
@@ -155,14 +155,14 @@ export default function MensagemAvulsaPage() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+              <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                 Data/Hora do Envio (Opcional)
               </label>
               <input
                 type="datetime-local"
                 value={scheduleDate}
                 onChange={(e) => setScheduleDate(e.target.value)}
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
               />
             </div>
           </div>
@@ -170,19 +170,19 @@ export default function MensagemAvulsaPage() {
 
         {/* Prévia */}
         <div className="lg:col-span-5 flex flex-col">
-          <div className="sticky top-20 rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 sm:p-5 flex flex-col">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#1CCAF2] mb-3">
+          <div className="sticky top-20 rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 sm:p-5 flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#f5c542] mb-3">
               Prévia do Comunicado
             </span>
 
             {mediaUrl && (
-              <div className="mb-3 rounded-xl overflow-hidden border border-[#18334D] max-h-48 bg-[#061225]">
+              <div className="mb-3 rounded-xl overflow-hidden border border-[#2c2c2c] max-h-48 bg-[#0c0c0d]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={mediaUrl} alt="Prévia" className="w-full h-full object-cover" />
               </div>
             )}
 
-            <div className="p-4 rounded-2xl bg-[#061225] border border-[#18334D] text-xs text-[#F8FBFF] whitespace-pre-wrap leading-relaxed min-h-24">
+            <div className="p-4 rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c] text-xs text-[#f6f2e8] whitespace-pre-wrap leading-relaxed min-h-24">
               {text || 'Digite o texto ao lado para visualizar a prévia aqui...'}
             </div>
 
@@ -190,8 +190,8 @@ export default function MensagemAvulsaPage() {
               <div
                 className={`mt-3 p-2.5 rounded-xl text-xs font-medium border flex items-center gap-2 ${
                   statusMessage.type === 'success'
-                    ? 'bg-[#20C997]/10 border-[#20C997]/30 text-[#20C997]'
-                    : 'bg-[#F87171]/10 border-[#F87171]/30 text-[#F87171]'
+                    ? 'bg-[#5fd0a0]/10 border-[#5fd0a0]/30 text-[#5fd0a0]'
+                    : 'bg-[#f07878]/10 border-[#f07878]/30 text-[#f07878]'
                 }`}
               >
                 {statusMessage.type === 'success' ? (
@@ -207,7 +207,7 @@ export default function MensagemAvulsaPage() {
               <button
                 onClick={() => handleSend(false)}
                 disabled={sending}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#0D1B31] border border-[#18334D] text-[#8EADC7] hover:text-[#F8FBFF] transition-all"
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#161616] border border-[#2c2c2c] text-[#a8a39a] hover:text-[#f6f2e8] transition-all"
               >
                 <Calendar className="w-4 h-4" />
                 <span>Agendar</span>
@@ -216,7 +216,7 @@ export default function MensagemAvulsaPage() {
               <button
                 onClick={() => handleSend(true)}
                 disabled={sending}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] shadow-lg shadow-[#1CCAF2]/20 hover:opacity-95 transition-all"
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] shadow-lg shadow-[#f5c542]/20 hover:opacity-95 transition-all"
               >
                 <Send className="w-4 h-4" />
                 <span>Enviar Agora</span>

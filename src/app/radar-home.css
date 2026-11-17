@@ -1,17 +1,17 @@
 #radar-scene {
   position: relative;
   isolation: isolate;
-  background: #080d18;
+  background: #0b0b0a;
   min-height: 100vh;
   overflow-x: clip;
 }
 
 #radar-scene .ambient-bg {
-  --line: rgba(90, 150, 255, 0.14);
-  --ring: rgba(90, 150, 255, 0.2);
-  --cross: rgba(90, 150, 255, 0.16);
-  --sky: #38bdf8;
-  --beam: #bae6fd;
+  --line: rgba(245, 197, 66, 0.14);
+  --ring: rgba(245, 197, 66, 0.2);
+  --cross: rgba(245, 197, 66, 0.16);
+  --sky: #f5c542;
+  --beam: #fbe6a6;
   --ok: #7ef0b4;
   position: fixed;
   inset: 0;
@@ -97,10 +97,10 @@
   border-radius: 50%;
   background: conic-gradient(
     from 0deg,
-    rgba(56, 189, 248, 0) 0deg,
-    rgba(56, 189, 248, 0) 280deg,
-    rgba(56, 189, 248, 0.2) 340deg,
-    rgba(125, 211, 252, 0.55) 360deg
+    rgba(245, 197, 66, 0) 0deg,
+    rgba(245, 197, 66, 0) 280deg,
+    rgba(245, 197, 66, 0.2) 340deg,
+    rgba(252, 218, 125, 0.55) 360deg
   );
   -webkit-mask-image: radial-gradient(circle closest-side, #000 70%, transparent 100%);
   mask-image: radial-gradient(circle closest-side, #000 70%, transparent 100%);
@@ -114,8 +114,8 @@
   width: 2px;
   height: 48%;
   border-radius: 2px;
-  background: linear-gradient(0deg, rgba(186, 230, 253, 0.15), var(--beam));
-  box-shadow: 0 0 14px 2px rgba(56, 189, 248, 0.85);
+  background: linear-gradient(0deg, rgba(252, 229, 166, 0.15), var(--beam));
+  box-shadow: 0 0 14px 2px rgba(245, 197, 66, 0.85);
 }
 
 #radar-scene .ambient-blip {
@@ -124,15 +124,15 @@
   height: 10px;
   margin: -5px 0 0 -5px;
   border-radius: 50%;
-  background: #7fb4e8;
+  background: #f4d173;
   opacity: 0.22;
   transition: opacity 0.5s, background 0.4s, box-shadow 0.5s;
 }
 
 #radar-scene .ambient-blip.on {
   opacity: 1;
-  background: #e0f4ff;
-  box-shadow: 0 0 18px 6px rgba(56, 189, 248, 0.85);
+  background: #f0f0ef;
+  box-shadow: 0 0 18px 6px rgba(245, 197, 66, 0.85);
 }
 
 #radar-scene .ambient-blip:after {
@@ -167,9 +167,9 @@
   font: 400 12px/1 Inter, Arial, sans-serif;
   padding: 6px 10px;
   border-radius: 99px;
-  background: rgba(3, 10, 26, 0.88);
-  border: 1px solid rgba(56, 189, 248, 0.5);
-  color: #c8e8ff;
+  background: rgba(15, 15, 14, 0.88);
+  border: 1px solid rgba(245, 197, 66, 0.5);
+  color: #ffe7a3;
   opacity: 0;
   transform: translateX(-8px);
   transition: opacity 0.35s, transform 0.35s;
@@ -193,12 +193,12 @@
 }
 
 #radar-home {
-  --bg: #080d18;
-  --surface: #111b2c;
-  --line: #2b3a50;
-  --text: #f4f6fa;
-  --muted: #b6c2d2;
-  --cyan: #35d4ed;
+  --bg: #0b0b0a;
+  --surface: #161616;
+  --line: #2c2c2c;
+  --text: #f6f2e8;
+  --muted: #b3ada2;
+  --cyan: #f5c542;
   position: relative;
   z-index: 1;
   background: transparent;
@@ -293,7 +293,7 @@
 
 #radar-home .small {
   font-size: 12px;
-  color: #a5b5ca;
+  color: #b3ada2;
 }
 
 #radar-home .center {
@@ -313,7 +313,7 @@
   gap: 9px;
   padding: 12px 19px;
   min-height: 46px;
-  border: 1px solid #6d829c;
+  border: 1px solid #7d786f;
   border-radius: 10px;
   background: transparent;
   color: var(--text);
@@ -323,18 +323,18 @@
 }
 
 #radar-home .action:hover {
-  background: #172338;
+  background: #20201f;
   transform: translateY(-1px);
 }
 
 #radar-home .primary {
   background: var(--cyan);
-  color: #06131c;
+  color: #121110;
   border-color: var(--cyan);
 }
 
 #radar-home .primary:hover {
-  background: #70e6f5;
+  background: #f5d270;
 }
 
 #radar-home .text-link {
@@ -462,7 +462,7 @@
 #radar-home .mobile-menu {
   padding: 12px 24px 24px;
   border-top: 1px solid var(--line);
-  background: #0c1422;
+  background: #111111;
 }
 
 #radar-home .mobile-menu a {
@@ -502,9 +502,9 @@
 
 #radar-home .browser {
   margin: 45px auto 0;
-  border: 1px solid #334363;
+  border: 1px solid #4e4c48;
   border-radius: 18px;
-  background: #0c1422;
+  background: #111111;
   box-shadow: 0 26px 75px #0005;
   text-align: left;
   max-width: 960px;
@@ -518,19 +518,19 @@
   padding: 13px 18px;
   border-bottom: 1px solid var(--line);
   font-size: 11px;
-  color: #a6b8cd;
-  background: #10192b;
+  color: #bcbab7;
+  background: #1f1e1c;
 }
 
 #radar-home .dots {
   letter-spacing: 3px;
-  color: #65758c;
+  color: #7b7976;
   margin-right: 14px;
 }
 
 #radar-home .demo-label {
   margin-left: auto;
-  color: #a5b5ca;
+  color: #b3ada2;
   font-size: 11px;
 }
 
@@ -546,7 +546,7 @@
   border: 1px solid var(--line);
   padding: 18px;
   border-radius: 12px;
-  background: #111b2c;
+  background: #161616;
   min-width: 0;
 }
 
@@ -567,12 +567,12 @@
 }
 
 #radar-home .flow-card.accent {
-  border-color: #358399;
-  background: linear-gradient(150deg, #142c3b, #111b2c);
+  border-color: #d4a011;
+  background: linear-gradient(150deg, #292826, #161616);
 }
 
 #radar-home .arrow {
-  color: #52778b;
+  color: #72706b;
   text-align: center;
 }
 
@@ -587,9 +587,9 @@
   height: 36px;
   display: grid;
   place-items: center;
-  border: 1px solid #344862;
+  border: 1px solid #4e4c48;
   border-radius: 10px;
-  background: #1a2a3d;
+  background: #2e2c29;
   color: var(--cyan);
   flex-shrink: 0;
 }
@@ -613,7 +613,7 @@
   align-items: center;
   gap: 12px;
   font-size: 11px;
-  color: #b6c2d2;
+  color: #b3ada2;
 }
 
 #radar-home .browser-bottom .text-link {
@@ -628,7 +628,7 @@
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
-  color: #c1ccda;
+  color: #cfcecc;
   font-size: 14px;
   border-bottom: 1px solid var(--line);
 }
@@ -642,7 +642,7 @@
 
 #radar-home .step {
   padding: 24px 0;
-  border-top: 1px solid #365268;
+  border-top: 1px solid #52504c;
 }
 
 #radar-home .number {
@@ -665,9 +665,9 @@
 }
 
 #radar-home .alt {
-  background: #0c14228c;
-  border-top: 1px solid #1d2c40;
-  border-bottom: 1px solid #1d2c40;
+  background: #1010128c;
+  border-top: 1px solid #2c2c2c;
+  border-bottom: 1px solid #2c2c2c;
 }
 
 #radar-home .points {
@@ -696,10 +696,10 @@
 }
 
 #radar-home .interactive {
-  border: 1px solid #35506c;
+  border: 1px solid #54524d;
   border-radius: 20px;
   padding: 24px;
-  background: #111b2c;
+  background: #161616;
   box-shadow: 0 20px 65px #0003;
   min-width: 0;
 }
@@ -718,12 +718,12 @@
 
 #radar-home .caption {
   font-size: 11px;
-  color: #a2b4c9;
+  color: #b8b6b3;
 }
 
 #radar-home .field-label {
   display: block;
-  color: #aebed0;
+  color: #c1c0bd;
   font-size: 12px;
   margin-bottom: 8px;
 }
@@ -734,9 +734,9 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  border: 1px solid #40566b;
+  border: 1px solid #585653;
   border-radius: 12px;
-  background: #152237;
+  background: #282724;
   color: var(--text);
   padding: 14px;
   margin-bottom: 10px;
@@ -745,12 +745,12 @@
 
 #radar-home .choice[aria-pressed='true'] {
   border-color: var(--cyan);
-  background: #18313e;
+  background: #2d2c29;
 }
 
 #radar-home .choice small {
   display: block;
-  color: #a5b8cc;
+  color: #bbb9b6;
   font-size: 11px;
   margin-top: 2px;
 }
@@ -763,7 +763,7 @@
 #radar-home .message {
   padding: 19px;
   border-radius: 14px;
-  background: #0c1625;
+  background: #1a1917;
   border: 1px solid var(--line);
   font-size: 13px;
   margin: 20px 0;
@@ -796,8 +796,8 @@
   display: inline-flex;
   gap: 4px;
   padding: 4px;
-  background: #080d18;
-  border: 1px solid #364a62;
+  background: #0b0b0a;
+  border: 1px solid #4f4d49;
   border-radius: 12px;
   flex-wrap: wrap;
 }
@@ -806,14 +806,14 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #b6c2d2;
+  color: #b3ada2;
   padding: 10px 14px;
   min-height: 42px;
   font-size: 12px;
 }
 
 #radar-home .segment button[aria-pressed='true'] {
-  background: #283b52;
+  background: #403e3a;
   color: #fff;
 }
 
@@ -823,9 +823,9 @@
 
 #radar-home .input {
   width: 100%;
-  background: #0c1422;
+  background: #111111;
   color: var(--text);
-  border: 1px solid #6d829c;
+  border: 1px solid #7d786f;
   border-radius: 10px;
   min-height: 46px;
   padding: 10px 12px;
@@ -837,17 +837,17 @@
   place-items: center;
   padding: 20px 12px;
   border-radius: 15px;
-  background: #0a1220;
+  background: #161514;
   min-height: 0;
   margin-top: 20px;
 }
 
 #radar-home .art {
-  --art-accent: #35d4ed;
+  --art-accent: #f5c542;
   width: 100%;
   max-width: 340px;
   aspect-ratio: 1;
-  background: linear-gradient(145deg, #122535, #0d1729);
+  background: linear-gradient(145deg, #252422, #1c1b1a);
   border: 1px solid var(--art-accent);
   border-radius: 14px;
   box-shadow: 0 8px 26px #0004;
@@ -880,11 +880,11 @@
   min-height: 0;
   overflow: hidden;
   border-radius: 9px;
-  background: #080d18;
+  background: #0b0b0a;
   border: 1px solid #ffffff15;
   display: grid;
   place-items: center;
-  color: #dde8ee;
+  color: #e7e6e4;
 }
 
 #radar-home .product-figure img {
@@ -922,7 +922,7 @@
 #radar-home .art-note {
   font-size: 9px;
   line-height: 1.2;
-  color: #a7bdcf;
+  color: #bdbcb9;
   margin: 0;
   text-align: center;
 }
@@ -938,7 +938,7 @@
 }
 
 #radar-home .photo-message .old-price {
-  color: #9dafc3;
+  color: #b2b1ae;
   text-decoration: line-through;
 }
 
@@ -962,7 +962,7 @@
   gap: 12px;
   margin-top: 17px;
   font-size: 11px;
-  color: #a5b5ca;
+  color: #b3ada2;
 }
 
 #radar-home .photo-status {
@@ -1010,7 +1010,7 @@
 
 #radar-home .feature {
   padding: 22px;
-  background: #111b2c;
+  background: #161616;
   border: 1px solid var(--line);
   border-radius: 16px;
   display: flex;
@@ -1022,7 +1022,7 @@
 }
 
 #radar-home .feature:hover {
-  background: #172338;
+  background: #20201f;
   border-bottom-color: var(--cyan);
 }
 
@@ -1042,7 +1042,7 @@
 }
 
 #radar-home .feature small {
-  color: #a5b5ca;
+  color: #b3ada2;
   font-size: 10px;
   margin-top: auto;
 }
@@ -1066,7 +1066,7 @@
 }
 
 #radar-home .plan {
-  border: 1px solid #3b4965;
+  border: 1px solid #53514d;
   border-radius: 20px;
   padding: 25px;
   background: #10192bf0;
@@ -1078,7 +1078,7 @@
 
 #radar-home .popular {
   border-color: var(--cyan);
-  background: linear-gradient(145deg, #153142, #131c32);
+  background: linear-gradient(145deg, #2e2c29, #242321);
 }
 
 #radar-home .plan-head {
@@ -1116,7 +1116,7 @@
 #radar-home .price {
   font: 600 44px/1.1 'Playfair Display', Georgia, serif;
   letter-spacing: -2px;
-  color: #e1f0f5;
+  color: #ecebea;
 }
 
 #radar-home .currency {
@@ -1125,7 +1125,7 @@
 
 #radar-home .period {
   font-size: 11px;
-  color: #b6c2d2;
+  color: #b3ada2;
 }
 
 #radar-home .total {
@@ -1137,7 +1137,7 @@
 #radar-home .benefits {
   display: grid;
   gap: 15px;
-  border-top: 1px solid #344257;
+  border-top: 1px solid #484643;
   margin: 24px 0 30px;
   padding-top: 24px;
   flex: 1;
@@ -1148,7 +1148,7 @@
   gap: 9px;
   align-items: flex-start;
   font-size: 12px;
-  color: #c6d1de;
+  color: #d3d2d1;
 }
 
 #radar-home .benefit:before {
@@ -1206,9 +1206,9 @@
 
 #radar-home .final {
   padding: 70px 24px;
-  border: 1px solid #314565;
+  border: 1px solid #4e4c48;
   border-radius: 24px;
-  background: radial-gradient(ellipse at 50% 0, #20385c66, transparent 72%), #0e1729;
+  background: radial-gradient(ellipse at 50% 0, #20385c66, transparent 72%), #1d1c1a;
 }
 
 #radar-home .final h2 {
@@ -1235,7 +1235,7 @@
   gap: 22px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #b6c2d2;
+  color: #b3ada2;
 }
 
 #radar-home .footer-links a:hover {
@@ -1243,7 +1243,7 @@
 }
 
 #radar-home .legal-note {
-  border-top: 1px solid #1a293f;
+  border-top: 1px solid #2f2d2a;
   padding-top: 23px;
   margin-top: 24px !important;
   font-size: 11px;
@@ -1267,9 +1267,9 @@
   width: min(500px, calc(100% - 32px));
   max-height: calc(100vh - 40px);
   padding: 28px;
-  border: 1px solid #496481;
+  border: 1px solid #686662;
   border-radius: 20px;
-  background: #111b2c;
+  background: #161616;
   color: var(--text);
   box-shadow: 0 28px 100px #0009;
   margin: auto;
@@ -1286,10 +1286,10 @@
   float: right;
   width: 38px;
   height: 38px;
-  border: 1px solid #405269;
+  border: 1px solid #575552;
   border-radius: 10px;
-  background: #172338;
-  color: #f4f6fa;
+  background: #20201f;
+  color: #f6f2e8;
   font-size: 20px;
   margin: -8px -8px 12px 12px;
 }
@@ -1315,7 +1315,7 @@
   margin-top: 20px;
   color: var(--cyan);
   padding: 12px;
-  background: #0b1422;
+  background: #181715;
   border-radius: 8px;
   overflow-wrap: anywhere;
 }
@@ -1567,10 +1567,10 @@
   border-radius: 26px;
   border: 1px solid var(--line);
   background:
-    radial-gradient(circle at 50% 0, rgba(53, 212, 237, 0.14), transparent 58%),
-    linear-gradient(180deg, rgba(17, 27, 44, 0.96), rgba(10, 17, 29, 0.96));
+    radial-gradient(circle at 50% 0, rgba(245, 197, 66, 0.14), transparent 58%),
+    linear-gradient(180deg, rgba(22, 22, 22, 0.96), rgba(20, 20, 19, 0.96));
   overflow: hidden;
-  box-shadow: 0 32px 72px rgba(2, 6, 15, 0.56);
+  box-shadow: 0 32px 72px rgba(9, 9, 8, 0.56);
   text-align: left;
 }
 
@@ -1580,7 +1580,7 @@
   align-items: center;
   gap: 16px;
   padding: 18px 24px;
-  border-bottom: 1px solid rgba(43, 58, 80, 0.72);
+  border-bottom: 1px solid rgba(44, 44, 44, 0.72);
 }
 
 #radar-home .journey-top strong {
@@ -1596,14 +1596,14 @@
   padding: 8px 12px;
   border-radius: 99px;
   border: 1px solid var(--line);
-  background: rgba(8, 13, 24, 0.55);
+  background: rgba(11, 11, 10, 0.55);
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
 }
 
 #radar-home .motion-toggle:hover {
-  border-color: rgba(53, 212, 237, 0.45);
+  border-color: rgba(245, 197, 66, 0.45);
   color: var(--text);
 }
 
@@ -1625,8 +1625,8 @@
   height: 2px;
   background: linear-gradient(
     90deg,
-    rgba(53, 212, 237, 0.15),
-    rgba(53, 212, 237, 0.72),
+    rgba(245, 197, 66, 0.15),
+    rgba(245, 197, 66, 0.72),
     rgba(126, 240, 180, 0.45)
   );
   pointer-events: none;
@@ -1640,7 +1640,7 @@
   height: 12px;
   border-radius: 50%;
   background: var(--cyan);
-  box-shadow: 0 0 18px 4px rgba(53, 212, 237, 0.85);
+  box-shadow: 0 0 18px 4px rgba(245, 197, 66, 0.85);
   animation: radar-journey-transfer 6.5s ease-in-out infinite;
   pointer-events: none;
   z-index: 2;
@@ -1660,7 +1660,7 @@
   45%,
   58% {
     left: 50%;
-    background: #9ef0ff;
+    background: #ffe59e;
   }
   90%,
   100% {
@@ -1678,8 +1678,8 @@
   min-height: 252px;
   padding: 20px;
   border-radius: 22px;
-  border: 1px solid rgba(43, 58, 80, 0.95);
-  background: rgba(8, 13, 24, 0.82);
+  border: 1px solid rgba(44, 44, 44, 0.95);
+  background: rgba(11, 11, 10, 0.82);
   color: var(--text);
   text-align: left;
   transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
@@ -1688,12 +1688,12 @@
 #radar-home .scene-card:hover,
 #radar-home .scene-card.active {
   transform: translateY(-3px);
-  border-color: rgba(53, 212, 237, 0.7);
-  box-shadow: 0 18px 40px rgba(3, 8, 19, 0.55);
+  border-color: rgba(245, 197, 66, 0.7);
+  box-shadow: 0 18px 40px rgba(12, 11, 10, 0.55);
 }
 
 #radar-home .scene-card.central {
-  background: linear-gradient(180deg, rgba(22, 36, 58, 0.96), rgba(11, 19, 32, 0.94));
+  background: linear-gradient(180deg, rgba(42, 41, 38, 0.96), rgba(23, 22, 20, 0.94));
 }
 
 #radar-home .scene-step {
@@ -1708,7 +1708,7 @@
 }
 
 #radar-home .scene-step span:last-child {
-  color: #8ea0b8;
+  color: #a6a4a0;
   font-weight: 600;
 }
 
@@ -1734,13 +1734,13 @@
   gap: 10px;
   padding: 11px 12px;
   border-radius: 15px;
-  border: 1px solid rgba(59, 78, 106, 0.78);
-  background: rgba(17, 27, 44, 0.9);
+  border: 1px solid rgba(85, 83, 80, 0.78);
+  background: rgba(22, 22, 22, 0.9);
 }
 
 #radar-home .paper:nth-child(2) {
   transform: translateX(10px);
-  border-color: rgba(53, 212, 237, 0.42);
+  border-color: rgba(245, 197, 66, 0.42);
 }
 
 #radar-home .avatar {
@@ -1749,7 +1749,7 @@
   border-radius: 10px;
   display: grid;
   place-items: center;
-  background: rgba(53, 212, 237, 0.13);
+  background: rgba(245, 197, 66, 0.13);
   color: var(--cyan);
   font-size: 12px;
   font-weight: 800;
@@ -1779,8 +1779,8 @@
   align-items: center;
   padding: 10px;
   border-radius: 18px;
-  border: 1px solid rgba(53, 212, 237, 0.48);
-  background: rgba(8, 13, 24, 0.86);
+  border: 1px solid rgba(245, 197, 66, 0.48);
+  background: rgba(11, 11, 10, 0.86);
 }
 
 #radar-home .photo-tile img {
@@ -1824,8 +1824,8 @@
   gap: 10px;
   padding: 11px 13px;
   border-radius: 15px;
-  border: 1px solid rgba(59, 78, 106, 0.78);
-  background: rgba(17, 27, 44, 0.9);
+  border: 1px solid rgba(85, 83, 80, 0.78);
+  background: rgba(22, 22, 22, 0.9);
 }
 
 #radar-home .channel-left {
@@ -1846,7 +1846,7 @@
 }
 
 #radar-home .channel.blue .channel-mark {
-  background: rgba(53, 212, 237, 0.13);
+  background: rgba(245, 197, 66, 0.13);
   color: var(--cyan);
 }
 
@@ -1865,8 +1865,8 @@
   align-items: center;
   gap: 18px;
   padding: 18px 24px;
-  border-top: 1px solid rgba(43, 58, 80, 0.72);
-  background: rgba(7, 12, 22, 0.76);
+  border-top: 1px solid rgba(44, 44, 44, 0.72);
+  background: rgba(15, 15, 14, 0.76);
 }
 
 #radar-home .journey-foot p {
@@ -1882,8 +1882,8 @@
   margin-top: 22px;
   padding: 20px 24px;
   border-radius: 22px;
-  border: 1px solid rgba(43, 58, 80, 0.9);
-  background: rgba(13, 22, 37, 0.88);
+  border: 1px solid rgba(44, 44, 44, 0.9);
+  background: rgba(17, 17, 17, 0.88);
 }
 
 #radar-home .integrations strong {
@@ -1910,8 +1910,8 @@
   gap: 14px;
   padding: 10px 18px 10px 12px;
   border-radius: 18px;
-  border: 1px solid rgba(58, 79, 108, 0.9);
-  background: rgba(8, 13, 24, 0.88);
+  border: 1px solid rgba(86, 84, 80, 0.9);
+  background: rgba(11, 11, 10, 0.88);
   font-size: 15px;
   font-weight: 700;
   color: var(--text);
@@ -1947,8 +1947,8 @@
 #radar-home .account-hint {
   padding: 12px 15px;
   border-radius: 16px;
-  border: 1px solid rgba(43, 58, 80, 0.85);
-  background: rgba(13, 22, 37, 0.78);
+  border: 1px solid rgba(44, 44, 44, 0.85);
+  background: rgba(17, 17, 17, 0.78);
   font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
@@ -1980,8 +1980,8 @@
   border-radius: 22px;
   border: 1px solid var(--line);
   background:
-    radial-gradient(circle at 100% 0, rgba(53, 212, 237, 0.1), transparent 55%),
-    rgba(17, 27, 44, 0.88);
+    radial-gradient(circle at 100% 0, rgba(245, 197, 66, 0.1), transparent 55%),
+    rgba(22, 22, 22, 0.88);
   color: var(--text);
   text-align: left;
   overflow: hidden;
@@ -2002,8 +2002,8 @@
 
 #radar-home .resource:hover {
   transform: translateY(-4px);
-  border-color: rgba(53, 212, 237, 0.68);
-  box-shadow: 0 22px 44px rgba(2, 6, 15, 0.52);
+  border-color: rgba(245, 197, 66, 0.68);
+  box-shadow: 0 22px 44px rgba(9, 9, 8, 0.52);
 }
 
 #radar-home .resource:hover::after {
@@ -2026,9 +2026,9 @@
   gap: 10px;
   margin-top: 18px;
   padding-top: 13px;
-  border-top: 1px solid rgba(43, 58, 80, 0.72);
+  border-top: 1px solid rgba(44, 44, 44, 0.72);
   font-size: 12px;
-  color: #9fb0c7;
+  color: #b3ada2;
 }
 
 #radar-home .resource-foot strong {
@@ -2039,8 +2039,8 @@
 #radar-home .mini-scene {
   height: 76px;
   border-radius: 16px;
-  border: 1px solid rgba(58, 79, 108, 0.72);
-  background: rgba(8, 13, 24, 0.76);
+  border: 1px solid rgba(86, 84, 80, 0.72);
+  background: rgba(11, 11, 10, 0.76);
   padding: 11px 12px;
   display: flex;
   align-items: center;
@@ -2052,8 +2052,8 @@
 #radar-home .tiny-sheet {
   padding: 7px 10px;
   border-radius: 11px;
-  border: 1px solid rgba(53, 212, 237, 0.36);
-  background: rgba(17, 27, 44, 0.95);
+  border: 1px solid rgba(245, 197, 66, 0.36);
+  background: rgba(22, 22, 22, 0.95);
   font-size: 11px;
   font-weight: 700;
   color: var(--text);
@@ -2084,8 +2084,8 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  background: rgba(24, 39, 62, 0.96);
-  border: 1px solid rgba(53, 212, 237, 0.32);
+  background: rgba(45, 44, 41, 0.96);
+  border: 1px solid rgba(245, 197, 66, 0.32);
   font-size: 11px;
   color: var(--text);
 }
@@ -2106,8 +2106,8 @@
 #radar-home .brand-chip {
   padding: 8px 11px;
   border-radius: 12px;
-  background: rgba(20, 34, 55, 0.96);
-  border: 1px solid rgba(53, 212, 237, 0.42);
+  background: rgba(39, 38, 36, 0.96);
+  border: 1px solid rgba(245, 197, 66, 0.42);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.8px;
@@ -2149,8 +2149,8 @@
   display: inline-flex;
   padding: 3px 8px;
   border-radius: 99px;
-  background: rgba(20, 34, 55, 0.96);
-  border: 1px solid rgba(58, 79, 108, 0.8);
+  background: rgba(39, 38, 36, 0.96);
+  border: 1px solid rgba(86, 84, 80, 0.8);
   font-size: 10px;
   font-weight: 700;
 }
@@ -2164,8 +2164,8 @@
 #radar-home .url-pill {
   padding: 4px 9px;
   border-radius: 99px;
-  background: rgba(17, 27, 44, 0.95);
-  border: 1px solid rgba(53, 212, 237, 0.35);
+  background: rgba(22, 22, 22, 0.95);
+  border: 1px solid rgba(245, 197, 66, 0.35);
   font-size: 11px;
   color: var(--cyan);
   width: fit-content;
@@ -2180,7 +2180,7 @@
 #radar-home .window-bars span {
   height: 16px;
   border-radius: 7px;
-  background: rgba(29, 45, 70, 0.95);
+  background: rgba(52, 50, 47, 0.95);
 }
 
 #radar-home .metric-chips {
@@ -2193,8 +2193,8 @@
 #radar-home .metric-chips span {
   padding: 8px 9px;
   border-radius: 11px;
-  background: rgba(18, 30, 48, 0.95);
-  border: 1px solid rgba(58, 79, 108, 0.72);
+  background: rgba(35, 34, 31, 0.95);
+  border: 1px solid rgba(86, 84, 80, 0.72);
   font-size: 11px;
   font-weight: 600;
 }
@@ -2208,8 +2208,8 @@
   gap: 8px;
   padding: 9px 11px;
   border-radius: 12px;
-  background: rgba(17, 27, 44, 0.95);
-  border: 1px solid rgba(58, 79, 108, 0.78);
+  background: rgba(22, 22, 22, 0.95);
+  border: 1px solid rgba(86, 84, 80, 0.78);
   font-size: 11px;
 }
 

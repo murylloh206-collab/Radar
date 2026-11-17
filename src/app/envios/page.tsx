@@ -382,16 +382,17 @@ function EnviosContent() {
   return (
     <section className="rp-page" aria-label="Envios">
       {/* Cabeçalho */}
-      <div className="rp-head">
+      <header className="rv6-head">
         <div>
-          <span className="rp-step">Publicação</span>
           <h1>Envios</h1>
-          <p>Da revisão à publicação, acompanhe tudo no mesmo lugar.</p>
+          <p>Tudo o que vai sair para os seus grupos passa por aqui: você confere, agenda e acompanha.</p>
         </div>
-        <Link href="/criar-conteudo" className="rp-btn rp-primary">
-          Criar conteúdo
-        </Link>
-      </div>
+        <div className="rv6-head-actions">
+          <Link href="/criar-conteudo" className="rp-btn rp-primary">
+            Criar conteúdo
+          </Link>
+        </div>
+      </header>
 
       {apiError && (
         <div className="rp-panel rp-section rp-warn" style={{ borderColor: '#e05353' }}>
@@ -400,46 +401,34 @@ function EnviosContent() {
       )}
 
       {notice && (
-        <div className="rp-panel rp-section" style={{ borderColor: '#39bee6' }}>
+        <div className="rp-panel rp-section" style={{ borderColor: '#f5c542' }}>
           <p>{notice}</p>
         </div>
       )}
 
       {/* Abas */}
       <div data-tab-group="delivery">
-        <div className="rp-tabs" role="tablist" aria-label="Etapa do envio">
-          <button
-            role="tab"
-            type="button"
-            aria-selected={activeTab === 'revisao'}
-            onClick={() => handleSelectTab('revisao')}
-          >
-            Revisão {pendingJobs.length > 0 ? `· ${pendingJobs.length}` : '· 0'}
-          </button>
-          <button
-            role="tab"
-            type="button"
-            aria-selected={activeTab === 'agenda'}
-            onClick={() => handleSelectTab('agenda')}
-          >
-            Agenda {scheduledJobs.length > 0 ? `· ${scheduledJobs.length}` : ''}
-          </button>
-          <button
-            role="tab"
-            type="button"
-            aria-selected={activeTab === 'campanhas'}
-            onClick={() => handleSelectTab('campanhas')}
-          >
-            Campanhas {campaigns.length > 0 ? `· ${campaigns.length}` : ''}
-          </button>
-          <button
-            role="tab"
-            type="button"
-            aria-selected={activeTab === 'historico'}
-            onClick={() => handleSelectTab('historico')}
-          >
-            Histórico
-          </button>
+        <div className="rv9-pipe" role="tablist" aria-label="Etapa do envio">
+          {([
+            ['revisao', 'Revisão', 'esperando você conferir', pendingJobs.length],
+            ['agenda', 'Agenda', 'com hora marcada', scheduledJobs.length],
+            ['campanhas', 'Campanhas', 'sequências montadas', campaigns.length],
+            ['historico', 'Histórico', 'já publicadas', jobs.filter((j) => j.status === 'enviado').length],
+          ] as const).map(([key, label, hint, count]) => (
+            <button
+              key={key}
+              role="tab"
+              type="button"
+              aria-selected={activeTab === key}
+              onClick={() => handleSelectTab(key)}
+            >
+              <span className="rv9-pipe-n">{count}</span>
+              <span className="rv9-pipe-t">
+                <strong>{label}</strong>
+                <small>{hint}</small>
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Aba 1: Revisão */}
@@ -471,7 +460,7 @@ function EnviosContent() {
                   pendingJobs.map((j) => (
                     <div key={j.id} className="rp-list-item">
                       {j.mediaUrl ? (
-                        <div style={{ position: 'relative', width: 68, height: 68, flexShrink: 0, borderRadius: 10, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
+                        <div style={{ position: 'relative', width: 68, height: 68, flexShrink: 0, borderRadius: 10, overflow: 'hidden', border: '1px solid #41403e', background: '#222221' }}>
                           <img
                             src={j.mediaUrl}
                             alt={j.targetName || 'Foto do produto'}
@@ -534,7 +523,7 @@ function EnviosContent() {
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <Link href="/conexoes?aba=marca" className="rp-btn rp-quiet" style={{ fontSize: 12 }}>
-                      🛡️ Configurar Envio Seguro
+                      Configurar Envio Seguro
                     </Link>
                     <button
                       className="rp-btn rp-primary"
@@ -559,9 +548,9 @@ function EnviosContent() {
                       type="button"
                       onClick={() => setQueueFilter(tab.key as any)}
                       style={{
-                        background: queueFilter === tab.key ? '#1CCAF2' : '#0B1728',
-                        color: queueFilter === tab.key ? '#040C1A' : '#8EADC7',
-                        border: queueFilter === tab.key ? '1px solid #1CCAF2' : '1px solid #1C2E46',
+                        background: queueFilter === tab.key ? '#f5c542' : '#1b1a18',
+                        color: queueFilter === tab.key ? '#090908' : '#a8a39a',
+                        border: queueFilter === tab.key ? '1px solid #f5c542' : '1px solid #20201f',
                         borderRadius: 999,
                         padding: '5px 14px',
                         fontSize: 12,
@@ -602,7 +591,7 @@ function EnviosContent() {
                       return (
                         <div key={j.id} className="rp-list-item" style={{ flexWrap: 'wrap', gap: 10 }}>
                           {j.mediaUrl && (
-                            <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227' }}>
+                            <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid #41403e', background: '#222221' }}>
                               <img
                                 src={j.mediaUrl}
                                 alt={j.targetName || 'Foto do produto'}
@@ -708,7 +697,7 @@ function EnviosContent() {
                 campaigns.map((c) => {
                   const isActive = c.status === 'ativa';
                   return (
-                    <div key={c.id} className="rp-section" style={{ borderBottom: '1px solid #363c41', paddingBottom: 16 }}>
+                    <div key={c.id} className="rp-section" style={{ borderBottom: '1px solid #2c2c2c', paddingBottom: 16 }}>
                       <div className="rp-list-item" style={{ padding: '12px 0' }}>
                         <div className="rp-list-copy">
                           <strong>{c.name}</strong>
@@ -772,11 +761,11 @@ function EnviosContent() {
                     value={searchHistory}
                     onChange={(e) => setSearchHistory(e.target.value)}
                     style={{
-                      background: '#061225',
-                      border: '1px solid #1c2b3e',
+                      background: '#0c0c0d',
+                      border: '1px solid #2f2e2b',
                       borderRadius: 8,
                       padding: '6px 12px',
-                      color: '#F8FBFF',
+                      color: '#f6f2e8',
                       fontSize: 13,
                       minWidth: 220,
                     }}
@@ -788,11 +777,11 @@ function EnviosContent() {
                     value={historyFilter}
                     onChange={(e) => setHistoryFilter(e.target.value as 'all' | 'sent' | 'failed')}
                     style={{
-                      background: '#061225',
-                      border: '1px solid #1c2b3e',
+                      background: '#0c0c0d',
+                      border: '1px solid #2f2e2b',
                       borderRadius: 8,
                       padding: '6px 10px',
-                      color: '#F8FBFF',
+                      color: '#f6f2e8',
                       fontSize: 13,
                     }}
                   >
@@ -804,7 +793,7 @@ function EnviosContent() {
               </div>
 
               {/* Filtro rápido por Marketplace */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #182738' }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid #2a2926' }}>
                 {[
                   { key: 'all', label: 'Todos os canais' },
                   { key: 'mercadolivre', label: 'Mercado Livre' },
@@ -817,9 +806,9 @@ function EnviosContent() {
                     type="button"
                     onClick={() => setStoreHistoryFilter(st.key as any)}
                     style={{
-                      background: storeHistoryFilter === st.key ? '#1CCAF2' : '#0B1728',
-                      color: storeHistoryFilter === st.key ? '#040C1A' : '#8EADC7',
-                      border: storeHistoryFilter === st.key ? '1px solid #1CCAF2' : '1px solid #1C2E46',
+                      background: storeHistoryFilter === st.key ? '#f5c542' : '#1b1a18',
+                      color: storeHistoryFilter === st.key ? '#090908' : '#a8a39a',
+                      border: storeHistoryFilter === st.key ? '1px solid #f5c542' : '1px solid #20201f',
                       borderRadius: 20,
                       padding: '4px 12px',
                       fontSize: 12,
@@ -856,8 +845,8 @@ function EnviosContent() {
                       shopee: { bg: '#291008', text: '#FF5722', border: 'rgba(255, 87, 34, 0.4)' },
                       amazon: { bg: '#291800', text: '#FF9900', border: 'rgba(255, 153, 0, 0.4)' },
                       netshoes: { bg: '#23082E', text: '#C084FC', border: 'rgba(192, 132, 252, 0.4)' },
-                      magalu: { bg: '#081D33', text: '#0086FF', border: 'rgba(0, 134, 255, 0.4)' },
-                      outro: { bg: '#0D1B31', text: '#1CCAF2', border: 'rgba(28, 202, 242, 0.3)' },
+                      magalu: { bg: '#1f1e1c', text: '#ffbb00', border: 'rgba(255, 187, 0, 0.4)' },
+                      outro: { bg: '#161616', text: '#f5c542', border: 'rgba(245, 197, 66, 0.3)' },
                     };
 
                     const sc = storeColors[store] || storeColors.outro;
@@ -866,8 +855,8 @@ function EnviosContent() {
                       <div
                         key={j.id}
                         style={{
-                          background: '#091526',
-                          border: '1px solid #18283D',
+                          background: '#0b0b0a',
+                          border: '1px solid #20201f',
                           borderRadius: 12,
                           padding: 16,
                           display: 'flex',
@@ -894,11 +883,11 @@ function EnviosContent() {
                             >
                               {store}
                             </span>
-                            <span style={{ fontSize: 12, color: '#8EADC7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 12, color: '#a8a39a', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               👥 {groupLabel}
                             </span>
-                            <span style={{ fontSize: 12, color: '#627D98' }}>•</span>
-                            <span style={{ fontSize: 12, color: '#8EADC7' }}>
+                            <span style={{ fontSize: 12, color: '#807e7a' }}>•</span>
+                            <span style={{ fontSize: 12, color: '#a8a39a' }}>
                               {j.sentAt
                                 ? new Date(j.sentAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
                                 : j.createdAt
@@ -911,9 +900,9 @@ function EnviosContent() {
                             {isSuccess ? (
                               <span
                                 style={{
-                                  background: 'rgba(32, 201, 151, 0.12)',
-                                  color: '#20C997',
-                                  border: '1px solid rgba(32, 201, 151, 0.35)',
+                                  background: 'rgba(95, 208, 160, 0.12)',
+                                  color: '#5fd0a0',
+                                  border: '1px solid rgba(95, 208, 160, 0.35)',
                                   borderRadius: 20,
                                   padding: '3px 10px',
                                   fontSize: 11,
@@ -926,7 +915,7 @@ function EnviosContent() {
                               <span
                                 style={{
                                   background: 'rgba(239, 68, 68, 0.12)',
-                                  color: '#F87171',
+                                  color: '#f07878',
                                   border: '1px solid rgba(239, 68, 68, 0.35)',
                                   borderRadius: 20,
                                   padding: '3px 10px',
@@ -939,9 +928,9 @@ function EnviosContent() {
                             ) : (
                               <span
                                 style={{
-                                  background: 'rgba(100, 116, 139, 0.12)',
-                                  color: '#94A3B8',
-                                  border: '1px solid rgba(100, 116, 139, 0.35)',
+                                  background: 'rgba(122, 120, 117, 0.12)',
+                                  color: '#a8a39a',
+                                  border: '1px solid rgba(122, 120, 117, 0.35)',
                                   borderRadius: 20,
                                   padding: '3px 10px',
                                   fontSize: 11,
@@ -964,7 +953,7 @@ function EnviosContent() {
                                 flexShrink: 0,
                                 borderRadius: 10,
                                 overflow: 'hidden',
-                                border: '1px solid #1E344F',
+                                border: '1px solid #393734',
                                 background: '#FFFFFF',
                               }}
                             >
@@ -984,12 +973,12 @@ function EnviosContent() {
                                 height: 72,
                                 flexShrink: 0,
                                 borderRadius: 10,
-                                border: '1px solid #1E344F',
-                                background: '#0D1B31',
+                                border: '1px solid #393734',
+                                background: '#161616',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                color: '#1CCAF2',
+                                color: '#f5c542',
                                 fontSize: 24,
                               }}
                             >
@@ -998,23 +987,23 @@ function EnviosContent() {
                           )}
 
                           <div style={{ flex: 1, minWidth: 240 }}>
-                            <strong style={{ fontSize: 14, color: '#F8FBFF', display: 'block', lineHeight: 1.4, marginBottom: 4 }}>
+                            <strong style={{ fontSize: 14, color: '#f6f2e8', display: 'block', lineHeight: 1.4, marginBottom: 4 }}>
                               {j.targetName || 'Oferta enviada ao WhatsApp'}
                             </strong>
 
                             {/* Preços */}
                             <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 6 }}>
                               {prices.original && (
-                                <span style={{ fontSize: 12, color: '#64748B', textDecoration: 'line-through' }}>
+                                <span style={{ fontSize: 12, color: '#7a7875', textDecoration: 'line-through' }}>
                                   De {prices.original}
                                 </span>
                               )}
                               {prices.current ? (
-                                <span style={{ fontSize: 14, color: '#1CCAF2', fontWeight: 800 }}>
+                                <span style={{ fontSize: 14, color: '#f5c542', fontWeight: 800 }}>
                                   Por {prices.current}
                                 </span>
                               ) : (
-                                <span style={{ fontSize: 12, color: '#8EADC7' }}>Preço na oferta</span>
+                                <span style={{ fontSize: 12, color: '#a8a39a' }}>Preço na oferta</span>
                               )}
                             </div>
 
@@ -1025,11 +1014,11 @@ function EnviosContent() {
                                   style={{
                                     fontFamily: 'monospace',
                                     fontSize: 11,
-                                    background: '#040C1A',
-                                    border: '1px solid #18283D',
+                                    background: '#090908',
+                                    border: '1px solid #20201f',
                                     borderRadius: 6,
                                     padding: '3px 8px',
-                                    color: '#8EADC7',
+                                    color: '#a8a39a',
                                     maxWidth: 320,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
@@ -1043,9 +1032,9 @@ function EnviosContent() {
                                   type="button"
                                   onClick={() => handleCopyAffiliate(j.affiliateUrl, j.id)}
                                   style={{
-                                    background: copiedAffiliateId === j.id ? '#20C997' : '#0D213B',
-                                    color: copiedAffiliateId === j.id ? '#040C1A' : '#1CCAF2',
-                                    border: '1px solid rgba(28, 202, 242, 0.35)',
+                                    background: copiedAffiliateId === j.id ? '#5fd0a0' : '#262522',
+                                    color: copiedAffiliateId === j.id ? '#090908' : '#f5c542',
+                                    border: '1px solid rgba(245, 197, 66, 0.35)',
                                     borderRadius: 6,
                                     padding: '3px 10px',
                                     fontSize: 11,
@@ -1068,11 +1057,11 @@ function EnviosContent() {
                               type="button"
                               onClick={() => setInspectingJob(j)}
                               style={{
-                                background: '#0D1B31',
-                                border: '1px solid #1C2E46',
+                                background: '#161616',
+                                border: '1px solid #20201f',
                                 borderRadius: 8,
                                 padding: '6px 12px',
-                                color: '#F8FBFF',
+                                color: '#f6f2e8',
                                 fontSize: 12,
                                 fontWeight: 600,
                                 cursor: 'pointer',
@@ -1087,11 +1076,11 @@ function EnviosContent() {
                                 disabled={retryingJobId === j.id}
                                 onClick={() => handleRetryJob(j.id)}
                                 style={{
-                                  background: '#1CCAF2',
+                                  background: '#f5c542',
                                   border: 'none',
                                   borderRadius: 8,
                                   padding: '6px 12px',
-                                  color: '#040C1A',
+                                  color: '#090908',
                                   fontSize: 12,
                                   fontWeight: 700,
                                   cursor: 'pointer',
@@ -1145,7 +1134,7 @@ function EnviosContent() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(2, 8, 19, 0.75)',
+            background: 'rgba(20, 20, 19, 0.75)',
             backdropFilter: 'blur(4px)',
             zIndex: 1000,
             display: 'flex',
@@ -1237,7 +1226,7 @@ function EnviosContent() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(2, 8, 19, 0.75)',
+            background: 'rgba(20, 20, 19, 0.75)',
             backdropFilter: 'blur(4px)',
             zIndex: 1000,
             display: 'flex',
@@ -1325,7 +1314,7 @@ function EnviosContent() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(2, 8, 19, 0.78)',
+            background: 'rgba(20, 20, 19, 0.78)',
             backdropFilter: 'blur(4px)',
             zIndex: 1000,
             display: 'flex',
@@ -1336,8 +1325,8 @@ function EnviosContent() {
         >
           <div
             style={{
-              background: '#091526',
-              border: '1px solid #1C2E46',
+              background: '#0b0b0a',
+              border: '1px solid #20201f',
               borderRadius: 16,
               maxWidth: 580,
               width: '100%',
@@ -1352,10 +1341,10 @@ function EnviosContent() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <span style={{ fontSize: 11, color: '#1CCAF2', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <span style={{ fontSize: 11, color: '#f5c542', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Detalhes do Envio
                 </span>
-                <h3 style={{ margin: '2px 0 0', fontSize: 17, color: '#F8FBFF', fontWeight: 700 }}>
+                <h3 style={{ margin: '2px 0 0', fontSize: 17, color: '#f6f2e8', fontWeight: 700 }}>
                   {inspectingJob.targetName || 'Mensagem WhatsApp'}
                 </h3>
               </div>
@@ -1365,7 +1354,7 @@ function EnviosContent() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#8EADC7',
+                  color: '#a8a39a',
                   fontSize: 20,
                   cursor: 'pointer',
                   padding: 4,
@@ -1386,16 +1375,16 @@ function EnviosContent() {
             )}
 
             <div>
-              <span style={{ fontSize: 12, color: '#8EADC7', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 600, display: 'block', marginBottom: 6 }}>
                 Texto publicado no WhatsApp:
               </span>
               <pre
                 style={{
-                  background: '#040C1A',
-                  border: '1px solid #18283D',
+                  background: '#090908',
+                  border: '1px solid #20201f',
                   borderRadius: 10,
                   padding: 14,
-                  color: '#E2E8F0',
+                  color: '#ebe6da',
                   fontSize: 13,
                   lineHeight: 1.5,
                   whiteSpace: 'pre-wrap',
@@ -1418,11 +1407,11 @@ function EnviosContent() {
                   } catch {}
                 }}
                 style={{
-                  background: '#0D213B',
-                  border: '1px solid rgba(28, 202, 242, 0.4)',
+                  background: '#262522',
+                  border: '1px solid rgba(245, 197, 66, 0.4)',
                   borderRadius: 8,
                   padding: '8px 16px',
-                  color: '#1CCAF2',
+                  color: '#f5c542',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -1435,11 +1424,11 @@ function EnviosContent() {
                 type="button"
                 onClick={() => setInspectingJob(null)}
                 style={{
-                  background: '#1CCAF2',
+                  background: '#f5c542',
                   border: 'none',
                   borderRadius: 8,
                   padding: '8px 18px',
-                  color: '#040C1A',
+                  color: '#090908',
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: 'pointer',

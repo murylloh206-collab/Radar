@@ -13,8 +13,6 @@ import {
 } from '@/lib/types';
 import CopierGroupPicker, { CopierGroupPhoto } from '@/components/CopierGroupPicker';
 import CopierSettingsModal, { BUILTIN_TEMPLATES } from '@/components/CopierSettingsModal';
-import CopierHistoryModal from '@/components/CopierHistoryModal';
-import { InstagramIcon } from '@/components/SocialIcons';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
   Activity,
@@ -149,7 +147,6 @@ function CopierContent() {
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Estados dos 4 Passos do Fluxo
   const [activeRuleId, setActiveRuleId] = useState<string | null>(null);
@@ -419,51 +416,31 @@ function CopierContent() {
 
   return (
     <section className="rp-page copier-page" aria-label="Modo Copiador">
-      {/* Topo: WhatsApp Selecionado, Seletor de Contas e Ações */}
-      <div className="rp-head" style={{ marginBottom: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <div>
-            <span className="rp-step">Automação Contínua</span>
-            <h1 style={{ margin: '4px 0 2px' }}>Modo Copiador</h1>
-            <p>Monitore grupos de ofertas, converta links para seus afiliados e publique automaticamente.</p>
-          </div>
+      {/* Topo: título e ações */}
+      <header className="rv6-head">
+        <div>
+          <h1>Copiador</h1>
+          <p>Copia as ofertas de um grupo, troca os links pelos seus e publica nos seus grupos.</p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="rv6-head-actions">
           {/* Seletor de WhatsApp (quando houver várias contas) */}
           {connections.length > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#22292f', padding: '4px 10px', borderRadius: 8, border: '1px solid #364149' }}>
-              <Smartphone size={14} style={{ color: '#39bee6' }} />
+            <label className="rv6-select">
+              <Smartphone size={14} aria-hidden="true" />
               <select
                 value={selectedConnectionId}
                 onChange={(e) => handleSelectConnection(e.target.value)}
-                style={{ background: 'transparent', border: 'none', color: '#edf2f5', fontSize: 12, outline: 'none', cursor: 'pointer' }}
                 aria-label="Selecionar conta WhatsApp"
               >
                 {connections.map((c) => (
-                  <option key={c.id} value={c.id} style={{ background: '#1c2227', color: '#edf2f5' }}>
+                  <option key={c.id} value={c.id}>
                     {c.label} ({c.phoneNumber ? formatPhone(c.phoneNumber) : 'Sem número'})
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
           )}
-
-          <button
-            type="button"
-            className="rp-btn"
-            style={{
-              background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)',
-              color: '#ffffff',
-              border: 'none',
-              fontWeight: 700,
-            }}
-            onClick={() => setShowHistoryModal(true)}
-            title="Ver histórico de links copiados e postar Stories"
-          >
-            <InstagramIcon size={14} aria-hidden="true" />
-            Histórico & Stories
-          </button>
 
           <button
             type="button"
@@ -472,275 +449,150 @@ function CopierContent() {
             title="Ver histórico de atividade em tempo real"
           >
             <Activity size={14} aria-hidden="true" />
-            Ver atividade
+            Atividade
           </button>
-
-          <Link href="/conexoes?aba=whatsapp" className="rp-btn rp-quiet">
-            Gerenciar WhatsApps ↗
-          </Link>
         </div>
-      </div>
+      </header>
 
-      {/* Painel de Regras e Botão de Engrenagem SVG Profissional */}
-      <div
-        className="rp-panel"
-        style={{
-          padding: '16px 20px',
-          marginBottom: 18,
-          background: '#1d252b',
-          border: '1px solid #34404b',
-          borderRadius: 14,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
-          <div>
-            <span className="rp-step" style={{ fontSize: 10, letterSpacing: '0.08em' }}>Regras da Automação</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-              <h2 style={{ fontSize: 16, margin: 0, color: '#edf2f5' }}>
-                {activeRuleId && savedRule.current ? savedRule.current.name : 'Nova Configuração do Copiador'}
-              </h2>
-              <span className={`rp-tag ${isRuleActive ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10 }}>
-                {isRuleActive ? 'Monitoramento Ativo' : 'Copiador Pausado'}
-              </span>
+      {/* Console: estado da automação, conta e caminho da oferta num único bloco */}
+      <section className="rv6-console" data-on={isRuleActive ? 'true' : 'false'} aria-label="Estado do Copiador">
+        <div className="rv6-console-top">
+          <div className="rv6-state">
+            <span className="rv6-pulse" aria-hidden="true" />
+            <div>
+              <small>{activeRuleId && savedRule.current ? savedRule.current.name : 'Nova configuração'}</small>
+              <strong>
+                {!rulesReady ? 'Carregando…' : !activeRuleId ? 'Pronto para configurar' : isRuleActive ? 'Copiando agora' : 'Pausado'}
+              </strong>
+              <p>
+                {isRuleActive
+                  ? 'Para mudar intervalo, horário, ordem ou modelo de mensagem, pause o Copiador antes.'
+                  : 'Escolha a origem e os destinos abaixo. A engrenagem abre os ajustes avançados.'}
+              </p>
             </div>
-            <p className="rp-sub" style={{ margin: '4px 0 0', fontSize: 12 }}>
-              {isRuleActive
-                ? 'Copiador em execução. Para alterar intervalo, janela de funcionamento, ordem ou templates, pause o copiador.'
-                : 'Copiador pausado. Configure a origem, destinos ou clique no botão de engrenagem para abrir as configurações avançadas.'}
-            </p>
           </div>
 
-          {/* Botão com Engrenagem SVG Profissional */}
-          <button
-            type="button"
-            className="copier-settings-gear-btn"
-            onClick={() => setShowSettingsModal(true)}
-            aria-label="Abrir configurações avançadas do copiador"
-            title="Configurações da automação (intervalo, horários, ordem e templates)"
-          >
-            <Settings size={18} style={{ color: '#39bee6' }} aria-hidden="true" />
-            <span>Configurações do Copiador</span>
-          </button>
+          <div className="rv6-account">
+            <BrandLogo brand="whatsapp" variant="whatsapp-destaque" size={26} containerSize={42} />
+            <div className="rv6-account-info">
+              <div className="rv6-account-line">
+                <strong>{activeConnection?.label || 'Selecione seu WhatsApp'}</strong>
+                <span className={`rp-tag ${isConnected ? 'rp-good' : 'rp-warn'}`}>
+                  {activeConnection?.statusLabel || (loading ? 'Consultando conexão…' : 'Conexão não confirmada')}
+                </span>
+                {activeConnection?.isDefault && <span className="rp-tag">Padrão</span>}
+              </div>
+              <p>
+                {formatPhone(activeConnection?.phoneNumber)} · {activeConnection?.profileName || 'Conta WhatsApp'}
+              </p>
+              <p className="rv6-check">
+                <ShieldCheck size={13} aria-hidden="true" data-ok={isConnected ? 'true' : 'false'} />
+                Verificado em {formatDateTimeBR(activeConnection?.lastPingAt)}
+              </p>
+            </div>
+            <div className="rv6-account-actions">
+              <button
+                type="button"
+                className="rp-btn"
+                onClick={handleReviveConnection}
+                disabled={reviving}
+                title="Reinicia a sessão do WhatsApp e processa ofertas acumuladas"
+              >
+                <RefreshCw size={13} className={reviving ? 'wa-spin' : ''} aria-hidden="true" />
+                {reviving ? 'Sincronizando…' : 'Sincronizar'}
+              </button>
+              <Link href="/conexoes?aba=whatsapp" className="rv5-more" style={{ margin: 0 }}>
+                Gerenciar contas
+              </Link>
+            </div>
+          </div>
         </div>
 
-        {/* Escolha de Regras por Cards Interativos / Botões Segmentados (Sem listas de select) */}
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-          <button
-            type="button"
-            className={`csm-seg-btn ${!activeRuleId ? 'is-active' : ''}`}
-            style={{ minWidth: 150, flex: 'none' }}
-            onClick={() => chooseRule('')}
-            disabled={!rulesReady}
-          >
-            <Plus size={14} />
-            <span>+ Nova Regra</span>
-          </button>
+        {/* Caminho da oferta: origem, conversão e destinos, com a saúde de cada etapa */}
+        <ol className="rv6-track" aria-label="Caminho da oferta">
+          <li>
+            <div className="rv6-track-head">
+              <small>1 · Chega de</small>
+              <span className={`rp-tag ${isReceivingActive ? 'rp-good' : ''}`}>{isReceivingActive ? 'Recebendo' : 'Aguardando'}</span>
+            </div>
+            <strong>{originGroupName}</strong>
+            <p>
+              <b>{statusData ? statusData.receiving?.todayCount ?? 0 : '–'}</b> recebidas hoje · última: {formatDateTimeBR(statusData?.receiving?.lastMessageReceivedAt)}
+            </p>
+          </li>
+          <li>
+            <div className="rv6-track-head">
+              <small>2 · Vira sua oferta</small>
+              <span className={`rp-tag ${isRuleActive ? 'rp-good' : 'rp-warn'}`}>
+                {!rulesReady ? 'Carregando…' : !activeRuleId ? 'Nova' : isRuleActive ? 'Ativa' : 'Pausada'}
+              </span>
+            </div>
+            <strong>{selectedTemplate}</strong>
+            <p>{operationMode === 'automatico' ? 'Envio automático, sem revisão' : 'Passa pela sua revisão antes de enviar'}</p>
+          </li>
+          <li>
+            <div className="rv6-track-head">
+              <small>3 · Sai para</small>
+              <span className={`rp-tag ${isQueueActive ? 'rp-good' : ''}`}>
+                {statusData?.queue?.status === 'parada' ? 'Processador parado' : statusData?.queue?.status === 'processando' ? 'Enviando' : 'Em espera'}
+              </span>
+            </div>
+            <strong>{destinationGroupName}</strong>
+            <p>
+              <b>{statusData ? statusData.queue?.sentTodayCount ?? 0 : '–'}</b> enviadas hoje · último: {formatDateTimeBR(statusData?.queue?.lastProcessedAt)}
+            </p>
+          </li>
+        </ol>
 
-          {rulesList.map((source) => {
-            const isSelected = activeRuleId === source.id;
-            return (
+        {/* Regras salvas e ajustes aplicados */}
+        <div className="rv6-console-foot">
+          <div className="rv6-rules" role="group" aria-label="Regras salvas">
+            <button
+              type="button"
+              className={`csm-seg-btn ${!activeRuleId ? 'is-active' : ''}`}
+              onClick={() => chooseRule('')}
+              disabled={!rulesReady}
+            >
+              <Plus size={14} aria-hidden="true" />
+              <span>Nova regra</span>
+            </button>
+
+            {rulesList.map((source) => (
               <button
                 key={source.id}
                 type="button"
-                className={`csm-seg-btn ${isSelected ? 'is-active' : ''}`}
-                style={{ minWidth: 160, flex: 'none', justifyContent: 'space-between' }}
+                className={`csm-seg-btn ${activeRuleId === source.id ? 'is-active' : ''}`}
                 onClick={() => chooseRule(source.id)}
                 disabled={!rulesReady}
               >
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>
-                  {source.name}
-                </span>
-                <span
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: source.isActive ? '#10b981' : '#f59e0b',
-                    flexShrink: 0,
-                  }}
-                  title={source.isActive ? 'Ativa' : 'Pausada'}
-                />
+                <span className="rv6-rule-name">{source.name}</span>
+                <span className="rv6-rule-dot" data-on={source.isActive ? 'true' : 'false'} title={source.isActive ? 'Ativa' : 'Pausada'} />
               </button>
-            );
-          })}
-        </div>
-
-        {/* Resumo das configurações aplicadas da regra */}
-        {savedRule.current && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid #28333b', paddingTop: 8, fontSize: 11, color: '#8fa2b1' }}>
-            <span>⏱️ Intervalo: <strong style={{ color: '#edf2f5' }}>{savedRule.current.customDelaySeconds || 60}s</strong></span>
-            <span>&bull;</span>
-            <span>🕒 Janela: <strong style={{ color: '#edf2f5' }}>{savedRule.current.is24Hours || (savedRule.current.startTime === '00:00' && (savedRule.current.endTime === '00:00' || savedRule.current.endTime === '23:59')) ? '24 Horas' : `${savedRule.current.startTime || '08:00'} às ${savedRule.current.endTime || '22:00'} (Brasília)`}</strong></span>
-            <span>&bull;</span>
-            <span>🔀 Ordem: <strong style={{ color: '#edf2f5' }}>{savedRule.current.dispatchOrder === 'aleatoria' ? 'Aleatória' : 'Em sequência'}</strong></span>
-            <span>&bull;</span>
-            <span>📝 Template: <strong style={{ color: '#edf2f5' }}>{savedRule.current.templateName || selectedTemplate}</strong></span>
+            ))}
           </div>
-        )}
-      </div>
-      {!sharedWhatsApp.workspace && <p role="status" className="rp-panel" style={{ padding: 18 }}>{sharedWhatsApp.error || 'Carregando suas contas, grupos e regras salvas…'}</p>}
 
-      {/* Cartão de WhatsApp Conectado em Destaque */}
-      <div
-        className="rp-banner"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '14px 20px',
-          gap: 16,
-          background: '#242b31',
-          border: '1px solid #36424b',
-          borderRadius: 14,
-          marginBottom: 20,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
-          <BrandLogo brand="whatsapp" variant="whatsapp-destaque" size={32} containerSize={48} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: 15, color: '#edf2f5' }}>
-                {activeConnection?.label || 'Selecione seu WhatsApp'}
-              </strong>
-              <span className={`rp-tag ${isConnected ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10, padding: '2px 8px' }}>
-                {activeConnection?.statusLabel || (loading ? 'Consultando conexão…' : 'Conexão não confirmada')}
-              </span>
-              {activeConnection?.isDefault && (
-                <span style={{ fontSize: 9, background: '#254452', color: '#74dbf7', padding: '1px 6px', borderRadius: 4, border: '1px solid #356073' }}>
-                  Padrão
-                </span>
-              )}
-            </div>
-            <p className="rp-sub" style={{ margin: '3px 0 0', fontSize: 12, color: '#97abb9' }}>
-              Número: <strong style={{ color: '#d0dfea' }}>{formatPhone(activeConnection?.phoneNumber)}</strong>
-              {' '}&bull; Perfil: <strong style={{ color: '#d0dfea' }}>{activeConnection?.profileName || 'Conta WhatsApp'}</strong>
-            </p>
-          </div>
-        </div>
+          {savedRule.current && (
+            <dl className="rv6-settings">
+              <div><dt>Intervalo</dt><dd>{savedRule.current.customDelaySeconds || 60}s</dd></div>
+              <div><dt>Horário</dt><dd>{savedRule.current.is24Hours || (savedRule.current.startTime === '00:00' && (savedRule.current.endTime === '00:00' || savedRule.current.endTime === '23:59')) ? '24 horas' : `${savedRule.current.startTime || '08:00'} às ${savedRule.current.endTime || '22:00'}`}</dd></div>
+              <div><dt>Ordem</dt><dd>{savedRule.current.dispatchOrder === 'aleatoria' ? 'Aleatória' : 'Em sequência'}</dd></div>
+              <div><dt>Modelo</dt><dd>{savedRule.current.templateName || selectedTemplate}</dd></div>
+            </dl>
+          )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-          <div style={{ textAlign: 'right', fontSize: 11, color: '#889dae' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-              <ShieldCheck size={14} style={{ color: isConnected ? '#56c288' : '#889dae' }} />
-              <span>Última verificação:</span>
-            </div>
-            <strong style={{ color: '#b9cad6', display: 'block', marginTop: 2 }}>
-              {formatDateTimeBR(activeConnection?.lastPingAt)}
-            </strong>
-          </div>
           <button
             type="button"
-            onClick={handleReviveConnection}
-            disabled={reviving}
-            title="Reinicia a sessão Baileys na Evolution API e processa ofertas acumuladas"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 11,
-              fontWeight: 600,
-              padding: '5px 12px',
-              borderRadius: 8,
-              background: '#0D1B31',
-              border: '1px solid #1CCAF2',
-              color: '#1CCAF2',
-              cursor: reviving ? 'wait' : 'pointer',
-              transition: 'all 0.2s',
-            }}
+            className="rp-btn rv6-gear"
+            onClick={() => setShowSettingsModal(true)}
+            aria-label="Abrir configurações avançadas do copiador"
+            title="Configurações da automação (intervalo, horários, ordem e modelos)"
           >
-            <RefreshCw size={12} className={reviving ? 'wa-spin' : ''} />
-            {reviving ? 'Revivendo conexão...' : 'Reviver / Sincronizar'}
+            <Settings size={15} aria-hidden="true" />
+            Ajustes
           </button>
         </div>
-      </div>
-
-      {/* 4 Pilares de Saúde e Diagnóstico Separados */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
-          gap: 14,
-          marginBottom: 24,
-        }}
-        aria-label="Status dos 4 componentes da automação"
-      >
-        {/* Pilar 1: Regra do Copiador */}
-        <div style={{ background: '#20262b', border: '1px solid #364049', borderRadius: 12, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: '#8fa2af', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              1. Regra
-            </span>
-            <span className={`rp-tag ${isRuleActive ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10 }}>
-              {!rulesReady ? 'Carregando…' : !activeRuleId ? 'Nova configuração' : isRuleActive ? 'Ativa' : 'Pausada'}
-            </span>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {!rulesReady ? 'Consultando regra salva…' : !activeRuleId ? 'Selecione os grupos' : isRuleActive ? 'Monitoramento habilitado' : 'Regra pausada'}
-          </div>
-          <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
-            Modo: <strong>{operationMode === 'automatico' ? 'Envio automático' : 'Revisão prévia'}</strong>
-          </p>
-        </div>
-
-        {/* Pilar 2: Conexão WhatsApp */}
-        <div style={{ background: '#20262b', border: '1px solid #364049', borderRadius: 12, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: '#8fa2af', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              2. Conexão WhatsApp
-            </span>
-            <span className={`rp-tag ${isConnected ? 'rp-good' : 'rp-warn'}`} style={{ fontSize: 10 }}>
-              {isConnected ? 'Pareada' : 'Aguardando'}
-            </span>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {activeConnection?.statusLabel || 'Não verificada'}
-          </div>
-          <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
-            {activeConnection?.phoneNumber ? formatPhone(activeConnection.phoneNumber) : 'Sem número'}
-          </p>
-        </div>
-
-        {/* Pilar 3: Saúde de Recebimento */}
-        <div style={{ background: '#20262b', border: '1px solid #364049', borderRadius: 12, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: '#8fa2af', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              3. Recebimento
-            </span>
-            <span className={`rp-tag ${isReceivingActive ? 'rp-good' : ''}`} style={{ fontSize: 10 }}>
-              {isReceivingActive ? 'Ativo' : 'Aguardando'}
-            </span>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {statusData ? statusData.receiving?.todayCount ?? 0 : '—'} ofertas hoje
-          </div>
-          <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
-            Última recebida: <br />
-            <strong>{formatDateTimeBR(statusData?.receiving?.lastMessageReceivedAt)}</strong>
-          </p>
-        </div>
-
-        {/* Pilar 4: Saúde de Envio */}
-        <div style={{ background: '#20262b', border: '1px solid #364049', borderRadius: 12, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: '#8fa2af', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              4. Processamento & Envio
-            </span>
-            <span className={`rp-tag ${isQueueActive ? 'rp-good' : ''}`} style={{ fontSize: 10 }}>
-              {statusData?.queue?.status === 'parada' ? 'Processador parado' : statusData?.queue?.status === 'processando' ? 'Processando' : 'Ociosa'}
-            </span>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#edf2f5', marginBottom: 4 }}>
-            {statusData ? statusData.queue?.sentTodayCount ?? 0 : '—'} enviadas hoje
-          </div>
-          <p style={{ fontSize: 11, color: '#8fa2af', margin: 0 }}>
-            Último envio confirmado: <br />
-            <strong>{formatDateTimeBR(statusData?.queue?.lastProcessedAt)}</strong>
-          </p>
-        </div>
-      </div>
+      </section>
+      {!sharedWhatsApp.workspace && <p role="status" className="rp-panel" style={{ padding: 18 }}>{sharedWhatsApp.error || 'Carregando suas contas, grupos e regras salvas…'}</p>}
 
       {feedback && (
         <div
@@ -751,7 +603,7 @@ function CopierContent() {
             background: feedback.type === 'error' ? '#2e1d1d' : feedback.type === 'warning' ? '#2e251a' : '#1b2d22',
           }}
         >
-          <p style={{ margin: 0, fontSize: 13, color: '#edf2f5' }}>{feedback.message}</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#f1f1f1' }}>{feedback.message}</p>
         </div>
       )}
 
@@ -763,24 +615,6 @@ function CopierContent() {
         onConfirm={selection => { selectionEdited.current = true; if (picker === 'origin') { setSelectedOriginJid(selection[0]); setSelectedDestJids(previous => previous.filter(jid => jid !== selection[0])); } else setSelectedDestJids(selection); setPicker(null); }} />}
 
       <CopierRuntimeStatus workerActive={statusData?.queue?.isWorkerActive} connectionId={selectedConnectionId} />
-
-      {/* Resumo do Fluxo Principal */}
-      <div className="rp-flow copier-flow" style={{ marginBottom: 20 }}>
-        <div className="rp-flow-part">
-          <small>1. Copiar de</small>
-          <strong>{originGroupName}</strong>
-        </div>
-        <span className="rp-flow-arrow">→</span>
-        <div className="rp-flow-part">
-          <small>2. Publicar em</small>
-          <strong>{destinationGroupName}</strong>
-        </div>
-        <span className="rp-flow-arrow">→</span>
-        <div className="rp-flow-part">
-          <small>3. Formato</small>
-          <strong>{selectedTemplate} ({operationMode === 'automatico' ? 'Auto' : 'Revisão'})</strong>
-        </div>
-      </div>
 
       {/* Grid com os 4 Passos Estruturados */}
       <div className="rp-split">
@@ -853,14 +687,14 @@ function CopierContent() {
 
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#c1d0dc' }}>Modelo de mensagem (Template)</label>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#d0cfcd' }}>Modelo de mensagem (Template)</label>
                 <button
                   type="button"
                   onClick={() => setShowSettingsModal(true)}
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#39bee6',
+                    color: '#f5c542',
                     fontSize: 12,
                     cursor: 'pointer',
                     display: 'flex',
@@ -951,12 +785,12 @@ function CopierContent() {
                 </label>
               </div>
 
-              <div style={{ background: '#1c2227', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #333d45' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#39bee6', fontSize: 11, fontWeight: 600 }}>
+              <div style={{ background: '#222221', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #3d3c3b' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f5c542', fontSize: 11, fontWeight: 600 }}>
                   <ShieldCheck size={14} />
                   PROTEÇÃO ANTI-CONCORRENTE OBRIGATÓRIA
                 </div>
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#a0b3c2', lineHeight: 1.5 }}>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#b3b2af', lineHeight: 1.5 }}>
                   Se a conversão para o seu link de afiliado falhar em qualquer loja, a oferta será <strong>automaticamente bloqueada</strong>. O link do concorrente nunca será publicado no seu grupo.
                 </p>
               </div>
@@ -974,13 +808,13 @@ function CopierContent() {
             </div>
 
             <div className="rp-message rp-section">
-              <div style={{ position: 'relative', width: '100%', maxWidth: 220, aspectRatio: '1', borderRadius: 10, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227', marginBottom: 12 }}>
+              <div style={{ position: 'relative', width: '100%', maxWidth: 220, aspectRatio: '1', borderRadius: 10, overflow: 'hidden', border: '1px solid #41403e', background: '#222221', marginBottom: 12 }}>
                 <img
                   src="/scenarios/eletroeletronicos.png"
                   alt="Prévia de cenário de produto"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
-                <div style={{ position: 'absolute', bottom: 6, right: 6, background: 'rgba(15, 23, 42, 0.85)', padding: '2px 8px', borderRadius: 10, fontSize: 10, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+                <div style={{ position: 'absolute', bottom: 6, right: 6, background: 'rgba(30, 29, 27, 0.85)', padding: '2px 8px', borderRadius: 10, fontSize: 10, color: '#ebe6da', display: 'flex', alignItems: 'center', gap: 4, backdropFilter: 'blur(4px)', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
                   <span>🎯 @radar.ofertas.br1</span>
                 </div>
               </div>
@@ -994,7 +828,7 @@ function CopierContent() {
                     🏷️ <em>Use o cupom: PROMO10</em><br />
                   </>
                 )}
-                <span className="rp-link" style={{ color: '#39bee6', fontWeight: 600 }}>
+                <span className="rp-link" style={{ color: '#f5c542', fontWeight: 600 }}>
                   👉 Compre aqui: https://shope.ee/seu-afiliado
                 </span>
               </p>
@@ -1006,7 +840,7 @@ function CopierContent() {
           </div>
 
           {/* PASSO 4: Ativar Copiador */}
-          <div className="rp-panel" style={{ border: isActiveRule ? '1px solid #2e7d56' : '1px solid #3d4a55' }}>
+          <div className="rp-panel" style={{ border: isActiveRule ? '1px solid #2e7d56' : '1px solid #4a4948' }}>
             <span className="rp-step">Passo 04</span>
             <div className="rp-row" style={{ marginTop: 4 }}>
               <h2>Ativar Copiador</h2>
@@ -1089,7 +923,7 @@ function CopierContent() {
           <div className="wa-modal" style={{ maxWidth: 680, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
             <div className="wa-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Activity size={18} style={{ color: '#39bee6' }} />
+                <Activity size={18} style={{ color: '#f5c542' }} />
                 <h3 style={{ margin: 0, fontSize: 16 }}>Atividade Recente do Copiador</h3>
               </div>
               <button
@@ -1104,7 +938,7 @@ function CopierContent() {
 
             <div className="wa-modal-body" style={{ overflowY: 'auto', padding: 20 }}>
               {!statusData?.activity || statusData.activity.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#8fa2af' }}>
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#a1a09d' }}>
                   <Clock size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                   <p style={{ margin: 0, fontSize: 14 }}>Nenhum evento registrado ainda.</p>
                   <p style={{ margin: '4px 0 0', fontSize: 12 }}>
@@ -1122,8 +956,8 @@ function CopierContent() {
                       <div
                         key={event.id}
                         style={{
-                          background: '#192025',
-                          border: '1px solid #313d46',
+                          background: '#201f1e',
+                          border: '1px solid #3d3c3a',
                           borderRadius: 10,
                           padding: 14,
                           display: 'flex',
@@ -1134,13 +968,13 @@ function CopierContent() {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {isRecebimento ? (
-                              <Radio size={14} style={{ color: '#39bee6' }} />
+                              <Radio size={14} style={{ color: '#f5c542' }} />
                             ) : (
                               <Send size={14} style={{ color: '#56c288' }} />
                             )}
-                            <strong style={{ fontSize: 13, color: '#edf2f5' }}>{event.title}</strong>
+                            <strong style={{ fontSize: 13, color: '#f1f1f1' }}>{event.title}</strong>
                             {event.store && (
-                              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#25343e', color: '#8dd9ec' }}>
+                              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#333230', color: '#f5d784' }}>
                                 {event.store.toUpperCase()}
                               </span>
                             )}
@@ -1154,13 +988,13 @@ function CopierContent() {
                           </span>
                         </div>
 
-                        <p style={{ margin: 0, fontSize: 12, color: '#a4b7c4', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                        <p style={{ margin: 0, fontSize: 12, color: '#b6b5b2', lineHeight: 1.5, wordBreak: 'break-word' }}>
                           {event.detail}
                         </p>
 
                         {event.mediaUrl && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                            <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', border: '1px solid #364049', background: '#182026', flexShrink: 0 }}>
+                            <div style={{ width: 48, height: 48, borderRadius: 8, overflow: 'hidden', border: '1px solid #41403e', background: '#201f1e', flexShrink: 0 }}>
                               <img
                                 src={event.mediaUrl}
                                 alt="Mídia da publicação"
@@ -1168,7 +1002,7 @@ function CopierContent() {
                                 onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                               />
                             </div>
-                            <span style={{ fontSize: 11, color: '#8fa2b1' }}>Foto enviada com a publicação</span>
+                            <span style={{ fontSize: 11, color: '#a2a19e' }}>Foto enviada com a publicação</span>
                           </div>
                         )}
 
@@ -1176,8 +1010,8 @@ function CopierContent() {
                           <div
                             style={{
                               fontSize: 11,
-                              color: isBlocked ? '#fca5a5' : '#94a9b8',
-                              background: isBlocked ? 'rgba(239, 68, 68, 0.1)' : '#212a31',
+                              color: isBlocked ? '#fca5a5' : '#a8a7a4',
+                              background: isBlocked ? 'rgba(239, 68, 68, 0.1)' : '#2a2928',
                               padding: '4px 8px',
                               borderRadius: 6,
                               marginTop: 2,
@@ -1187,7 +1021,7 @@ function CopierContent() {
                           </div>
                         )}
 
-                        <div style={{ fontSize: 10, color: '#748b99', marginTop: 2 }}>
+                        <div style={{ fontSize: 10, color: '#898784', marginTop: 2 }}>
                           {formatDateTimeBR(event.timestamp)}
                         </div>
                       </div>
@@ -1210,11 +1044,6 @@ function CopierContent() {
         </div>
       )}
 
-      {/* Modal de Histórico de Ofertas Copiadas com Story 9:16 */}
-      <CopierHistoryModal
-        isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
-      />
     </section>
   );
 }
@@ -1222,7 +1051,7 @@ function CopierContent() {
 
 export default function CopierPage() {
   return (
-    <React.Suspense fallback={<div className="rp-page"><p style={{ color: "#8fa2af", padding: 40 }}>Carregando Modo Copiador...</p></div>}>
+    <React.Suspense fallback={<div className="rp-page"><p style={{ color: "#a1a09d", padding: 40 }}>Carregando Modo Copiador...</p></div>}>
       <CopierContent />
     </React.Suspense>
   );

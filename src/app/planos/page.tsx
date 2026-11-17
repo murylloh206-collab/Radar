@@ -86,10 +86,10 @@ export default function PlanosPage() {
 
   return (
     <div
-      className="min-h-screen rounded-3xl p-4 sm:p-8 md:p-10 text-white"
+      className="rv4-plans min-h-screen text-white"
       style={{
-        background: 'linear-gradient(165deg, #03050a 0%, #070d22 50%, #0d173a 100%)',
-        border: '1px solid rgba(99, 102, 241, 0.2)',
+        background: 'transparent',
+        border: '0',
       }}
     >
       {/* Cabeçalho centralizado */}
@@ -116,7 +116,7 @@ export default function PlanosPage() {
             onClick={() => setBillingCycle('anual')}
             className={`relative flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all ${
               billingCycle === 'anual'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                ? 'bg-slate-100 text-slate-950'
                 : 'text-slate-300 hover:text-white'
             }`}
           >
@@ -137,7 +137,7 @@ export default function PlanosPage() {
             onClick={() => setBillingCycle('mensal')}
             className={`rounded-xl px-5 py-2.5 text-xs sm:text-sm font-semibold transition-all ${
               billingCycle === 'mensal'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                ? 'bg-slate-100 text-slate-950'
                 : 'text-slate-300 hover:text-white'
             }`}
           >
@@ -177,18 +177,16 @@ export default function PlanosPage() {
               key={plan.id}
               className={`relative flex flex-col justify-between rounded-2xl p-6 sm:p-8 transition-all ${
                 isPopular
-                  ? 'border-2 border-indigo-400/80 shadow-2xl shadow-indigo-950/60 lg:-translate-y-2'
-                  : 'border border-white/15 shadow-xl'
+                  ? 'rv4-plan rv4-plan-popular lg:-translate-y-2'
+                  : 'rv4-plan'
               }`}
               style={{
-                background: isPopular
-                  ? 'linear-gradient(170deg, #060916 0%, #0d173b 55%, #172765 100%)'
-                  : 'linear-gradient(170deg, #04060c 0%, #091026 65%, #101b42 100%)',
+                background: isPopular ? 'var(--radar-raised)' : 'var(--radar-panel)',
               }}
             >
               {/* Selo "Mais popular" no plano Plus */}
               {plan.badge && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 px-4 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-md">
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-indigo-500 px-4 py-1 text-xs font-bold text-slate-950 shadow-md">
                   {plan.badge}
                 </div>
               )}
@@ -219,8 +217,8 @@ export default function PlanosPage() {
                     <span className="text-lg sm:text-xl font-semibold text-slate-300">R$</span>
                     <span
                       style={{
-                        fontFamily: "var(--font-serif-pricing), 'Playfair Display', Georgia, serif",
-                        backgroundImage: 'linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%)',
+                        fontFamily: 'var(--radar-display)', fontVariantNumeric: 'tabular-nums',
+                        backgroundImage: 'linear-gradient(180deg, #ffffff 0%, #ddd8cc 100%)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
                       }}
@@ -261,8 +259,8 @@ export default function PlanosPage() {
                       onClick={() => handleStartCheckout(plan.id)}
                       className={`w-full rounded-xl py-3 px-4 text-sm font-bold transition-all cursor-pointer ${
                         isPopular
-                          ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-600/30'
-                          : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
+                          ? 'bg-slate-100 hover:bg-indigo-500 text-slate-950 active:scale-[0.98]'
+                          : 'bg-white/5 hover:bg-white/10 text-white border border-white/15 active:scale-[0.98]'
                       }`}
                     >
                       {`Escolher ${plan.name}`}
@@ -285,11 +283,11 @@ export default function PlanosPage() {
                 {/* Lista de benefícios com checkmarks */}
                 <div className="space-y-3 pt-4 border-t border-white/10">
                   {plan.inheritsFromLabel ? (
-                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                    <p className="text-xs font-semibold text-indigo-300">
                       {plan.inheritsFromLabel}
                     </p>
                   ) : (
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    <p className="text-xs font-semibold text-slate-400">
                       Recursos incluídos:
                     </p>
                   )}
@@ -322,7 +320,7 @@ export default function PlanosPage() {
       <div
         className="max-w-6xl mx-auto mt-10 rounded-2xl border border-indigo-500/30 p-6 sm:p-8"
         style={{
-          background: 'linear-gradient(135deg, rgba(13, 23, 58, 0.9) 0%, rgba(23, 37, 84, 0.75) 100%)',
+          background: 'var(--radar-panel)', borderColor: 'var(--radar-border)',
         }}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -346,7 +344,7 @@ export default function PlanosPage() {
             <button
               type="button"
               onClick={handleCopyReferral}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 px-4 py-2.5 text-xs font-bold text-white transition-colors cursor-pointer shrink-0"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 hover:bg-indigo-500 px-4 py-2.5 text-xs font-bold text-slate-950 transition-colors cursor-pointer shrink-0"
             >
               {copiedRef ? (
                 <>
@@ -378,7 +376,7 @@ export default function PlanosPage() {
           <div
             className="relative w-full max-w-md rounded-2xl border border-indigo-500/40 p-6 sm:p-7 text-white shadow-2xl"
             style={{
-              background: 'linear-gradient(160deg, #060913 0%, #0e1738 60%, #17255a 100%)',
+              background: 'var(--radar-panel)', borderColor: 'var(--radar-border-strong)', animation: 'rv4-pop 0.24s var(--radar-ease) both',
             }}
           >
             <button

@@ -187,7 +187,7 @@ function OfertasContent() {
       </div>
 
       {notice && (
-        <div className="rp-panel rp-section" style={{ borderColor: '#39bee6' }}>
+        <div className="rp-panel rp-section" style={{ borderColor: '#f5c542' }}>
           <p>{notice}</p>
         </div>
       )}
@@ -209,7 +209,7 @@ function OfertasContent() {
             aria-selected={activeTab === 'comparador'}
             onClick={() => handleSelectTab('comparador')}
           >
-            🔎 Buscador Comparador (Ultimate)
+            Comparador de preços
           </button>
           <button
             role="tab"
@@ -291,7 +291,7 @@ function OfertasContent() {
                   return (
                     <div key={p.id} className="rp-panel rp-catalog-card">
                       {p.imageUrl ? (
-                        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 9, overflow: 'hidden', border: '1px solid #364049', background: '#1c2227', marginBottom: 10 }}>
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 9, overflow: 'hidden', border: '1px solid #41403e', background: '#222221', marginBottom: 10 }}>
                           <img
                             src={p.imageUrl}
                             alt={p.title}

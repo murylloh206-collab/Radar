@@ -177,23 +177,23 @@ export default function StoriesPage() {
       {/* Título e Descrição */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#F8FBFF] tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-black text-[#f6f2e8] tracking-tight">
             Gerador de Stories 9:16
           </h1>
-          <p className="text-xs sm:text-sm text-[#8EADC7] mt-0.5">
+          <p className="text-xs sm:text-sm text-[#a8a39a] mt-0.5">
             Gere templates verticais de alta conversão para o Instagram Stories com link de compra direta.
           </p>
         </div>
 
         {metaIntegration?.isConnected ? (
-          <div className="flex items-center gap-2 self-start sm:self-center bg-[#20C997]/15 border border-[#20C997]/40 px-3 py-1.5 rounded-xl text-xs text-[#20C997] font-bold">
-            <span className="w-2 h-2 rounded-full bg-[#20C997] animate-pulse"></span>
+          <div className="flex items-center gap-2 self-start sm:self-center bg-[#5fd0a0]/15 border border-[#5fd0a0]/40 px-3 py-1.5 rounded-xl text-xs text-[#5fd0a0] font-bold">
+            <span className="w-2 h-2 rounded-full bg-[#5fd0a0] animate-pulse"></span>
             Instagram Conectado: @{metaIntegration.instagramUsername}
           </div>
         ) : (
           <a
             href="/conexoes?aba=redes"
-            className="flex items-center gap-1.5 self-start sm:self-center bg-[#0D1B31] border border-[#1CCAF2]/40 px-3 py-1.5 rounded-xl text-xs text-[#1CCAF2] font-bold hover:bg-[#1CCAF2]/15 transition-all"
+            className="flex items-center gap-1.5 self-start sm:self-center bg-[#161616] border border-[#f5c542]/40 px-3 py-1.5 rounded-xl text-xs text-[#f5c542] font-bold hover:bg-[#f5c542]/15 transition-all"
           >
             <InstagramIcon className="w-4 h-4" />
             Vincular Instagram & Facebook <ExternalLink className="w-3 h-3" />
@@ -206,8 +206,8 @@ export default function StoriesPage() {
         <div
           className={`p-4 rounded-xl border flex items-start gap-2.5 text-xs font-semibold ${
             feedback.type === 'success'
-              ? 'bg-[#20C997]/15 border-[#20C997]/40 text-[#20C997]'
-              : 'bg-[#F87171]/15 border-[#F87171]/40 text-[#F87171]'
+              ? 'bg-[#5fd0a0]/15 border-[#5fd0a0]/40 text-[#5fd0a0]'
+              : 'bg-[#f07878]/15 border-[#f07878]/40 text-[#f07878]'
           }`}
         >
           {feedback.type === 'success' ? (
@@ -224,15 +224,15 @@ export default function StoriesPage() {
         <div className="lg:col-span-6 space-y-4">
           {/* Seletor de Oferta Copiada */}
           {historyItems.length > 0 && (
-            <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-4 space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#1CCAF2] flex items-center gap-1.5">
+            <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-4 space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-[#f5c542] flex items-center gap-1.5">
                 <History className="w-3.5 h-3.5" />
                 Carregar de Oferta Copiada
               </label>
               <select
                 value={selectedJobId}
                 onChange={(e) => handleSelectHistoryItem(e.target.value)}
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
               >
                 <option value="">Selecione uma oferta do Copiador...</option>
                 {historyItems.map((item) => (
@@ -244,82 +244,82 @@ export default function StoriesPage() {
             </div>
           )}
 
-          <div className="rounded-2xl bg-[#0D1B31] border border-[#18334D] p-5 space-y-3.5">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-[#1CCAF2]">
+          <div className="rounded-2xl bg-[#161616] border border-[#2c2c2c] p-5 space-y-3.5">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#f5c542]">
               Configuração do Story
             </h2>
 
             <div>
-              <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+              <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                 Título do Produto
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
               />
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">Preço De (R$)</label>
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">Preço De (R$)</label>
                 <input
                   type="text"
                   value={priceOriginal}
                   onChange={(e) => setPriceOriginal(e.target.value)}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">Preço Por (R$)</label>
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">Preço Por (R$)</label>
                 <input
                   type="text"
                   value={priceCurrent}
                   onChange={(e) => setPriceCurrent(e.target.value)}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#8EADC7] block mb-1">Desconto (%)</label>
+                <label className="text-xs font-semibold text-[#a8a39a] block mb-1">Desconto (%)</label>
                 <input
                   type="text"
                   value={discountPct}
                   onChange={(e) => setDiscountPct(e.target.value)}
-                  className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                  className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+              <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                 Cupom de Desconto (Opcional)
               </label>
               <input
                 type="text"
                 value={coupon}
                 onChange={(e) => setCoupon(e.target.value)}
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2 text-xs text-[#F8FBFF] uppercase focus:outline-none focus:border-[#1CCAF2]"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2 text-xs text-[#f6f2e8] uppercase focus:outline-none focus:border-[#f5c542]"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+              <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                 URL da Imagem do Produto
               </label>
               <input
                 type="text"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
               />
             </div>
 
             {/* Chamada do Link de Compra */}
             <div>
-              <label className="text-xs font-semibold text-[#8EADC7] block mb-1">
+              <label className="text-xs font-semibold text-[#a8a39a] block mb-1">
                 Texto em Cima do Link de Compra:
               </label>
               <div className="flex flex-wrap gap-1.5 mb-2">
@@ -327,7 +327,7 @@ export default function StoriesPage() {
                   <button
                     type="button"
                     onClick={() => setCtaText(`👇 COMPRE AQUI COM ${discountPct}% OFF 👇`)}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#061225] text-[#1CCAF2] border border-[#1CCAF2]/40 cursor-pointer"
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#0c0c0d] text-[#f5c542] border border-[#f5c542]/40 cursor-pointer"
                   >
                     Compre com {discountPct}% OFF
                   </button>
@@ -335,7 +335,7 @@ export default function StoriesPage() {
                 <button
                   type="button"
                   onClick={() => setCtaText('👇 COMPRE AGORA COM DESCONTO 👇')}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#061225] text-[#8EADC7] border border-[#18334D] cursor-pointer"
+                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#0c0c0d] text-[#a8a39a] border border-[#2c2c2c] cursor-pointer"
                 >
                   Compre agora
                 </button>
@@ -344,7 +344,7 @@ export default function StoriesPage() {
                 type="text"
                 value={ctaText}
                 onChange={(e) => setCtaText(e.target.value)}
-                className="w-full bg-[#061225] border border-[#18334D] rounded-xl px-3.5 py-2 text-xs text-[#F8FBFF] focus:outline-none focus:border-[#1CCAF2]"
+                className="w-full bg-[#0c0c0d] border border-[#2c2c2c] rounded-xl px-3.5 py-2 text-xs text-[#f6f2e8] focus:outline-none focus:border-[#f5c542]"
               />
             </div>
           </div>
@@ -377,11 +377,11 @@ export default function StoriesPage() {
                 type="button"
                 onClick={handleRender}
                 disabled={isRendering}
-                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] text-xs font-black shadow-lg shadow-[#1CCAF2]/20 hover:opacity-95 transition-all cursor-pointer"
+                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] text-xs font-black shadow-lg shadow-[#f5c542]/20 hover:opacity-95 transition-all cursor-pointer"
               >
                 {isRendering ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#061225]" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0c0c0d]" />
                     Processando...
                   </>
                 ) : (
@@ -396,9 +396,9 @@ export default function StoriesPage() {
                 type="button"
                 onClick={handleDownload}
                 disabled={isRendering}
-                className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#061225] border border-[#18334D] hover:border-[#1CCAF2]/60 text-xs font-bold text-[#F8FBFF] transition-all cursor-pointer"
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] hover:border-[#f5c542]/60 text-xs font-bold text-[#f6f2e8] transition-all cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5 text-[#1CCAF2]" />
+                <Download className="w-3.5 h-3.5 text-[#f5c542]" />
                 Baixar Imagem 9:16
               </button>
             </div>
@@ -407,7 +407,7 @@ export default function StoriesPage() {
 
         {/* Prévia 9:16 do Story */}
         <div className="lg:col-span-6 flex flex-col items-center">
-          <div className="w-full max-w-[320px] aspect-[9/16] rounded-3xl bg-gradient-to-b from-[#040C1A] via-[#091A30] to-[#040C1A] border-2 border-[#1CCAF2]/30 p-5 flex flex-col justify-between shadow-2xl relative overflow-hidden text-center">
+          <div className="w-full max-w-[320px] aspect-[9/16] rounded-3xl bg-gradient-to-b from-[#090908] via-[#1e1d1b] to-[#090908] border-2 border-[#f5c542]/30 p-5 flex flex-col justify-between shadow-2xl relative overflow-hidden text-center">
             {/* Top Logo */}
             <div className="flex items-center justify-between z-10 text-left">
               <Logo size="sm" />
@@ -418,11 +418,11 @@ export default function StoriesPage() {
             </div>
 
             {/* Imagem Central */}
-            <div className="my-auto relative rounded-2xl overflow-hidden border-2 border-[#1CCAF2]/40 bg-white shadow-xl p-3">
+            <div className="my-auto relative rounded-2xl overflow-hidden border-2 border-[#f5c542]/40 bg-white shadow-xl p-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={imageUrl} alt={title} className="w-full h-44 object-contain" />
               {discountPct && (
-                <div className="absolute top-2 right-2 bg-[#20C997] text-[#061225] text-xs font-black px-2 py-0.5 rounded-xl shadow-lg">
+                <div className="absolute top-2 right-2 bg-[#5fd0a0] text-[#0c0c0d] text-xs font-black px-2 py-0.5 rounded-xl shadow-lg">
                   -{discountPct}% OFF
                 </div>
               )}
@@ -430,40 +430,40 @@ export default function StoriesPage() {
 
             {/* Texto e Preço */}
             <div className="z-10 space-y-2">
-              <h3 className="text-xs font-extrabold text-[#F8FBFF] line-clamp-2 leading-snug">
+              <h3 className="text-xs font-extrabold text-[#f6f2e8] line-clamp-2 leading-snug">
                 {title}
               </h3>
 
               <div className="flex items-baseline justify-center gap-2">
                 {priceOriginal && (
-                  <span className="text-xs text-[#8EADC7] line-through">
+                  <span className="text-xs text-[#a8a39a] line-through">
                     De: R$ {priceOriginal}
                   </span>
                 )}
-                <span className="text-xl font-black text-[#1CCAF2]">
+                <span className="text-xl font-black text-[#f5c542]">
                   Por: R$ {priceCurrent}
                 </span>
               </div>
 
               {coupon && (
-                <div className="inline-block px-3 py-1 rounded-xl bg-[#1CCAF2]/15 border border-[#1CCAF2]/40 text-xs font-bold text-[#1CCAF2]">
+                <div className="inline-block px-3 py-1 rounded-xl bg-[#f5c542]/15 border border-[#f5c542]/40 text-xs font-bold text-[#f5c542]">
                   🎟️ Cupom: {coupon}
                 </div>
               )}
 
               {/* Botão e Chamada de Link de Compra */}
               <div className="mt-3 space-y-1">
-                <span className="text-[10px] font-black text-[#F8FBFF] block">
+                <span className="text-[10px] font-black text-[#f6f2e8] block">
                   {ctaText}
                 </span>
-                <div className="p-2.5 rounded-2xl bg-gradient-to-r from-[#0879DF] to-[#1CCAF2] text-[#061225] text-xs font-black shadow-lg shadow-[#1CCAF2]/20 flex items-center justify-center gap-1.5">
+                <div className="p-2.5 rounded-2xl bg-gradient-to-r from-[#d9a520] to-[#f5c542] text-[#0c0c0d] text-xs font-black shadow-lg shadow-[#f5c542]/20 flex items-center justify-center gap-1.5">
                   <ShoppingBag className="w-3.5 h-3.5" />
                   COMPRE DIRETO NO LINK
                 </div>
               </div>
 
               {/* Rodapé da Marca */}
-              <div className="pt-2 border-t border-[#18334D] text-[9px] text-[#8EADC7]">
+              <div className="pt-2 border-t border-[#2c2c2c] text-[9px] text-[#a8a39a]">
                 🎯 Radar de Ofertas — Produtos que valem a pena!
               </div>
             </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ExternalLink, Copy, CheckCircle2, Upload, Palette } from 'lucide-react';
 import { PlanGateCard } from '@/components/PlanGateCard';
 
-const ACCENT_PRESETS = ['#6366f1', '#1CCAF2', '#10b981', '#f59e0b', '#ec4899', '#ef4444'];
+const ACCENT_PRESETS = ['#f5c542', '#6366f1', '#1CCAF2', '#10b981', '#f59e0b', '#ec4899', '#ef4444'];
 
 export default function PaginaPublicaPage() {
   const [bioTitle, setBioTitle] = useState('Radar de Ofertas');
@@ -196,7 +196,7 @@ export default function PaginaPublicaPage() {
               <label className="rp-field">
                 Endereço público (@slug)
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: '#94a3b8', fontWeight: 700, fontSize: 14 }}>/@</span>
+                  <span style={{ color: '#a8a39a', fontWeight: 700, fontSize: 14 }}>/@</span>
                   <input
                     value={slug}
                     aria-label="Nome do endereço público"
@@ -372,7 +372,7 @@ export default function PaginaPublicaPage() {
                 borderRadius: 20,
                 padding: 24,
                 border: `1px solid ${accentColor}44`,
-                background: 'linear-gradient(165deg, #060913 0%, #0d1634 100%)',
+                background: 'linear-gradient(165deg, #0d0d0c 0%, #22211f 100%)',
                 textAlign: 'center',
               }}
             >
@@ -413,7 +413,7 @@ export default function PaginaPublicaPage() {
               <div
                 style={{
                   fontSize: 11,
-                  color: '#cbd5e1',
+                  color: '#ddd8cc',
                   marginBottom: 4,
                   fontWeight: 600,
                 }}
@@ -478,7 +478,7 @@ export default function PaginaPublicaPage() {
                   paddingTop: 14,
                   borderTop: '1px solid rgba(255,255,255,0.1)',
                   fontSize: 12,
-                  color: '#94a3b8',
+                  color: '#a8a39a',
                 }}
               >
                 As ofertas publicadas hoje aparecem logo abaixo na sua página <strong>/@{cleanSlug}</strong> com redirecionamento rastreado via <code>/r/[code]</code>.

@@ -57,17 +57,17 @@ export function BottomNav() {
           onClick={() => setDrawerOpen(false)}
         >
           <div
-            className="bg-[#0D1B31] border-t border-[#18334D] rounded-t-3xl p-5 max-h-[80vh] overflow-y-auto safe-area-bottom shadow-2xl space-y-4"
+            className="bg-[#161616] border-t border-[#2c2c2c] rounded-t-3xl p-5 max-h-[80vh] overflow-y-auto safe-area-bottom shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-[#18334D]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#2c2c2c]">
               <div>
-                <h3 className="text-sm font-bold text-[#F8FBFF]">Recursos do Radar de Ofertas</h3>
-                <p className="text-[11px] text-[#8EADC7]">Acesse rapidamente qualquer módulo do painel</p>
+                <h3 className="text-sm font-bold text-[#f6f2e8]">Recursos do Radar de Ofertas</h3>
+                <p className="text-[11px] text-[#a8a39a]">Acesse rapidamente qualquer módulo do painel</p>
               </div>
               <button
                 onClick={() => setDrawerOpen(false)}
-                className="w-9 h-9 rounded-xl bg-[#061225] border border-[#18334D] text-[#8EADC7] flex items-center justify-center hover:text-[#F8FBFF]"
+                className="w-9 h-9 rounded-xl bg-[#0c0c0d] border border-[#2c2c2c] text-[#a8a39a] flex items-center justify-center hover:text-[#f6f2e8]"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -84,22 +84,22 @@ export function BottomNav() {
                     onClick={() => setDrawerOpen(false)}
                     className={`flex items-center gap-3 p-3 rounded-xl border transition-all min-h-[48px] ${
                       isActive
-                        ? 'bg-[#061225] border-[#1CCAF2] text-[#1CCAF2]'
-                        : 'bg-[#061225]/80 border-[#18334D] text-[#8EADC7] hover:border-[#1CCAF2]/40 hover:text-[#F8FBFF]'
+                        ? 'bg-[#0c0c0d] border-[#f5c542] text-[#f5c542]'
+                        : 'bg-[#0c0c0d]/80 border-[#2c2c2c] text-[#a8a39a] hover:border-[#f5c542]/40 hover:text-[#f6f2e8]'
                     }`}
                   >
                     <div
                       className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        isActive ? 'bg-[#1CCAF2]/15 text-[#1CCAF2]' : 'bg-[#0D1B31] text-[#8EADC7]'
+                        isActive ? 'bg-[#f5c542]/15 text-[#f5c542]' : 'bg-[#161616] text-[#a8a39a]'
                       }`}
                     >
                       <Icon className="w-5 h-5" />
                     </div>
                     <div className="leading-tight text-left">
-                      <p className={`text-xs font-bold ${isActive ? 'text-[#1CCAF2]' : 'text-[#F8FBFF]'}`}>
+                      <p className={`text-xs font-bold ${isActive ? 'text-[#f5c542]' : 'text-[#f6f2e8]'}`}>
                         {item.label}
                       </p>
-                      <p className="text-[10px] text-[#8EADC7] mt-0.5">{item.desc}</p>
+                      <p className="text-[10px] text-[#a8a39a] mt-0.5">{item.desc}</p>
                     </div>
                   </Link>
                 );
@@ -110,7 +110,7 @@ export function BottomNav() {
       )}
 
       {/* Barra de Navegação Inferior Fixa */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-[#061225]/95 backdrop-blur-md border-t border-[#18334D] px-2 py-1.5 safe-area-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-[#0c0c0d]/95 backdrop-blur-md border-t border-[#2c2c2c] px-2 py-1.5 safe-area-bottom">
         <div className="grid grid-cols-5 items-center justify-around">
           {mainItems.map((item) => {
             const isActive =
@@ -125,18 +125,18 @@ export function BottomNav() {
                 href={item.href}
                 className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all min-h-[44px] active:scale-95 ${
                   isActive
-                    ? 'text-[#1CCAF2] font-semibold'
-                    : 'text-[#8EADC7] hover:text-[#F8FBFF]'
+                    ? 'text-[#f5c542] font-semibold'
+                    : 'text-[#a8a39a] hover:text-[#f6f2e8]'
                 }`}
               >
                 <div
                   className={`relative flex items-center justify-center w-8 h-8 rounded-lg ${
-                    isActive ? 'bg-[#1CCAF2]/15' : ''
+                    isActive ? 'bg-[#f5c542]/15' : ''
                   }`}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-[#1CCAF2]' : 'text-[#8EADC7]'}`} />
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-[#f5c542]' : 'text-[#a8a39a]'}`} />
                   {isActive && (
-                    <span className="absolute -top-0.5 right-1 w-1.5 h-1.5 bg-[#1CCAF2] rounded-full" />
+                    <span className="absolute -top-0.5 right-1 w-1.5 h-1.5 bg-[#f5c542] rounded-full" />
                   )}
                 </div>
                 <span className="text-[10px] mt-0.5 tracking-tight font-medium">{item.label}</span>
@@ -149,18 +149,18 @@ export function BottomNav() {
             onClick={() => setDrawerOpen(true)}
             className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all min-h-[44px] active:scale-95 ${
               isMoreActive || drawerOpen
-                ? 'text-[#1CCAF2] font-semibold'
-                : 'text-[#8EADC7] hover:text-[#F8FBFF]'
+                ? 'text-[#f5c542] font-semibold'
+                : 'text-[#a8a39a] hover:text-[#f6f2e8]'
             }`}
           >
             <div
               className={`relative flex items-center justify-center w-8 h-8 rounded-lg ${
-                isMoreActive || drawerOpen ? 'bg-[#1CCAF2]/15' : ''
+                isMoreActive || drawerOpen ? 'bg-[#f5c542]/15' : ''
               }`}
             >
-              <Menu className={`w-5 h-5 ${isMoreActive || drawerOpen ? 'text-[#1CCAF2]' : 'text-[#8EADC7]'}`} />
+              <Menu className={`w-5 h-5 ${isMoreActive || drawerOpen ? 'text-[#f5c542]' : 'text-[#a8a39a]'}`} />
               {isMoreActive && (
-                <span className="absolute -top-0.5 right-1 w-1.5 h-1.5 bg-[#1CCAF2] rounded-full" />
+                <span className="absolute -top-0.5 right-1 w-1.5 h-1.5 bg-[#f5c542] rounded-full" />
               )}
             </div>
             <span className="text-[10px] mt-0.5 tracking-tight font-medium">Mais</span>

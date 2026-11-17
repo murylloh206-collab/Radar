@@ -197,7 +197,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
           <div
             className="relative w-full max-w-md rounded-2xl border border-indigo-500/30 p-6 text-white shadow-2xl"
             style={{
-              background: 'linear-gradient(155deg, #070a14 0%, #0e1636 60%, #162256 100%)',
+              background: 'linear-gradient(155deg, #0e0e0d 0%, #242320 60%, #393733 100%)',
             }}
           >
             <button

@@ -1,11 +1,11 @@
 #radar-access {
-  --bg: #080d18;
-  --surface: #111b2c;
-  --surface-2: #0d1625;
-  --line: #2b3a50;
-  --text: #f4f6fa;
-  --muted: #b6c2d2;
-  --cyan: #35d4ed;
+  --bg: #0b0b0a;
+  --surface: #161616;
+  --surface-2: #111111;
+  --line: #2c2c2c;
+  --text: #f6f2e8;
+  --muted: #b3ada2;
+  --cyan: #f5c542;
   --mint: #7ef0b4;
   --amber: #f6c768;
   --danger: #f59b9b;
@@ -26,8 +26,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 10%, rgba(53, 212, 237, 0.11), transparent 44%),
-    radial-gradient(circle at 82% 72%, rgba(69, 98, 220, 0.1), transparent 42%);
+    radial-gradient(circle at 50% 10%, rgba(245, 197, 66, 0.11), transparent 44%),
+    radial-gradient(circle at 82% 72%, rgba(238, 188, 51, 0.1), transparent 42%);
   z-index: 0;
 }
 
@@ -118,8 +118,8 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1.5px solid rgba(53, 212, 237, 0.55);
-  background: radial-gradient(circle, rgba(53, 212, 237, 0.28), transparent 68%);
+  border: 1.5px solid rgba(245, 197, 66, 0.55);
+  background: radial-gradient(circle, rgba(245, 197, 66, 0.28), transparent 68%);
   flex-shrink: 0;
 }
 
@@ -128,7 +128,7 @@
   position: absolute;
   inset: 5px;
   border-radius: 50%;
-  border: 1px solid rgba(53, 212, 237, 0.35);
+  border: 1px solid rgba(245, 197, 66, 0.35);
 }
 
 #radar-access .brand-mark::after {
@@ -168,7 +168,7 @@
   padding: 11px 18px;
   border-radius: 99px;
   border: 1px solid var(--line);
-  background: rgba(17, 27, 44, 0.78);
+  background: rgba(22, 22, 22, 0.78);
   color: var(--text);
   font-size: 14px;
   font-weight: 600;
@@ -176,19 +176,19 @@
 }
 
 #radar-access .action:hover {
-  border-color: rgba(53, 212, 237, 0.55);
+  border-color: rgba(245, 197, 66, 0.55);
   transform: translateY(-1px);
 }
 
 #radar-access .action.primary {
   background: var(--cyan);
   border-color: var(--cyan);
-  color: #06131c;
+  color: #121110;
   font-weight: 700;
 }
 
 #radar-access .action.primary:hover {
-  background: #63e0f3;
+  background: #f5c542;
 }
 
 #radar-access .action.primary:disabled {
@@ -216,7 +216,7 @@
   padding: 8px 13px;
   border-radius: 99px;
   border: 1px solid var(--line);
-  background: rgba(17, 27, 44, 0.72);
+  background: rgba(22, 22, 22, 0.72);
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
@@ -224,7 +224,7 @@
 
 #radar-access .back-link:hover {
   color: var(--text);
-  border-color: rgba(53, 212, 237, 0.48);
+  border-color: rgba(245, 197, 66, 0.48);
 }
 
 #radar-access .auth-layout {
@@ -238,7 +238,7 @@
 #radar-access .auth-form {
   border-radius: 26px;
   border: 1px solid var(--line);
-  background: rgba(17, 27, 44, 0.9);
+  background: rgba(22, 22, 22, 0.9);
   padding: 32px;
 }
 
@@ -249,8 +249,8 @@
   flex-direction: column;
   justify-content: space-between;
   background:
-    radial-gradient(circle at 20% 15%, rgba(53, 212, 237, 0.18), transparent 52%),
-    linear-gradient(180deg, rgba(19, 31, 51, 0.96), rgba(9, 15, 27, 0.96));
+    radial-gradient(circle at 20% 15%, rgba(245, 197, 66, 0.18), transparent 52%),
+    linear-gradient(180deg, rgba(23, 21, 15, 0.96), rgba(13, 13, 14, 0.96));
 }
 
 #radar-access .auth-art h2 {
@@ -268,10 +268,10 @@
   min-height: 255px;
   margin: 26px 0 18px;
   border-radius: 22px;
-  border: 1px solid rgba(58, 79, 108, 0.78);
+  border: 1px solid rgba(86, 84, 80, 0.78);
   background:
-    radial-gradient(circle at 50% 50%, rgba(53, 212, 237, 0.14), transparent 64%),
-    rgba(8, 13, 24, 0.78);
+    radial-gradient(circle at 50% 50%, rgba(245, 197, 66, 0.14), transparent 64%),
+    rgba(11, 11, 10, 0.78);
   padding: 20px;
   display: grid;
   place-items: center;
@@ -282,7 +282,7 @@
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  border: 1px dashed rgba(53, 212, 237, 0.28);
+  border: 1px dashed rgba(245, 197, 66, 0.28);
 }
 
 #radar-access .floating-poster {
@@ -295,8 +295,8 @@
   align-items: center;
   padding: 12px;
   border-radius: 18px;
-  border: 1px solid rgba(53, 212, 237, 0.48);
-  background: rgba(15, 25, 41, 0.96);
+  border: 1px solid rgba(245, 197, 66, 0.48);
+  background: rgba(29, 28, 27, 0.96);
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.42);
 }
 
@@ -329,7 +329,7 @@
   margin-top: 8px;
   padding: 4px 9px;
   border-radius: 99px;
-  background: rgba(53, 212, 237, 0.13);
+  background: rgba(245, 197, 66, 0.13);
   color: var(--cyan);
   font-size: 11px;
   font-weight: 700;
@@ -339,8 +339,8 @@
   position: absolute;
   padding: 7px 11px;
   border-radius: 99px;
-  border: 1px solid rgba(59, 78, 106, 0.85);
-  background: rgba(11, 18, 31, 0.92);
+  border: 1px solid rgba(85, 83, 80, 0.85);
+  background: rgba(22, 21, 20, 0.92);
   font-size: 11px;
   font-weight: 700;
   color: var(--muted);
@@ -359,7 +359,7 @@
 
 #radar-access .auth-footnote {
   font-size: 12px;
-  color: #93a5bc;
+  color: #a8a39a;
 }
 
 #radar-access .auth-form h1 {
@@ -380,8 +380,8 @@
   margin-top: 16px;
   padding: 11px 14px;
   border-radius: 15px;
-  border: 1px solid rgba(53, 212, 237, 0.36);
-  background: rgba(53, 212, 237, 0.08);
+  border: 1px solid rgba(245, 197, 66, 0.36);
+  background: rgba(245, 197, 66, 0.08);
   font-size: 13px;
   color: var(--text);
 }
@@ -412,14 +412,14 @@
   min-height: 46px;
   padding: 11px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(58, 79, 108, 0.95);
-  background: rgba(8, 13, 24, 0.88);
+  border: 1px solid rgba(86, 84, 80, 0.95);
+  background: rgba(11, 11, 10, 0.88);
   color: var(--text);
   font-size: 15px;
 }
 
 #radar-access .field input::placeholder {
-  color: #7789a1;
+  color: #7d786f;
 }
 
 #radar-access .field input:focus {
@@ -442,8 +442,8 @@
   height: 32px;
   padding: 0 11px;
   border-radius: 10px;
-  border: 1px solid rgba(58, 79, 108, 0.8);
-  background: rgba(17, 27, 44, 0.9);
+  border: 1px solid rgba(86, 84, 80, 0.8);
+  background: rgba(22, 22, 22, 0.9);
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
@@ -451,12 +451,12 @@
 
 #radar-access .show-pass:hover {
   color: var(--text);
-  border-color: rgba(53, 212, 237, 0.45);
+  border-color: rgba(245, 197, 66, 0.45);
 }
 
 #radar-access .field-note {
   font-size: 12px;
-  color: #93a5bc;
+  color: #a8a39a;
 }
 
 #radar-access .form-row {
@@ -503,7 +503,7 @@
 #radar-access .auth-switch {
   margin-top: 18px;
   padding-top: 16px;
-  border-top: 1px solid rgba(43, 58, 80, 0.72);
+  border-top: 1px solid rgba(44, 44, 44, 0.72);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -516,17 +516,17 @@
 #radar-access .form-info {
   padding: 10px 13px;
   border-radius: 13px;
-  background: rgba(8, 13, 24, 0.66);
-  border: 1px solid rgba(43, 58, 80, 0.78);
+  background: rgba(11, 11, 10, 0.66);
+  border: 1px solid rgba(44, 44, 44, 0.78);
   font-size: 12px;
-  color: #9fb0c7;
+  color: #b3ada2;
 }
 
 #radar-access .form-message {
   padding: 11px 13px;
   border-radius: 14px;
-  border: 1px solid rgba(53, 212, 237, 0.38);
-  background: rgba(53, 212, 237, 0.09);
+  border: 1px solid rgba(245, 197, 66, 0.38);
+  background: rgba(245, 197, 66, 0.09);
   color: var(--text);
   font-size: 13px;
 }
@@ -545,7 +545,7 @@
   gap: 14px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #93a5bc;
+  color: #a8a39a;
 }
 
 #radar-access .auth-bottom-links {
@@ -573,7 +573,7 @@
   margin: 18px auto 0;
   border-radius: 26px;
   border: 1px solid var(--line);
-  background: rgba(17, 27, 44, 0.92);
+  background: rgba(22, 22, 22, 0.92);
   padding: 34px;
 }
 
@@ -584,8 +584,8 @@
   display: grid;
   place-items: center;
   margin-bottom: 18px;
-  border: 1px solid rgba(53, 212, 237, 0.45);
-  background: rgba(53, 212, 237, 0.11);
+  border: 1px solid rgba(245, 197, 66, 0.45);
+  background: rgba(245, 197, 66, 0.11);
   color: var(--cyan);
 }
 
@@ -611,8 +611,8 @@
   border-radius: 26px;
   border: 1px solid var(--line);
   background:
-    radial-gradient(circle at 100% 0, rgba(53, 212, 237, 0.14), transparent 52%),
-    rgba(17, 27, 44, 0.9);
+    radial-gradient(circle at 100% 0, rgba(245, 197, 66, 0.14), transparent 52%),
+    rgba(22, 22, 22, 0.9);
 }
 
 #radar-access .legal-head h1 {
@@ -629,8 +629,8 @@
 #radar-access .legal-seal {
   padding: 12px 15px;
   border-radius: 16px;
-  border: 1px solid rgba(53, 212, 237, 0.34);
-  background: rgba(8, 13, 24, 0.72);
+  border: 1px solid rgba(245, 197, 66, 0.34);
+  background: rgba(11, 11, 10, 0.72);
   font-size: 12px;
   color: var(--muted);
   max-width: 250px;
@@ -653,7 +653,7 @@
   padding: 20px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(13, 22, 37, 0.86);
+  background: rgba(17, 17, 17, 0.86);
 }
 
 #radar-access .legal-highlight span {
@@ -663,7 +663,7 @@
   display: grid;
   place-items: center;
   margin-bottom: 12px;
-  background: rgba(53, 212, 237, 0.12);
+  background: rgba(245, 197, 66, 0.12);
   color: var(--cyan);
 }
 
@@ -686,7 +686,7 @@
   padding: 18px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(13, 22, 37, 0.86);
+  background: rgba(17, 17, 17, 0.86);
   display: grid;
   gap: 7px;
 }
@@ -710,7 +710,7 @@
 }
 
 #radar-access .legal-index button:hover {
-  background: rgba(53, 212, 237, 0.1);
+  background: rgba(245, 197, 66, 0.1);
   color: var(--text);
 }
 
@@ -722,7 +722,7 @@
 #radar-access details.legal-topic {
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(17, 27, 44, 0.88);
+  background: rgba(22, 22, 22, 0.88);
   padding: 18px 22px;
 }
 
@@ -775,8 +775,8 @@
   margin-top: 16px;
   padding: 18px 22px;
   border-radius: 20px;
-  border: 1px solid rgba(43, 58, 80, 0.85);
-  background: rgba(11, 18, 31, 0.82);
+  border: 1px solid rgba(44, 44, 44, 0.85);
+  background: rgba(22, 21, 20, 0.82);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -830,7 +830,7 @@
 @media print {
   #radar-access {
     background: #ffffff !important;
-    color: #111827 !important;
+    color: #171204 !important;
   }
 
   #radar-access::before,
@@ -852,8 +852,8 @@
   #radar-access details.legal-topic,
   #radar-access .legal-help {
     background: #ffffff !important;
-    border-color: #d1d5db !important;
-    color: #111827 !important;
+    border-color: #d7d6d5 !important;
+    color: #171204 !important;
     break-inside: avoid;
   }
 
@@ -864,7 +864,7 @@
   #radar-access li,
   #radar-access summary,
   #radar-access strong {
-    color: #111827 !important;
+    color: #171204 !important;
   }
 }
 

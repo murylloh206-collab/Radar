@@ -56,9 +56,9 @@ export function OnboardingChecklist() {
   return (
     <section
       aria-labelledby="onboarding-heading"
-      className="rounded-2xl border border-indigo-500/30 p-5 sm:p-6 text-white shadow-lg"
+      className="rp-panel rv15-steps"
       style={{
-        background: 'linear-gradient(155deg, #060913 0%, #0b132c 60%, #121f48 100%)',
+        background: 'var(--radar-panel)', borderColor: 'var(--radar-border)', boxShadow: 'var(--radar-shadow)', marginTop: 18,
       }}
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -116,26 +116,23 @@ export function OnboardingChecklist() {
       {/* Barra de progresso */}
       <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-500"
+          className="rv15-progress"
           style={{ width: `${Math.max(progressPct, 6)}%` }}
         />
       </div>
 
       {!collapsed && (
-        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="rv15-step-grid">
           {steps.map((step) => (
             <div
               key={step.id}
-              className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
-                step.completed
-                  ? 'border-emerald-500/35 bg-emerald-950/20'
-                  : 'border-white/12 bg-black/30 hover:border-indigo-400/40'
-              }`}
+              className="rv15-step"
+              data-done={step.completed ? 'true' : 'false'}
             >
               <div>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
                       step.completed ? 'text-emerald-300' : 'text-indigo-300'
                     }`}
                   >
@@ -159,11 +156,7 @@ export function OnboardingChecklist() {
 
               <Link
                 href={step.actionHref}
-                className={`inline-flex items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                  step.completed
-                    ? 'bg-white/5 hover:bg-white/10 text-emerald-300 border border-emerald-500/20'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                }`}
+                className="rv15-step-go"
               >
                 <span>{step.actionLabel}</span>
                 <ArrowRight className="w-3.5 h-3.5" />

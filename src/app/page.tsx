@@ -71,8 +71,8 @@ const MESSAGE_TONES: Record<MessageTone, string> = {
 };
 
 const ART_COLORS = [
-  { hex: '#35d4ed', label: 'Ciano' },
-  { hex: '#b8a3ff', label: 'Lavanda' },
+  { hex: '#f5c542', label: 'Ciano' },
+  { hex: '#ffe6a3', label: 'Lavanda' },
   { hex: '#70d8ae', label: 'Menta' },
   { hex: '#f0c36d', label: 'Dourado suave' },
 ] as const;
@@ -276,7 +276,7 @@ export default function RadarPublicHomePage() {
   );
   const [tone, setTone] = useState<MessageTone>('direto');
   const [format, setFormat] = useState<ArtFormat>('feed');
-  const [color, setColor] = useState<string>('#35d4ed');
+  const [color, setColor] = useState<string>('#f5c542');
   const [brand, setBrand] = useState<string>('');
   const [photoStatus, setPhotoStatus] = useState<string>('');
   const [isGeneratingArt, setIsGeneratingArt] = useState(false);
@@ -470,8 +470,8 @@ export default function RadarPublicHomePage() {
       const h = canvas.height;
 
       const bg = ctx.createLinearGradient(0, 0, w, h);
-      bg.addColorStop(0, '#122535');
-      bg.addColorStop(1, '#0d1729');
+      bg.addColorStop(0, '#252422');
+      bg.addColorStop(1, '#1c1b1a');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, w, h);
 
@@ -484,7 +484,7 @@ export default function RadarPublicHomePage() {
       ctx.fillText(brand.trim() || 'SUA MARCA', 48, 75, 984);
 
       const box = { x: 48, y: 110, w: 984, h: h - 300 };
-      ctx.fillStyle = '#080d18';
+      ctx.fillStyle = '#0b0b0a';
       ctx.beginPath();
       ctx.roundRect(box.x, box.y, box.w, box.h, 24);
       ctx.fill();
@@ -500,7 +500,7 @@ export default function RadarPublicHomePage() {
       ctx.drawImage(photo, box.x + (box.w - pw) / 2, box.y + (box.h - ph) / 2, pw, ph);
       ctx.restore();
 
-      ctx.fillStyle = '#f4f6fa';
+      ctx.fillStyle = '#f6f2e8';
       ctx.font = '500 36px Inter, Arial, sans-serif';
       ctx.fillText('Camiseta oversized', 48, h - 123);
       ctx.fillText('preta', 48, h - 76);
@@ -510,7 +510,7 @@ export default function RadarPublicHomePage() {
       ctx.textAlign = 'right';
       ctx.fillText('R$ 59,90', 1032, h - 91);
 
-      ctx.fillStyle = '#a7bdcf';
+      ctx.fillStyle = '#bdbcb9';
       ctx.font = '400 24px Inter, Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Preço ilustrativo · foto fornecida', 540, h - 27);

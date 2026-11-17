@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import './radar-v4.css';
 import { WhatsAppWorkspaceProvider } from '@/components/WhatsAppWorkspaceProvider';
 import { PlanProvider } from '@/components/PlanProvider';
 import { AppShell } from '@/components/AppShell';
@@ -33,7 +34,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Geist:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
         />
       </head>
       <body className="antialiased">

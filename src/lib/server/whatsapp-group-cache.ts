@@ -3,7 +3,7 @@ import type { UserSession } from './auth';
 import type { WhatsAppGroup } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { copierConnection, copierGroupCatalog } from './copier-group-catalog';
-import { ensureValidUuid } from './storage';
+import { ensureValidUuid, readDatabase } from './storage';
 
 export async function savedWhatsAppGroups(session: UserSession, connectionId?: string) {
   const selection = await copierConnection(session, connectionId);
@@ -11,6 +11,11 @@ export async function savedWhatsAppGroups(session: UserSession, connectionId?: s
 }
 
 export async function savedGroupsForConnection(session: UserSession, selection: Awaited<ReturnType<typeof copierConnection>>) {
+  if (!supabase && process.env.NEXT_PUBLIC_PREVIA === '1' && process.env.NODE_ENV === 'development') {
+    // Prévia local do redesenho: grupos de demonstração do arquivo local (nunca em produção).
+    const groups = (readDatabase().groups || []).filter(group => group.userId === session.userId && group.connectionId === selection.connection.id);
+    return { ...selection, groups, syncedAt: groups[0]?.lastSyncedAt || null, isLive: false };
+  }
   if (!supabase) throw new Error('Banco indisponível.');
   const cached = await supabase.from('whatsapp_groups').select('runtime_group,runtime_owner_jid,last_synced_at')
     .eq('user_id', session.userId).eq('connection_id', selection.connection.id);

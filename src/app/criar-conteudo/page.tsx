@@ -555,7 +555,7 @@ function CriarConteudoContent() {
       </div>
 
       {notice && (
-        <div className="rp-panel rp-section" style={{ borderColor: '#39bee6' }}>
+        <div className="rp-panel rp-section" style={{ borderColor: '#f5c542' }}>
           <p>{notice}</p>
         </div>
       )}
@@ -577,7 +577,7 @@ function CriarConteudoContent() {
             aria-selected={activeTab === 'ia'}
             onClick={() => handleSelectTab('ia')}
           >
-            ✨ Legenda com IA
+            Legenda com IA
           </button>
           <button
             role="tab"
@@ -593,7 +593,7 @@ function CriarConteudoContent() {
             aria-selected={activeTab === 'story'}
             onClick={() => handleSelectTab('story')}
           >
-            🖼️ Cards (Feed &amp; Story)
+            Cards (Feed e Story)
           </button>
           <button
             role="tab"
@@ -708,18 +708,18 @@ function CriarConteudoContent() {
                     marginBottom: 14,
                     padding: 14,
                     borderRadius: 12,
-                    background: '#081526',
-                    border: '1px solid #1C314B',
+                    background: '#181716',
+                    border: '1px solid #20201f',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <ShieldCheck size={18} style={{ color: '#20C997' }} />
+                      <ShieldCheck size={18} style={{ color: '#5fd0a0' }} />
                       <div>
-                        <strong style={{ fontSize: 13, color: '#F8FBFF', display: 'block' }}>
+                        <strong style={{ fontSize: 13, color: '#f6f2e8', display: 'block' }}>
                           Selo de Promoção Real (30 dias) &amp; Detector de Preço Inflado
                         </strong>
-                        <span style={{ fontSize: 11, color: '#8EADC7' }}>
+                        <span style={{ fontSize: 11, color: '#a8a39a' }}>
                           Compara o preço atual e o preço &quot;De&quot; com o histórico real da tabela price_history.
                         </span>
                       </div>
@@ -766,9 +766,9 @@ function CriarConteudoContent() {
                           style={{
                             padding: '8px 12px',
                             borderRadius: 8,
-                            background: 'rgba(148, 163, 184, 0.1)',
-                            border: '1px solid rgba(148, 163, 184, 0.25)',
-                            color: '#CBD5E1',
+                            background: 'rgba(168, 167, 164, 0.1)',
+                            border: '1px solid rgba(168, 167, 164, 0.25)',
+                            color: '#ddd8cc',
                             fontSize: 12,
                           }}
                         >
@@ -791,7 +791,7 @@ function CriarConteudoContent() {
                             gap: 8,
                           }}
                         >
-                          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2, color: '#F87171' }} />
+                          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2, color: '#f07878' }} />
                           <div>
                             <strong>Preço &quot;De&quot; inflado detectado (&quot;metade do dobro&quot;)!</strong>
                             <div style={{ marginTop: 2 }}>{dealAudit.inflationReason}</div>
@@ -877,8 +877,8 @@ function CriarConteudoContent() {
                       disabled={sendingTelegram}
                       onClick={handleSendToTelegram}
                       style={{
-                        borderColor: '#38bdf8',
-                        color: '#38bdf8',
+                        borderColor: '#f5c542',
+                        color: '#f5c542',
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 6,
@@ -992,7 +992,7 @@ function CriarConteudoContent() {
                       </span>
                     )}
                     {linkStatus === 'convertendo' && (
-                      <span className="rp-link" style={{ color: '#39bee6' }}>
+                      <span className="rp-link" style={{ color: '#f5c542' }}>
                         Convertendo link de afiliado...
                       </span>
                     )}
@@ -1010,7 +1010,7 @@ function CriarConteudoContent() {
                 </div>
                 <p className="rp-sub" style={{ marginTop: 8 }}>
                   Status do link:{' '}
-                  <strong style={{ color: linkStatus === 'confirmado' ? '#56c288' : linkStatus === 'erro' ? '#e05353' : '#aab2b7' }}>
+                  <strong style={{ color: linkStatus === 'confirmado' ? '#56c288' : linkStatus === 'erro' ? '#e05353' : '#a8a39a' }}>
                     {linkStatus === 'confirmado'
                       ? 'Confirmado pela integração'
                       : linkStatus === 'gerado'
@@ -1240,7 +1240,7 @@ function CriarConteudoContent() {
                         width: '100%',
                         borderRadius: 14,
                         overflow: 'hidden',
-                        border: '1px solid #1CCAF2',
+                        border: '1px solid #f5c542',
                         boxShadow: '0 14px 32px rgba(0,0,0,0.45)',
                       }}
                     >

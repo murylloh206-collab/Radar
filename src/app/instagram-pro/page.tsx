@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, CheckCircle2, Clock, Image as ImageIcon, Layers, Loader2, MessageCircle, Palette, Send, Settings, Settings2, X, Zap } from 'lucide-react';
 import ImageDropZone from '@/components/ImageDropZone';
 import { PlanGateCard } from '@/components/PlanGateCard';
+import CopierHistoryModal from '@/components/CopierHistoryModal';
 
 type Channel = 'instagram_story' | 'instagram_feed' | 'whatsapp_status';
 
@@ -42,6 +43,7 @@ export default function InstagramProPage() {
   const [autopost, setAutopost] = useState<Autopost | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'ok' | 'erro'; text: string } | null>(null);
   const [dialog, setDialog] = useState<{ offer: Offer; channel: Channel } | null>(null);
@@ -135,21 +137,25 @@ export default function InstagramProPage() {
 
   return (
     <section className="rp-page" aria-label="Instagram Pro">
-      <div className="rp-head" style={{ flexWrap: 'wrap', gap: 12 }}>
+      <header className="rv6-head">
         <div>
-          <span className="rp-step">Instagram Pro</span>
-          <h1>Posts com a sua marca</h1>
-          <p>Escolha uma oferta que o copiador já enviou e publique no story, no feed ou no status do WhatsApp. Cada post sai numerado (ex.: “Oferta #128 · link na bio”) e a oferta aparece na sua página da bio com o link certo.</p>
+          <h1>Instagram Pro</h1>
+          <p>Escolha uma oferta que o Copiador já enviou e publique no story, no feed ou no status do WhatsApp. Cada post sai numerado (ex.: “Oferta #128 · link na bio”) e a oferta aparece na sua página da bio com o link certo.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div className="rv6-head-actions">
           {quota && !locked && <span className={`rp-tag ${quota.allowed ? 'rp-good' : 'rp-warn'}`}>{quotaLabel}</span>}
           {!locked && (
-            <button type="button" className="rp-btn" onClick={() => setSettingsTab('identidade')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button type="button" className="rp-btn" onClick={() => setShowHistory(true)}>
+              <Clock className="w-4 h-4" /> Ofertas copiadas
+            </button>
+          )}
+          {!locked && (
+            <button type="button" className="rp-btn" onClick={() => setSettingsTab('identidade')}>
               <Settings className="w-4 h-4" /> Configurações
             </button>
           )}
         </div>
-      </div>
+      </header>
 
       {locked ? (
         <PlanGateCard feature="instagram_pro" title="Instagram Pro" description="Artes profissionais com a sua marca para story, feed e status do WhatsApp, link pela bio e postagem automática com freio. Disponível a partir do plano Plus." />
@@ -165,21 +171,21 @@ export default function InstagramProPage() {
                 <p>Assim que o copiador enviar ofertas para os seus grupos, elas aparecem aqui prontas para postar.</p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+              <div className="rv10-posts">
                 {offers.map(offer => (
-                  <article key={offer.jobId} className="rp-panel" style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: 0 }}>
-                    <div style={{ height: 150, borderRadius: 12, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
+                  <article key={offer.jobId} className="rv10-post">
+                    <div className="rv10-post-photo">
                       {offer.imageUrl ? <img src={offer.imageUrl} alt="" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} /> : <ImageIcon className="w-8 h-8 text-slate-400" />}
-                      {offer.discountPct ? <span className="rp-tag rp-good" style={{ position: 'absolute', top: 8, left: 8 }}>−{offer.discountPct}%</span> : null}
+                      {offer.discountPct ? <span className="rv10-off">−{offer.discountPct}%</span> : null}
                     </div>
-                    <h3 style={{ fontSize: 14, lineHeight: 1.3, margin: 0 }}>{offer.title}</h3>
+                    <h3>{offer.title}</h3>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                       {offer.priceOriginal ? <span style={{ fontSize: 12, opacity: 0.6, textDecoration: 'line-through' }}>R$ {brl(offer.priceOriginal)}</span> : null}
                       <strong style={{ fontSize: 18 }}>R$ {brl(offer.priceCurrent)}</strong>
                       {offer.coupon ? <span className="rp-tag">cupom {offer.coupon}</span> : null}
                     </div>
                     <small style={{ opacity: 0.6, display: 'flex', alignItems: 'center', gap: 4 }}><Clock className="w-3 h-3" /> enviada nos grupos {timeAgo(offer.sentAt)}</small>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 'auto' }}>
+                    <div className="rv10-post-actions">
                       {CHANNELS.map(c => (
                         <button key={c.id} type="button" className="rp-btn" disabled={!quota?.allowed || !offer.imageUrl}
                           title={!offer.imageUrl ? 'Oferta sem foto do produto' : quota?.allowed ? `Postar no ${c.label}` : quota?.reason}
@@ -202,6 +208,8 @@ export default function InstagramProPage() {
         </>
       )}
 
+      <CopierHistoryModal isOpen={showHistory} onClose={() => setShowHistory(false)} />
+
       {dialog && (
         <div role="dialog" aria-modal="true" aria-label="Prévia da publicação" className="rp-dialog"
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
@@ -210,7 +218,7 @@ export default function InstagramProPage() {
               <h2 style={{ margin: 0 }}>{CHANNELS.find(c => c.id === dialog.channel)?.label}</h2>
               <button type="button" className="rp-btn" onClick={() => { previewRequest.current++; setDialog(null); }} aria-label="Fechar"><X className="w-4 h-4" /></button>
             </div>
-            <div style={{ borderRadius: 12, overflow: 'hidden', background: '#0b0f1a', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ borderRadius: 12, overflow: 'hidden', background: '#131312', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {preview ? <img src={preview} alt="Prévia da arte" style={{ width: '100%' }} /> : <Loader2 className="w-6 h-6 animate-spin" />}
             </div>
             <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>O número da oferta é definido na hora de publicar.</p>
@@ -224,7 +232,7 @@ export default function InstagramProPage() {
 
       {settingsTab && (
         <div role="dialog" aria-modal="true" aria-label="Configurações do Instagram Pro" onClick={e => { if (e.target === e.currentTarget) setSettingsTab(null); }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(6,12,16,.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+          style={{ position: 'fixed', inset: 0, background: 'rgba(12, 11, 10,.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
           <div className="rp-panel" style={{ maxWidth: 680, width: '100%', maxHeight: '92vh', overflow: 'auto', margin: 0, borderRadius: 20, padding: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 22px 0' }}>
               <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Settings className="w-5 h-5" /> Configurações</h2>
@@ -233,7 +241,7 @@ export default function InstagramProPage() {
             <div role="tablist" style={{ display: 'flex', gap: 6, padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,.08)', flexWrap: 'wrap' }}>
               {([['identidade', 'Identidade visual', Palette], ['story', 'Template do story', Layers], ['automatico', 'Automático', Zap]] as const).map(([id, label, Icon]) => (
                 <button key={id} role="tab" type="button" aria-selected={settingsTab === id} onClick={() => setSettingsTab(id)} className="rp-btn"
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 999, ...(settingsTab === id ? { background: '#45d3c7', color: '#0d2a2d', borderColor: '#45d3c7' } : {}) }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 999, ...(settingsTab === id ? { background: '#eeba2a', color: '#1e1d1c', borderColor: '#eeba2a' } : {}) }}>
                   <Icon className="w-4 h-4" /> {label}
                 </button>
               ))}

@@ -146,8 +146,8 @@ export function ComparatorSearchPanel() {
                 🔎 Buscador Comparador Lado a Lado
               </h2>
               <p className="rp-sub" style={{ marginTop: 4 }}>
-                Busca tolerante a erros de digitação (<code style={{ color: '#1CCAF2' }}>pg_trgm</code> +{' '}
-                <code style={{ color: '#1CCAF2' }}>unaccent</code> + dicionário) com consulta em fontes oficiais e cache de 5 minutos.
+                Busca tolerante a erros de digitação (<code style={{ color: '#f5c542' }}>pg_trgm</code> +{' '}
+                <code style={{ color: '#f5c542' }}>unaccent</code> + dicionário) com consulta em fontes oficiais e cache de 5 minutos.
               </p>
             </div>
           </div>
@@ -172,11 +172,11 @@ export function ComparatorSearchPanel() {
                 placeholder="Digite o produto (ex: bulsa, cadado, fone bluetooth, air fryer)..."
                 style={{
                   width: '100%',
-                  background: '#050E1C',
-                  border: '1px solid #1E3A5F',
+                  background: '#090908',
+                  border: '1px solid #42403b',
                   borderRadius: 10,
                   padding: '11px 14px',
-                  color: '#F8FBFF',
+                  color: '#f6f2e8',
                   fontSize: 14,
                 }}
               />
@@ -209,7 +209,7 @@ export function ComparatorSearchPanel() {
 
           {/* Atalhos para testar tolerância a erros de digitação */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#8EADC7', fontWeight: 600 }}>
+            <span style={{ fontSize: 11, color: '#a8a39a', fontWeight: 600 }}>
               Testar busca rápida:
             </span>
             {TYPO_TEST_CHIPS.map((chip) => (
@@ -221,11 +221,11 @@ export function ComparatorSearchPanel() {
                   executeSearch(chip.query, false);
                 }}
                 style={{
-                  background: '#0B1728',
-                  border: '1px solid #1C2E46',
+                  background: '#1b1a18',
+                  border: '1px solid #20201f',
                   borderRadius: 999,
                   padding: '4px 10px',
-                  color: '#CBD5E1',
+                  color: '#ddd8cc',
                   fontSize: 11,
                   cursor: 'pointer',
                 }}
@@ -246,8 +246,8 @@ export function ComparatorSearchPanel() {
         {result && result.didYouMean && (
           <div
             style={{
-              background: 'rgba(28, 202, 242, 0.1)',
-              border: '1px solid rgba(28, 202, 242, 0.45)',
+              background: 'rgba(245, 197, 66, 0.1)',
+              border: '1px solid rgba(245, 197, 66, 0.45)',
               borderRadius: 12,
               padding: '12px 16px',
               display: 'flex',
@@ -257,9 +257,9 @@ export function ComparatorSearchPanel() {
               gap: 10,
             }}
           >
-            <div style={{ fontSize: 13, color: '#E2E8F0' }}>
+            <div style={{ fontSize: 13, color: '#ebe6da' }}>
               💡 Você pesquisou por <strong>&quot;{result.rawQuery}&quot;</strong>.{' '}
-              <span style={{ color: '#1CCAF2', fontWeight: 700 }}>
+              <span style={{ color: '#f5c542', fontWeight: 700 }}>
                 Você quis dizer:{' '}
                 <button
                   type="button"
@@ -270,7 +270,7 @@ export function ComparatorSearchPanel() {
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#1CCAF2',
+                    color: '#f5c542',
                     textDecoration: 'underline',
                     fontWeight: 800,
                     cursor: 'pointer',
@@ -283,13 +283,13 @@ export function ComparatorSearchPanel() {
                 ?
               </span>
               {result.autoCorrected && (
-                <span style={{ marginLeft: 8, fontSize: 12, color: '#94A3B8' }}>
+                <span style={{ marginLeft: 8, fontSize: 12, color: '#a8a39a' }}>
                   (Exibindo resultados corrigidos automaticamente para <strong>&quot;{result.effectiveQuery}&quot;</strong>)
                 </span>
               )}
             </div>
 
-            <span style={{ fontSize: 11, color: '#8EADC7' }}>
+            <span style={{ fontSize: 11, color: '#a8a39a' }}>
               {result.fromCache
                 ? `⚡ Resposta em cache (válido por ${Math.round(result.cacheTtlSeconds / 60)} min)`
                 : '🔄 Consulta ao vivo nas fontes oficiais'}
@@ -301,15 +301,15 @@ export function ComparatorSearchPanel() {
         {result && (
           <div
             style={{
-              background: '#081322',
-              border: '1px solid #18283D',
+              background: '#161514',
+              border: '1px solid #20201f',
               borderRadius: 12,
               padding: 16,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Info size={16} className="text-[#1CCAF2]" />
-              <strong style={{ fontSize: 13, color: '#F8FBFF' }}>
+              <Info size={16} className="text-[#f5c542]" />
+              <strong style={{ fontSize: 13, color: '#f6f2e8' }}>
                 Transparência das Fontes Oficiais Consultadas (Sem Scraping Frágil)
               </strong>
             </div>
@@ -325,15 +325,15 @@ export function ComparatorSearchPanel() {
                 <div
                   key={diag.store}
                   style={{
-                    background: '#050C17',
-                    border: '1px solid #15253B',
+                    background: '#0f0e0d',
+                    border: '1px solid #2a2926',
                     borderRadius: 10,
                     padding: 12,
                     fontSize: 11,
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <strong style={{ color: '#F8FBFF', fontSize: 12 }}>{diag.displayName}</strong>
+                    <strong style={{ color: '#f6f2e8', fontSize: 12 }}>{diag.displayName}</strong>
                     <span
                       style={{
                         padding: '2px 7px',
@@ -342,25 +342,25 @@ export function ComparatorSearchPanel() {
                         fontWeight: 700,
                         background:
                           diag.status === 'ok'
-                            ? 'rgba(32, 201, 151, 0.16)'
+                            ? 'rgba(95, 208, 160, 0.16)'
                             : diag.status === 'requires_credentials'
                             ? 'rgba(245, 158, 11, 0.16)'
-                            : 'rgba(148, 163, 184, 0.14)',
+                            : 'rgba(168, 167, 164, 0.14)',
                         color:
                           diag.status === 'ok'
-                            ? '#20C997'
+                            ? '#5fd0a0'
                             : diag.status === 'requires_credentials'
                             ? '#FBBF24'
-                            : '#CBD5E1',
+                            : '#ddd8cc',
                       }}
                     >
                       {diag.resultsCount} oferta(s)
                     </span>
                   </div>
-                  <div style={{ color: '#1CCAF2', marginBottom: 4, fontWeight: 600 }}>
+                  <div style={{ color: '#f5c542', marginBottom: 4, fontWeight: 600 }}>
                     Fonte: {diag.sourceUsed}
                   </div>
-                  <div style={{ color: '#94A3B8', lineHeight: 1.4 }}>{diag.message}</div>
+                  <div style={{ color: '#a8a39a', lineHeight: 1.4 }}>{diag.message}</div>
                   {diag.status === 'requires_credentials' && (
                     <Link
                       href="/conexoes"
@@ -403,11 +403,11 @@ export function ComparatorSearchPanel() {
                     key={offer.id}
                     style={{
                       background: offer.isBestValue
-                        ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, #091526 35%)'
-                        : '#091526',
+                        ? 'linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, #0b0b0a 35%)'
+                        : '#0b0b0a',
                       border: offer.isBestValue
                         ? '2px solid #10B981'
-                        : '1px solid #18283D',
+                        : '1px solid #20201f',
                       borderRadius: 14,
                       padding: 18,
                       display: 'flex',
@@ -431,13 +431,13 @@ export function ComparatorSearchPanel() {
                                 ? 'rgba(255, 87, 34, 0.18)'
                                 : offer.store === 'mercadolivre'
                                 ? 'rgba(255, 230, 0, 0.16)'
-                                : 'rgba(28, 202, 242, 0.15)',
+                                : 'rgba(245, 197, 66, 0.15)',
                             color:
                               offer.store === 'shopee'
                                 ? '#FF7043'
                                 : offer.store === 'mercadolivre'
                                 ? '#FFE600'
-                                : '#1CCAF2',
+                                : '#f5c542',
                             textTransform: 'uppercase',
                           }}
                         >
@@ -504,7 +504,7 @@ export function ComparatorSearchPanel() {
                         style={{
                           fontSize: 14,
                           fontWeight: 700,
-                          color: '#F8FBFF',
+                          color: '#f6f2e8',
                           lineHeight: 1.4,
                           margin: '0 0 10px',
                         }}
@@ -515,12 +515,12 @@ export function ComparatorSearchPanel() {
                       {/* Preço De / Por + Desconto */}
                       <div style={{ marginBottom: 10 }}>
                         {offer.originalPrice && offer.originalPrice > offer.price && (
-                          <div style={{ fontSize: 12, color: '#64748B', textDecoration: 'line-through' }}>
+                          <div style={{ fontSize: 12, color: '#7a7875', textDecoration: 'line-through' }}>
                             De R$ {offer.originalPrice.toFixed(2).replace('.', ',')}
                           </div>
                         )}
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                          <span style={{ fontSize: 24, fontWeight: 900, color: '#1CCAF2' }}>
+                          <span style={{ fontSize: 24, fontWeight: 900, color: '#f5c542' }}>
                             R$ {offer.price.toFixed(2).replace('.', ',')}
                           </span>
                           {offer.discountPct && offer.discountPct > 0 && (
@@ -528,8 +528,8 @@ export function ComparatorSearchPanel() {
                               style={{
                                 fontSize: 11,
                                 fontWeight: 800,
-                                color: '#20C997',
-                                background: 'rgba(32, 201, 151, 0.14)',
+                                color: '#5fd0a0',
+                                background: 'rgba(95, 208, 160, 0.14)',
                                 padding: '2px 7px',
                                 borderRadius: 999,
                               }}
@@ -541,10 +541,10 @@ export function ComparatorSearchPanel() {
                       </div>
 
                       {/* Frete, Avaliações, Vendas e Cupom */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: '#CBD5E1' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: '#ddd8cc' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Truck size={13} style={{ color: offer.freeShipping ? '#20C997' : '#8EADC7' }} />
-                          <span style={{ color: offer.freeShipping ? '#20C997' : '#CBD5E1', fontWeight: offer.freeShipping ? 700 : 400 }}>
+                          <Truck size={13} style={{ color: offer.freeShipping ? '#5fd0a0' : '#a8a39a' }} />
+                          <span style={{ color: offer.freeShipping ? '#5fd0a0' : '#ddd8cc', fontWeight: offer.freeShipping ? 700 : 400 }}>
                             {offer.shippingLabel}
                           </span>
                         </div>
@@ -556,7 +556,7 @@ export function ComparatorSearchPanel() {
                             </span>
                           )}
                           {offer.soldCount !== null && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#94A3B8' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#a8a39a' }}>
                               <ShoppingBag size={13} /> {offer.soldCount} vendidos
                             </span>
                           )}
@@ -572,10 +572,10 @@ export function ComparatorSearchPanel() {
                     </div>
 
                     {/* Rodapé do Card: Status do Link de Afiliado + Botão "Postar esta oferta" */}
-                    <div style={{ borderTop: '1px solid #16263B', paddingTop: 12, marginTop: 6 }}>
+                    <div style={{ borderTop: '1px solid #2b2926', paddingTop: 12, marginTop: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, marginBottom: 10 }}>
                         {offer.isAffiliateLinkVerified ? (
-                          <span style={{ color: '#20C997', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ color: '#5fd0a0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             <CheckCircle2 size={12} /> Link de afiliado pronto
                           </span>
                         ) : (
@@ -583,7 +583,7 @@ export function ComparatorSearchPanel() {
                             <AlertTriangle size={12} /> Link oficial (conecte sua tag p/ comissão)
                           </span>
                         )}
-                        <span style={{ marginLeft: 'auto', color: '#64748B', fontSize: 10 }}>
+                        <span style={{ marginLeft: 'auto', color: '#7a7875', fontSize: 10 }}>
                           {offer.dataSourceLabel}
                         </span>
                       </div>
