@@ -48,8 +48,17 @@ function mercadoPagoApi(token: string): MpApi {
     createPreapproval: body => call('POST', '/preapproval', body),
     getPreapproval: id => call('GET', `/preapproval/${encodeURIComponent(id)}`),
     async searchAuthorizedPayments(id) {
-      const data = await call('GET', `/authorized_payments/search?preapproval_id=${encodeURIComponent(id)}&limit=100`);
-      return Array.isArray(data?.results) ? data.results : [];
+      // O Mercado Pago recusa limit=100 ("Invalid value for limit"): páginas de 20 (o padrão dele) com offset.
+      const pageSize = 20;
+      const all: any[] = [];
+      for (let offset = 0; offset < 500; offset += pageSize) {
+        const data = await call('GET', `/authorized_payments/search?preapproval_id=${encodeURIComponent(id)}&limit=${pageSize}&offset=${offset}`);
+        const page = Array.isArray(data?.results) ? data.results : [];
+        all.push(...page);
+        const total = Number(data?.paging?.total);
+        if (page.length < pageSize || (Number.isFinite(total) && offset + pageSize >= total)) break;
+      }
+      return all;
     },
     getAuthorizedPayment: id => call('GET', `/authorized_payments/${encodeURIComponent(id)}`),
     getPayment: id => call('GET', `/v1/payments/${encodeURIComponent(id)}`),
