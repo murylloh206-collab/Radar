@@ -15,7 +15,8 @@ import { extractOfferDetailsFromWhatsAppText, extractProductTitleFromFormattedMe
  * Tudo sempre escopado pelo userId da sessão (isolamento entre clientes).
  */
 
-export type SocialChannel = 'instagram_story' | 'instagram_feed' | 'whatsapp_status';
+export type SocialChannel = 'instagram_story' | 'instagram_feed' | 'whatsapp_status' | 'whatsapp_group_status';
+const PUBLISH_CHANNELS: SocialChannel[] = ['instagram_story', 'instagram_feed', 'whatsapp_status', 'whatsapp_group_status'];
 export type SocialPostStatus = 'publicado' | 'falha' | 'incerto' | 'pendente';
 
 export interface SocialOfferSnapshot {
@@ -366,7 +367,7 @@ export function buildSocialCaption(offer: SocialOffer, channel: SocialChannel, h
   lines.push(offer.priceOriginal ? `💰 De R$ ${money(offer.priceOriginal)} por R$ ${money(offer.priceCurrent)}` : `💰 R$ ${money(offer.priceCurrent)}`);
   if (offer.coupon) lines.push(`🎟️ Cupom: ${offer.coupon}`);
   lines.push('');
-  if (channel === 'whatsapp_status') lines.push(`🛒 Oferta #${offer.offerNumber}: ${offer.affiliateUrl}`);
+  if (channel === 'whatsapp_status' || channel === 'whatsapp_group_status') lines.push(`🛒 Oferta #${offer.offerNumber}: ${offer.affiliateUrl}`);
   else lines.push(`🔗 Oferta #${offer.offerNumber} — link na bio${handle ? ` (${handle})` : ''}`);
   return lines.join('\n');
 }
@@ -395,9 +396,12 @@ async function sendWhatsAppStatus(userId: string, connectionId: string | undefin
 }
 
 /** Gera a arte com a marca do cliente e publica no canal escolhido. Nunca usa dados de outro cliente. */
-export async function publishSocialPost(userId: string, request: { jobId: string; channel: SocialChannel; connectionId?: string; origin?: 'manual' | 'automatico' }) {
-  if (!['instagram_story', 'instagram_feed', 'whatsapp_status'].includes(request.channel)) {
+export async function publishSocialPost(userId: string, request: { jobId: string; channel: SocialChannel; connectionId?: string; groupJids?: string[]; origin?: 'manual' | 'automatico' }) {
+  if (!PUBLISH_CHANNELS.includes(request.channel)) {
     throw new SocialPublishError('Canal de publicação inválido.', 400);
+  }
+  if (request.channel === 'whatsapp_group_status' && !request.groupJids?.length) {
+    throw new SocialPublishError('Escolha pelo menos um grupo para o status.', 400);
   }
   const quota = await getSocialQuota(userId);
   if (!quota.allowed) throw new SocialPublishError(quota.reason || 'Publicação não permitida.', quota.limit === 0 ? 403 : 429);
@@ -426,7 +430,17 @@ export async function publishSocialPost(userId: string, request: { jobId: string
     artUrl = await uploadArt(userId, art);
     const brand = await getBrandSettings(userId);
     const caption = buildSocialCaption(offer, request.channel, brand.watermarkHandle);
-    if (request.channel === 'whatsapp_status') {
+    if (request.channel === 'whatsapp_group_status') {
+      try {
+        const { publishGroupStatus } = await import('./wa-gateway/group-status');
+        const sent = await publishGroupStatus(userId, { image: art, caption, groupJids: request.groupJids || [] });
+        const okCount = sent.filter(r => r.ok).length;
+        const failures = sent.filter(r => !r.ok);
+        result = okCount === 0
+          ? { status: 'falha', error: failures[0]?.error || 'O WhatsApp recusou o status de grupo.' }
+          : { status: 'publicado', externalId: sent.filter(r => r.ok).map(r => r.messageId).join(','), error: failures.length ? `${failures.length} de ${sent.length} grupos falharam: ${failures[0].error}` : undefined };
+      } catch (error) { result = { status: 'falha', error: error instanceof Error ? error.message : 'Falha ao publicar o status de grupo.' }; }
+    } else if (request.channel === 'whatsapp_status') {
       try { result = await sendWhatsAppStatus(userId, request.connectionId, artUrl, caption); }
       catch (error) { result = { status: 'falha', error: error instanceof Error ? error.message : 'Falha ao enviar o status.' }; }
     } else {

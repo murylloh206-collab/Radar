@@ -1163,3 +1163,29 @@ dialog.rp-dialog[open] { animation: rv7-modal 0.45s var(--rv-spring) both; }
 .rck-link, .rck-reopen, .rck-inline { border: 0; background: none; color: #f5c542; font: 600 13px var(--radar-font, sans-serif); cursor: pointer; padding: 6px 4px; text-decoration: underline; }
 .rck :is(button, a):focus-visible { outline: 2px solid #f5c542; outline-offset: 2px; }
 @media (max-width: 600px) { .rck { left: 10px; right: 10px; bottom: 10px; width: auto; } }
+
+/* ================= v18 — STATUS NOS GRUPOS (pareamento por QR e escolha de grupos) ================= */
+.rv10-post-actions { grid-template-columns: repeat(2, 1fr) !important; }
+.rgs { margin-top: 14px; display: grid; gap: 10px; }
+.rgs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.rgs-head .rp-tag { display: inline-flex; align-items: center; gap: 6px; }
+.rgs-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: #f5c542; font: 600 12.5px var(--radar-font); cursor: pointer; padding: 4px; }
+.rgs-link:hover { text-decoration: underline; }
+.rgs-error { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(224, 83, 83, 0.5); background: rgba(224, 83, 83, 0.1); color: #ffb4b4; font-size: 13px; }
+.rgs-empty { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 18px 14px; border-radius: 16px; border: 1px dashed rgba(245, 197, 66, 0.4); color: #cfc9bd; font-size: 13.5px; line-height: 1.5; }
+.rgs-empty svg { color: #f5c542; }
+.rgs-empty p { margin: 0; }
+.rgs-list-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #a8a398; }
+.rgs-list-head span { display: inline-flex; align-items: center; gap: 6px; }
+.rgs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 240px; overflow-y: auto; }
+.rgs-list label { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid #2a2a2e; background: #121214; cursor: pointer; transition: border-color 0.2s ease, background 0.2s ease; }
+.rgs-list label:hover { border-color: rgba(245, 197, 66, 0.5); }
+.rgs-list label:has(input:checked) { border-color: #f5c542; background: rgba(245, 197, 66, 0.08); }
+.rgs-list input { accent-color: #f5c542; width: 16px; height: 16px; flex: none; }
+.rgs-list strong { display: block; font-size: 13.5px; color: #f6f2e8; }
+.rgs-list small { display: block; font-size: 11.5px; color: #8b867b; }
+.rgs-small { margin: 0; font-size: 11.5px; color: #8b867b; line-height: 1.5; }
+.rgs-pair { margin-top: 14px; display: grid; justify-items: center; gap: 10px; text-align: center; }
+.rgs-pair img { border-radius: 16px; background: #fff; padding: 8px; box-shadow: 0 0 0 4px rgba(245, 197, 66, 0.35); animation: rva-pop 0.4s var(--rv-spring) both; }
+.rgs-pair p { margin: 0; font-size: 13.5px; color: #d8d3c7; line-height: 1.5; }
+.rgs-qr-wait { width: 240px; height: 240px; display: grid; place-items: center; border-radius: 16px; border: 1px dashed rgba(245, 197, 66, 0.4); color: #f5c542; }

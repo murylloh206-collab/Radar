@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_BUILD_DIR || ".next",
   reactStrictMode: true,
+  // Baileys (status de grupo) carrega WebAssembly e módulos nativos: fica fora do bundle do servidor.
+  serverExternalPackages: ['baileys', 'whatsapp-rust-bridge', 'libsignal'],
   // Fonte Inter embutida usada pelas artes (texto vetorial): precisa acompanhar as funções do servidor.
   outputFileTracingIncludes: {
     '/api/**': ['./assets/fonts/**'],

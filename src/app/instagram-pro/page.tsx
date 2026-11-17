@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, CheckCircle2, Clock, Image as ImageIcon, Layers, Loader2, MessageCircle, Palette, Send, Settings, Settings2, X, Zap } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, Image as ImageIcon, Layers, Loader2, MessageCircle, Palette, Send, Settings, Settings2, Users, X, Zap } from 'lucide-react';
+import { GroupStatusPicker } from '@/components/GroupStatusPicker';
 import ImageDropZone from '@/components/ImageDropZone';
 import { PlanGateCard } from '@/components/PlanGateCard';
 import CopierHistoryModal from '@/components/CopierHistoryModal';
 
-type Channel = 'instagram_story' | 'instagram_feed' | 'whatsapp_status';
+type Channel = 'instagram_story' | 'instagram_feed' | 'whatsapp_status' | 'whatsapp_group_status';
 
 interface Offer {
   jobId: string;
@@ -25,8 +26,11 @@ interface Identity { panelName: string; watermarkHandle: string; panelLogoUrl: s
 const CHANNELS: Array<{ id: Channel; label: string; short: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'instagram_story', label: 'Story do Instagram', short: 'Story', icon: Camera },
   { id: 'instagram_feed', label: 'Feed do Instagram', short: 'Feed', icon: ImageIcon },
-  { id: 'whatsapp_status', label: 'Status do WhatsApp', short: 'Status', icon: MessageCircle },
+  { id: 'whatsapp_status', label: 'Status do WhatsApp (contatos)', short: 'Status', icon: MessageCircle },
+  { id: 'whatsapp_group_status', label: 'Status nos grupos', short: 'Grupos', icon: Users },
 ];
+/** O automático ainda não publica status de grupo (precisa da escolha dos grupos). */
+const AUTOPOST_CHANNELS = CHANNELS.filter(c => c.id !== 'whatsapp_group_status');
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function timeAgo(iso: string) {
@@ -49,6 +53,8 @@ export default function InstagramProPage() {
   const [dialog, setDialog] = useState<{ offer: Offer; channel: Channel } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [groupJids, setGroupJids] = useState<string[]>([]);
+  const [groupReady, setGroupReady] = useState(false);
   const previewRequest = useRef(0);
 
   const load = useCallback(async () => {
@@ -95,13 +101,15 @@ export default function InstagramProPage() {
     setBusy(true);
     try {
       const res = await fetch('/api/social/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: dialog.offer.jobId, channel: dialog.channel }) });
+        body: JSON.stringify({ jobId: dialog.offer.jobId, channel: dialog.channel, groupJids: dialog.channel === 'whatsapp_group_status' ? groupJids : undefined }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Não foi possível publicar.');
       const label = CHANNELS.find(c => c.id === dialog.channel)?.label;
       setToast({ type: 'ok', text: data.post?.status === 'incerto'
         ? `Enviado para ${label}, mas sem confirmação. Confira no aplicativo antes de repetir.`
-        : `Oferta #${data.offer.offerNumber} publicada no ${label}!` });
+        : dialog.channel === 'whatsapp_group_status'
+          ? `Oferta #${data.offer.offerNumber} publicada como status em ${groupJids.length} ${groupJids.length === 1 ? 'grupo' : 'grupos'}!${data.post?.error ? ` Atenção: ${data.post.error}` : ''}`
+          : `Oferta #${data.offer.offerNumber} publicada no ${label}!` });
       setDialog(null);
       await load();
     } catch (e) {
@@ -222,8 +230,11 @@ export default function InstagramProPage() {
               {preview ? <img src={preview} alt="Prévia da arte" style={{ width: '100%' }} /> : <Loader2 className="w-6 h-6 animate-spin" />}
             </div>
             <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>O número da oferta é definido na hora de publicar.</p>
+            {dialog.channel === 'whatsapp_group_status' && (
+              <GroupStatusPicker selected={groupJids} onChange={setGroupJids} onReadyChange={setGroupReady} />
+            )}
             <button type="button" className="rp-btn rp-primary" style={{ width: '100%', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              disabled={!preview || busy} onClick={publish}>
+              disabled={!preview || busy || (dialog.channel === 'whatsapp_group_status' && !groupReady)} onClick={publish}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Publicar agora
             </button>
           </div>
@@ -312,7 +323,7 @@ function AutopostForm({ settings, busy, onSave }: { settings: Autopost; busy: bo
         <strong>{form.enabled ? 'Automático ligado' : 'Automático desligado'}</strong>
       </label>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        {CHANNELS.map(c => (
+        {AUTOPOST_CHANNELS.map(c => (
           <label key={c.id} className="rp-btn" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <input type="checkbox" checked={form.channels.includes(c.id)} onChange={() => toggleChannel(c.id)} /> {c.label}
           </label>
