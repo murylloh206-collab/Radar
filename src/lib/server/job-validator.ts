@@ -240,8 +240,26 @@ export function validateJobForDispatch(job: PublicationJob, db: DatabaseSchema):
       const isRakutenDeeplink = parsed.hostname.includes('linksynergy.com');
       const idParam = parsed.searchParams.get('id');
       const midParam = parsed.searchParams.get('mid');
-      const expectedSiteId = storeCreds.affiliateTag?.trim();
-      const expectedMid = storeCreds.appId?.trim();
+      // O "id" do link é o código criptografado do afiliado na Rakuten (ex.: 8*LerrTfM*o), formato diferente
+      // do SID numérico salvo no cofre (ex.: 4764673): os dois nunca batem e comparar barrava toda oferta.
+      // A garantia de que o link é da conta vem da geração pela API oficial com as credenciais do cliente;
+      // aqui comparamos com o código criptografado só quando ele já é conhecido, e barramos o link recebido.
+      const session = ((storeCreds as unknown as { sessionData?: Record<string, unknown> }).sessionData || {}) as Record<string, unknown>;
+      const expectedSiteId = typeof session.rakutenEncryptedId === 'string' ? session.rakutenEncryptedId.trim() : '';
+      const expectedMid = typeof session.netshoesAdvertiserId === 'string' || typeof session.netshoesAdvertiserId === 'number'
+        ? String(session.netshoesAdvertiserId).trim() : '';
+      let originalId: string | null = null;
+      try {
+        const original = job.originalUrl ? new URL(job.originalUrl) : null;
+        if (original && original.hostname.includes('linksynergy.com')) originalId = original.searchParams.get('id');
+      } catch { originalId = null; }
+
+      if (originalId && idParam && originalId === idParam) {
+        return {
+          valid: false,
+          error: 'Link da Netshoes igual ao link de quem postou a oferta original. Proibido publicar link de terceiro.',
+        };
+      }
 
       if (!isRakutenDeeplink || !idParam || !midParam) {
         return {

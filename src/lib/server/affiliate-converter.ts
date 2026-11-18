@@ -78,6 +78,14 @@ export function sanitizeStoreUrl(urlStr: string, store: StoreName): string {
       url.searchParams.delete('searchVariation');
     }
 
+    // Netshoes: o endereço do produto vem com o rastreio Rakuten de quem postou a oferta original
+    // (ranEAID, ranSiteID, af_sub_siteID, clickid…). Sai tudo antes de gerar o link da conta.
+    if (store === 'netshoes' && url.hostname.toLowerCase().includes('netshoes')) {
+      for (const key of [...url.searchParams.keys()]) {
+        if (/^(af_|ran|utm_)/i.test(key) || /^(clickid|campaign|siteid|gclid|fbclid)$/i.test(key)) url.searchParams.delete(key);
+      }
+    }
+
     if (store === 'shopee') {
       url.search = '';
       const opaanlpMatch = url.pathname.match(/^\/opaanlp\/(\d+)\/(\d+)/i);
