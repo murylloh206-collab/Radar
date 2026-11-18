@@ -17,6 +17,8 @@ export interface StoryTemplateInput {
   discountPct?: number | null;
   coupon?: string | null;
   offerNumber?: number | null;
+  /** Chamada do rodapé; vazio = sem chamada (WhatsApp). Padrão: "link na bio". */
+  footerCta?: string | null;
 }
 
 const W = 1080;
@@ -36,12 +38,14 @@ function discountOf(i: { current: number; original?: number | null; discountPct?
 }
 
 /** Textos do template (separados do desenho para teste). */
-export function storyTemplateTexts(i: { title: string; current: number; original?: number | null; coupon?: string | null; offerNumber?: number | null }) {
+export function storyTemplateTexts(i: { title: string; current: number; original?: number | null; coupon?: string | null; offerNumber?: number | null; footerCta?: string | null }) {
+  const cta = i.footerCta === undefined ? 'link na bio' : i.footerCta;
   return {
     de: i.original && i.original > i.current ? `De R$ ${money(i.original)}` : null,
     por: `Por R$ ${money(i.current)}`,
     coupon: i.coupon && i.coupon.trim() ? `Cupom: ${i.coupon.trim().toUpperCase()}` : null,
-    footer: i.offerNumber ? `Oferta #${i.offerNumber} · link na bio` : 'link na bio',
+    footer: i.offerNumber ? `Oferta #${i.offerNumber}${cta ? ` · ${cta}` : ''}` : cta || null,
+    hasCta: Boolean(cta),
   };
 }
 
@@ -103,10 +107,11 @@ export async function renderStoryTemplate(input: StoryTemplateInput): Promise<Bu
 
   // Rodapé abaixo do cartão: "Oferta #N · link na bio ↗", numa pílula escura (legível em qualquer fundo)
   const footSize = 40;
+  if (texts.footer) {
   const parts = texts.footer.split(' · ');
   const widths = parts.map(p => textPath(p, { x: 0, y: 0, size: footSize, weight: 700, fill: '#FFF' }).width);
   const dotGap = parts.length > 1 ? 44 : 0;
-  const arrow = 34;
+  const arrow = texts.hasCta ? 34 : 0;
   const pillW = widths.reduce((a, b) => a + b, 0) + dotGap + arrow + 64;
   const pillX = (W - pillW) / 2;
   const pillY = c.y + c.h + 44;
@@ -121,10 +126,13 @@ export async function renderStoryTemplate(input: StoryTemplateInput): Promise<Bu
       fx += dotGap;
     }
   });
-  const ax = fx + 22;
-  const ay = fy - 14;
-  const s = 11;
-  svg.push(`<path d="M${ax - s} ${ay + s} L${ax + s} ${ay - s} M${ax - s * 0.3} ${ay - s} L${ax + s} ${ay - s} L${ax + s} ${ay + s * 0.3}" stroke="#FFFFFF" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+  if (texts.hasCta) {
+    const ax = fx + 22;
+    const ay = fy - 14;
+    const s = 11;
+    svg.push(`<path d="M${ax - s} ${ay + s} L${ax + s} ${ay - s} M${ax - s * 0.3} ${ay - s} L${ax + s} ${ay - s} L${ax + s} ${ay + s * 0.3}" stroke="#FFFFFF" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+  }
+  }
 
   const overlay = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${svg.join('')}</svg>`);
 

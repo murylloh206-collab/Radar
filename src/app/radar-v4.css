@@ -1225,3 +1225,6 @@ dialog.rp-dialog[open] { animation: rv7-modal 0.45s var(--rv-spring) both; }
 .rgs-pair img { border-radius: 16px; background: #fff; padding: 8px; box-shadow: 0 0 0 4px rgba(245, 197, 66, 0.35); animation: rva-pop 0.4s var(--rv-spring) both; }
 .rgs-pair p { margin: 0; font-size: 13.5px; color: #d8d3c7; line-height: 1.5; }
 .rgs-qr-wait { width: 220px; height: 220px; display: grid; place-items: center; border-radius: 16px; border: 1px dashed rgba(245, 197, 66, 0.4); color: #f5c542; }
+
+/* ================= v19 — envio em segundo plano ================= */
+.rgs-sending { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px !important; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(245, 197, 66, 0.4); background: rgba(245, 197, 66, 0.08); color: #f8e3aa !important; font-size: 12.5px !important; }

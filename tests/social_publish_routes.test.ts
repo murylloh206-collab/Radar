@@ -56,6 +56,20 @@ async function request(route: 'publish' | 'offers', userId: string | null, body?
   return POST(new NextRequest(url, { method: 'POST', headers, body: JSON.stringify(body) }));
 }
 
+/** A publicação roda em segundo plano: acompanha pelo GET até sair de 'pendente'. */
+async function waitPost(userId: string, postId: string) {
+  const auth = await import('../src/lib/server/auth');
+  const { GET } = await import('../src/app/api/social/publish/route');
+  const cookie = `${auth.SESSION_COOKIE_NAME}=${auth.signSession({ userId, email: `${userId}@t.com`, role: 'user' })}`;
+  for (let i = 0; i < 200; i++) {
+    const res = await GET(new NextRequest(`https://painel.test/api/social/publish?postId=${postId}`, { headers: { cookie } }));
+    const data = await res.json();
+    if (data.post && data.post.status !== 'pendente') return data.post;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error('a publicação não terminou');
+}
+
 test('sem login → 401', async () => {
   await seed();
   assert.equal((await request('offers', null)).status, 401);
@@ -89,9 +103,11 @@ test('status do WhatsApp usa a conexão do próprio cliente e registra o número
   await seed();
   const res = await request('publish', 'userA', { jobId: 'jobA', channel: 'whatsapp_status' });
   const data = await res.json();
-  assert.equal(res.status, 200, JSON.stringify(data));
-  assert.equal(data.post.status, 'publicado');
-  assert.equal(data.offer.offerNumber, 1);
+  assert.equal(res.status, 202, JSON.stringify(data));
+  assert.equal(data.queued, true);
+  assert.equal(data.offerNumber, 1);
+  const post = await waitPost('userA', data.postId);
+  assert.equal(post.status, 'publicado');
   const call = calls.find(c => c.url.includes('/message/sendStatus/'))!;
   assert.equal(call.url, 'https://gw.test/message/sendStatus/inst_a');
   assert.equal(call.body.type, 'image');
@@ -103,15 +119,20 @@ test('falha do Instagram fica registrada e não consome cota', async () => {
   await seed();
   const res = await request('publish', 'userA', { jobId: 'jobA', channel: 'instagram_feed' });
   const data = await res.json();
-  assert.equal(res.status, 502);
-  assert.equal(data.post.status, 'falha');
+  assert.equal(res.status, 202);
+  const post = await waitPost('userA', data.postId);
+  assert.equal(post.status, 'falha');
   const offers = await (await request('offers', 'userA')).json();
   assert.equal(offers.quota.usedToday, 0);
 });
 
 test('6ª publicação do dia no Plus → 429', async () => {
   await seed();
-  for (let i = 0; i < 5; i++) assert.equal((await request('publish', 'userA', { jobId: 'jobA', channel: 'whatsapp_status' })).status, 200);
+  for (let i = 0; i < 5; i++) {
+    const res = await request('publish', 'userA', { jobId: 'jobA', channel: 'whatsapp_status' });
+    assert.equal(res.status, 202);
+    await waitPost('userA', (await res.json()).postId);
+  }
   const res = await request('publish', 'userA', { jobId: 'jobA', channel: 'whatsapp_status' });
   assert.equal(res.status, 429);
   assert.match((await res.json()).error, /Limite diário/);

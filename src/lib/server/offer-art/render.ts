@@ -233,7 +233,9 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
     svg.push(label.svg);
     svg.push(textPath(`#${input.offerNumber}`, { x: pad + label.width + 4, y: footerY, size: footSize, weight: 800, fill: t.text }).svg);
   }
-  const cta = input.footerCta || 'link na bio';
+  // footerCta vazio = sem chamada (WhatsApp leva o link clicável na legenda).
+  const cta = input.footerCta === undefined ? 'link na bio' : input.footerCta;
+  if (cta) {
   const ctaText = textPath(cta, { x: W - pad - footSize * 1.15, y: footerY, size: footSize, weight: 700, fill: t.accentText, anchor: 'end' });
   svg.push(ctaText.svg);
   // seta ↗ desenhada (a fonte embutida não tem o símbolo)
@@ -241,6 +243,7 @@ export async function renderOfferArt(input: OfferArtInput): Promise<Buffer> {
   const ay = footerY - footSize * 0.36;
   const s = footSize * 0.34;
   svg.push(`<path d="M${ax - s} ${ay + s} L${ax + s} ${ay - s} M${ax - s * 0.3} ${ay - s} L${ax + s} ${ay - s} L${ax + s} ${ay + s * 0.3}" stroke="${t.accentText}" stroke-width="${footSize * 0.11}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+  }
 
   const background = Buffer.from(`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${svg.join('')}</svg>`);
   return sharp(background).composite(composites).jpeg({ quality: 90, chromaSubsampling: '4:4:4' }).toBuffer();

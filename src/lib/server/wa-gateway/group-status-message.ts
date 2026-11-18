@@ -45,3 +45,30 @@ export function wrapGroupStatus<T>(message: T): T {
     groupStatusMessageV2: { message: inner },
   } as unknown as T;
 }
+
+/** Resultado do envio em um grupo, já com a confirmação (ack) do servidor do WhatsApp. */
+export interface GroupStatusResult {
+  jid: string;
+  name?: string;
+  ok: boolean;
+  messageId?: string;
+  /** confirmado: o servidor aceitou; recusado: devolveu erro; sem_confirmacao: não respondeu a tempo. */
+  ack?: 'confirmado' | 'recusado' | 'sem_confirmacao';
+  error?: string;
+}
+
+/** Resume os grupos num resultado de publicação, dizendo pelo nome quais grupos falharam. */
+export function summarizeGroupStatus(sent: GroupStatusResult[]): { status: 'publicado' | 'falha' | 'incerto'; externalId?: string; error?: string } {
+  const label = (r: GroupStatusResult) => r.name || r.jid.split('@')[0];
+  const confirmed = sent.filter(r => r.ok && r.ack === 'confirmado');
+  const pending = sent.filter(r => r.ok && r.ack !== 'confirmado');
+  const failed = sent.filter(r => !r.ok);
+  const notes: string[] = [];
+  if (failed.length) notes.push(`Falhou em ${failed.map(r => `${label(r)} (${r.error || 'erro'})`).join(', ')}`);
+  if (pending.length) notes.push(`Sem confirmação do WhatsApp em ${pending.map(label).join(', ')}`);
+  const externalId = sent.filter(r => r.messageId).map(r => r.messageId).join(',') || undefined;
+  const error = notes.length ? notes.join('. ').slice(0, 900) : undefined;
+  if (confirmed.length) return { status: 'publicado', externalId, error };
+  if (pending.length) return { status: 'incerto', externalId, error };
+  return { status: 'falha', externalId, error: error || 'O WhatsApp recusou o status de grupo.' };
+}

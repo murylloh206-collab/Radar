@@ -3,7 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { clearAuthState, loadAuthState } from './auth-store';
 import { MAX_STATUS_GROUPS } from './copier-groups';
-import { GROUP_STATUS_META_NODE, isGroupJid, markAsGroupStatus, wrapGroupStatus } from './group-status-message';
+import { GROUP_STATUS_META_NODE, isGroupJid, markAsGroupStatus, wrapGroupStatus, type GroupStatusResult } from './group-status-message';
+export type { GroupStatusResult } from './group-status-message';
 
 /*
  * Conector próprio do WhatsApp, sob demanda: abre a conexão, faz o trabalho e fecha.
@@ -138,12 +139,11 @@ export async function disconnectGateway(userId: string): Promise<void> {
   await setSession(userId, { status: 'desconectado', phone: null, last_error: null });
 }
 
-export interface GroupStatusResult { jid: string; ok: boolean; messageId?: string; error?: string }
 
 /** Publica a imagem como status em cada grupo escolhido. Um grupo por vez, com intervalo curto entre eles. */
 export async function publishGroupStatus(
   userId: string,
-  input: { image: Buffer; caption: string; groupJids: string[] },
+  input: { image: Buffer; caption: string; groupJids: string[]; groupNames?: Record<string, string> },
 ): Promise<GroupStatusResult[]> {
   const groups = [...new Set(input.groupJids)].filter(isGroupJid);
   if (!groups.length) throw new GatewayError('Nenhum grupo de destino ativo no Copiador.');
@@ -152,6 +152,13 @@ export async function publishGroupStatus(
   const baileys = await import('baileys');
   const sock = await openSocket(userId, { timeoutMs: 45_000, allowPairing: false });
   const results: GroupStatusResult[] = [];
+  // Confirmação do servidor por mensagem (ack). Sem ela não dá para saber se o grupo recebeu.
+  const acks = new Map<string, string | null>();
+  const onAck = (node: { attrs?: Record<string, string> }) => {
+    const id = node?.attrs?.id;
+    if (id) acks.set(id, node.attrs?.error || null);
+  };
+  sock.ws.on('CB:ack,class:message', onAck as never);
   try {
     const content = await baileys.generateWAMessageContent(
       { image: input.image, caption: input.caption },
@@ -166,13 +173,26 @@ export async function publishGroupStatus(
           messageId,
           additionalNodes: [GROUP_STATUS_META_NODE],
         });
-        results.push({ jid, ok: true, messageId });
+        results.push({ jid, name: input.groupNames?.[jid], ok: true, messageId });
       } catch (error) {
-        results.push({ jid, ok: false, error: error instanceof Error ? error.message.slice(0, 200) : 'Falha no envio.' });
+        results.push({ jid, name: input.groupNames?.[jid], ok: false, error: error instanceof Error ? error.message.slice(0, 200) : 'Falha no envio.' });
       }
+    }
+    // Espera a confirmação de todos (até 20 s) antes de fechar a conexão.
+    const waitUntil = Date.now() + 20_000;
+    while (Date.now() < waitUntil && results.some(r => r.ok && r.messageId && !acks.has(r.messageId))) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    for (const r of results) {
+      if (!r.ok || !r.messageId) continue;
+      if (!acks.has(r.messageId)) { r.ack = 'sem_confirmacao'; continue; }
+      const code = acks.get(r.messageId);
+      if (code) { r.ok = false; r.ack = 'recusado'; r.error = `o WhatsApp recusou (erro ${code})`; }
+      else r.ack = 'confirmado';
     }
     await setSession(userId, { status: 'conectado', last_used_at: new Date().toISOString(), last_error: null });
   } finally {
+    sock.ws.off('CB:ack,class:message', onAck as never);
     await new Promise(resolve => setTimeout(resolve, 1200));
     closeSocket(sock);
   }

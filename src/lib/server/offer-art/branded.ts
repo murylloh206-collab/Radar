@@ -55,6 +55,7 @@ export async function renderBrandedOfferArt(userId: string, request: BrandedArtR
           discountPct: request.discountPct ?? null,
           coupon: couponForFormat(request.format, request.coupon) || null,
           offerNumber: request.offerNumber ?? null,
+          footerCta: request.footerCta,
         });
       }
     }

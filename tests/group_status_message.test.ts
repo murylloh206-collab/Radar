@@ -41,3 +41,28 @@ test('nó meta do envio e validação de JID de grupo', () => {
   assert.ok(!isGroupJid('5511999999999@s.whatsapp.net'));
   assert.ok(!isGroupJid('status@broadcast'));
 });
+
+import { summarizeGroupStatus } from '../src/lib/server/wa-gateway/group-status-message';
+import { storyTemplateTexts } from '../src/lib/server/offer-art/story-template';
+
+test('resumo: diz pelo nome os grupos sem confirmação ou recusados', () => {
+  const r = summarizeGroupStatus([
+    { jid: '1@g.us', name: 'Radar de Ofertas #14', ok: true, messageId: 'a', ack: 'confirmado' },
+    { jid: '2@g.us', name: 'Radar de Ofertas #16', ok: false, messageId: 'b', ack: 'recusado', error: 'o WhatsApp recusou (erro 479)' },
+    { jid: '3@g.us', name: 'Radar de Ofertas #17', ok: true, messageId: 'c', ack: 'sem_confirmacao' },
+  ]);
+  assert.equal(r.status, 'publicado');
+  assert.match(r.error || '', /#16 \(o WhatsApp recusou \(erro 479\)\)/);
+  assert.match(r.error || '', /Sem confirmação do WhatsApp em Radar de Ofertas #17/);
+  assert.equal(summarizeGroupStatus([{ jid: '3@g.us', ok: true, messageId: 'c', ack: 'sem_confirmacao' }]).status, 'incerto');
+  assert.equal(summarizeGroupStatus([{ jid: '3@g.us', ok: false, error: 'x' }]).status, 'falha');
+  assert.equal(summarizeGroupStatus([{ jid: '1@g.us', ok: true, messageId: 'a', ack: 'confirmado' }]).error, undefined);
+});
+
+test('arte do WhatsApp sai sem "link na bio"; Instagram continua com', () => {
+  assert.equal(storyTemplateTexts({ title: 't', current: 10, offerNumber: 12 }).footer, 'Oferta #12 · link na bio');
+  const wa = storyTemplateTexts({ title: 't', current: 10, offerNumber: 12, footerCta: '' });
+  assert.equal(wa.footer, 'Oferta #12');
+  assert.equal(wa.hasCta, false);
+  assert.equal(storyTemplateTexts({ title: 't', current: 10, footerCta: '' }).footer, null);
+});

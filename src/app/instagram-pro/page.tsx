@@ -26,11 +26,10 @@ interface Identity { panelName: string; watermarkHandle: string; panelLogoUrl: s
 
 const CHANNELS: Array<{ id: Channel; label: string; short: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'instagram_story', label: 'Story do Instagram', short: 'Story', icon: Camera },
-  { id: 'instagram_feed', label: 'Feed do Instagram', short: 'Feed', icon: ImageIcon },
-  { id: 'whatsapp_status', label: 'Status do WhatsApp (contatos)', short: 'Status', icon: MessageCircle },
-  { id: 'whatsapp_group_status', label: 'Status nos grupos', short: 'Grupos', icon: Users },
+  { id: 'instagram_feed', label: 'Post no Instagram', short: 'Post', icon: ImageIcon },
+  { id: 'whatsapp_group_status', label: 'Status nos grupos do WhatsApp', short: 'Status', icon: MessageCircle },
 ];
-/** O automático ainda não publica status de grupo (precisa da escolha dos grupos). */
+/** O automático publica só no Instagram (o status nos grupos é sempre manual). */
 const AUTOPOST_CHANNELS = CHANNELS.filter(c => c.id !== 'whatsapp_group_status');
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -55,6 +54,7 @@ export default function InstagramProPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [groupState, setGroupState] = useState({ ready: false, count: 0 });
+  const [sending, setSending] = useState<{ postId: string; label: string; offerNumber: number }[]>([]);
   const onGroupReady = useCallback((ready: boolean, count: number) => setGroupState({ ready, count }), []);
   const previewRequest = useRef(0);
 
@@ -95,7 +95,7 @@ export default function InstagramProPage() {
     setPreview(null);
     try {
       const res = await fetch('/api/social/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: offer.jobId, format: channel === 'instagram_feed' ? 'feed' : 'story' }) });
+        body: JSON.stringify({ jobId: offer.jobId, format: channel === 'instagram_feed' ? 'feed' : 'story', channel }) });
       const data = await res.json();
       if (ticket !== previewRequest.current) return; // outra prévia foi aberta depois desta
       if (!res.ok) throw new Error(data.error);
@@ -107,6 +107,27 @@ export default function InstagramProPage() {
     }
   };
 
+  /** Acompanha o envio em segundo plano e avisa quando terminar (até 5 min). */
+  const followPost = useCallback(async (postId: string, label: string, offerNumber: number) => {
+    const started = Date.now();
+    while (Date.now() - started < 300_000) {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      try {
+        const res = await fetch(`/api/social/publish?postId=${encodeURIComponent(postId)}`, { cache: 'no-store' });
+        const data = await res.json();
+        const post = data?.post;
+        if (!res.ok || !post || post.status === 'pendente') continue;
+        setSending(current => current.filter(item => item.postId !== postId));
+        if (post.status === 'publicado') setToast({ type: post.error ? 'erro' : 'ok', text: `Oferta #${offerNumber} publicada no ${label}.${post.error ? ` Atenção: ${post.error}` : ''}` });
+        else if (post.status === 'incerto') setToast({ type: 'erro', text: `Oferta #${offerNumber}: enviado para ${label}, mas sem confirmação. ${post.error || 'Confira no aplicativo antes de repetir.'}` });
+        else setToast({ type: 'erro', text: `Oferta #${offerNumber} não foi publicada no ${label}: ${post.error || 'erro desconhecido'}` });
+        void load();
+        return;
+      } catch { /* rede instável: tenta de novo */ }
+    }
+    setSending(current => current.filter(item => item.postId !== postId));
+  }, [load]);
+
   const publish = async () => {
     if (!dialog) return;
     setBusy(true);
@@ -115,14 +136,11 @@ export default function InstagramProPage() {
         body: JSON.stringify({ jobId: dialog.offer.jobId, channel: dialog.channel }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Não foi possível publicar.');
-      const label = CHANNELS.find(c => c.id === dialog.channel)?.label;
-      setToast({ type: 'ok', text: data.post?.status === 'incerto'
-        ? `Enviado para ${label}, mas sem confirmação. Confira no aplicativo antes de repetir.`
-        : dialog.channel === 'whatsapp_group_status'
-          ? `Oferta #${data.offer.offerNumber} publicada como status em ${groupState.count} ${groupState.count === 1 ? 'grupo' : 'grupos'}!${data.post?.error ? ` Atenção: ${data.post.error}` : ''}`
-          : `Oferta #${data.offer.offerNumber} publicada no ${label}!` });
+      const label = CHANNELS.find(c => c.id === dialog.channel)?.label || 'canal';
+      setSending(current => [...current, { postId: data.postId, label, offerNumber: data.offerNumber }]);
+      setToast({ type: 'ok', text: `Oferta #${data.offerNumber} enviada! Publicando no ${label} em segundo plano${data.groups ? ` (${data.groups} grupos)` : ''}. Pode continuar usando o painel.` });
       setDialog(null);
-      await load();
+      void followPost(data.postId, label, data.offerNumber);
     } catch (e) {
       setToast({ type: 'erro', text: e instanceof Error ? e.message : 'Não foi possível publicar.' });
     } finally {
@@ -159,7 +177,10 @@ export default function InstagramProPage() {
       <header className="rv6-head">
         <div>
           <h1>Instagram Pro</h1>
-          <p>Escolha uma oferta que o Copiador já enviou e publique no story, no feed ou no status do WhatsApp. Cada post sai numerado (ex.: “Oferta #128 · link na bio”) e a oferta aparece na sua página da bio com o link certo.</p>
+          <p>Escolha uma oferta que o Copiador já enviou e publique no story ou no post do Instagram, ou como status dentro dos seus grupos do WhatsApp. No Instagram cada post sai numerado (“Oferta #128 · link na bio”); no WhatsApp o link vai direto na legenda.</p>
+          {sending.length > 0 && (
+            <p className="rgs-sending" role="status"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Publicando em segundo plano: {sending.map(item => `#${item.offerNumber} (${item.label})`).join(', ')}</p>
+          )}
         </div>
         <div className="rv6-head-actions">
           {quota && !locked && <span className={`rp-tag ${quota.allowed ? 'rp-good' : 'rp-warn'}`}>{quotaLabel}</span>}
@@ -221,8 +242,7 @@ export default function InstagramProPage() {
 
 
           <div className="rp-panel" style={{ fontSize: 12, opacity: 0.85 }}>
-            <strong>Importante:</strong> o Instagram não permite publicar link clicável em stories por automação — por isso os posts indicam “link na bio” com o número da oferta.
-            O status do WhatsApp aparece para os seus <em>contatos</em> (não para os grupos) e leva o link direto. A conexão de WhatsApp não é oficial: postar com frequência aumenta o risco de restrição do número, e nenhum controle elimina esse risco.
+            <strong>Importante:</strong> o Instagram não permite publicar link clicável em stories por automação — por isso os posts do Instagram indicam “link na bio” com o número da oferta. No status dos grupos do WhatsApp o link vai clicável na legenda. A conexão de WhatsApp não é oficial: postar com frequência aumenta o risco de restrição do número, e nenhum controle elimina esse risco.
           </div>
         </>
       )}
@@ -232,11 +252,9 @@ export default function InstagramProPage() {
       {dialog && (() => {
         const channel = CHANNELS.find(c => c.id === dialog.channel)!;
         const isGroup = dialog.channel === 'whatsapp_group_status';
-        const note = dialog.channel === 'whatsapp_status'
-          ? 'Aparece no status para os seus contatos, com o link direto da oferta.'
-          : isGroup
-            ? 'Aparece como status dentro dos grupos do Copiador, com o link direto da oferta.'
-            : 'Sai com “Oferta #N · link na bio”. O número é definido na hora de publicar.';
+        const note = isGroup
+          ? 'Aparece como status dentro dos grupos do Copiador, para todos os participantes, com o link da oferta clicável na legenda.'
+          : 'Sai com “Oferta #N · link na bio”. O número é definido na hora de publicar.';
         const { offer } = dialog;
         // Portal no <body>: os contêineres animados da página prendem position:fixed e cortavam o modal.
         return createPortal(
@@ -267,7 +285,7 @@ export default function InstagramProPage() {
                   <button type="button" className="rp-btn rp-primary rpm-publish"
                     disabled={!preview || busy || (isGroup && !groupState.ready)} onClick={publish}>
                     {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    {busy ? 'Publicando…' : isGroup && groupState.count ? `Publicar em ${groupState.count} ${groupState.count === 1 ? 'grupo' : 'grupos'}` : 'Publicar agora'}
+                    {busy ? 'Enviando…' : isGroup && groupState.count ? `Publicar em ${groupState.count} ${groupState.count === 1 ? 'grupo' : 'grupos'}` : 'Publicar agora'}
                   </button>
                 </div>
               </div>

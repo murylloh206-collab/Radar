@@ -396,7 +396,20 @@ async function sendWhatsAppStatus(userId: string, connectionId: string | undefin
 }
 
 /** Gera a arte com a marca do cliente e publica no canal escolhido. Nunca usa dados de outro cliente. */
-export async function publishSocialPost(userId: string, request: { jobId: string; channel: SocialChannel; connectionId?: string; groupJids?: string[]; origin?: 'manual' | 'automatico' }) {
+export type PublishRequest = { jobId: string; channel: SocialChannel; connectionId?: string; groupJids?: string[]; groupNames?: Record<string, string>; origin?: 'manual' | 'automatico' };
+
+/** WhatsApp leva o link clicável na legenda: a arte não fala em "link na bio". */
+export const footerCtaFor = (channel: SocialChannel): string | undefined =>
+  channel === 'whatsapp_status' || channel === 'whatsapp_group_status' ? '' : undefined;
+
+/** Gera a arte e publica (story, feed, status). Pode demorar: as rotas chamam isto em segundo plano. */
+export async function publishSocialPost(userId: string, request: PublishRequest) {
+  const prepared = await prepareSocialPost(userId, request);
+  return executeSocialPost(userId, prepared, request);
+}
+
+/** Parte rápida: valida, numera a oferta e reserva a vaga na cota (registro 'pendente'). */
+export async function prepareSocialPost(userId: string, request: PublishRequest): Promise<{ offer: SocialOffer; postId: string }> {
   if (!PUBLISH_CHANNELS.includes(request.channel)) {
     throw new SocialPublishError('Canal de publicação inválido.', 400);
   }
@@ -416,7 +429,12 @@ export async function publishSocialPost(userId: string, request: { jobId: string
     const latest = await getSocialQuota(userId);
     throw new SocialPublishError(latest.reason || 'Limite diário do seu plano atingido.', latest.limit === 0 ? 403 : 429);
   }
+  return { offer, postId };
+}
 
+/** Parte lenta: arte, envio e registro do resultado. Nunca lança: o resultado fica no registro do post. */
+export async function executeSocialPost(userId: string, prepared: { offer: SocialOffer; postId: string }, request: PublishRequest) {
+  const { offer, postId } = prepared;
   let artUrl: string | null = null;
   let result: { status: Exclude<SocialPostStatus, 'pendente'>; connectionId?: string; externalId?: string; error?: string };
   try {
@@ -424,8 +442,9 @@ export async function publishSocialPost(userId: string, request: { jobId: string
     const { getBrandSettings } = await import('./brand-settings');
     const art = await renderBrandedOfferArt(userId, {
       format: request.channel === 'instagram_feed' ? 'feed' : 'story',
-      title: offer.title, imagePathOrUrl: offer.imageUrl, priceCurrent: offer.priceCurrent, priceOriginal: offer.priceOriginal,
+      title: offer.title, imagePathOrUrl: offer.imageUrl as string /* garantido em prepareSocialPost */, priceCurrent: offer.priceCurrent, priceOriginal: offer.priceOriginal,
       discountPct: offer.discountPct, coupon: offer.coupon || undefined, offerNumber: offer.offerNumber,
+      footerCta: footerCtaFor(request.channel),
     });
     artUrl = await uploadArt(userId, art);
     const brand = await getBrandSettings(userId);
@@ -433,12 +452,9 @@ export async function publishSocialPost(userId: string, request: { jobId: string
     if (request.channel === 'whatsapp_group_status') {
       try {
         const { publishGroupStatus } = await import('./wa-gateway/group-status');
-        const sent = await publishGroupStatus(userId, { image: art, caption, groupJids: request.groupJids || [] });
-        const okCount = sent.filter(r => r.ok).length;
-        const failures = sent.filter(r => !r.ok);
-        result = okCount === 0
-          ? { status: 'falha', error: failures[0]?.error || 'O WhatsApp recusou o status de grupo.' }
-          : { status: 'publicado', externalId: sent.filter(r => r.ok).map(r => r.messageId).join(','), error: failures.length ? `${failures.length} de ${sent.length} grupos falharam: ${failures[0].error}` : undefined };
+        const sent = await publishGroupStatus(userId, { image: art, caption, groupJids: request.groupJids || [], groupNames: request.groupNames });
+        const { summarizeGroupStatus } = await import('./wa-gateway/group-status-message');
+        result = summarizeGroupStatus(sent);
       } catch (error) { result = { status: 'falha', error: error instanceof Error ? error.message : 'Falha ao publicar o status de grupo.' }; }
     } else if (request.channel === 'whatsapp_status') {
       try { result = await sendWhatsAppStatus(userId, request.connectionId, artUrl, caption); }
@@ -461,7 +477,7 @@ export async function publishSocialPost(userId: string, request: { jobId: string
 }
 
 // ---------------------------------------------------------------- prévia e configurações do automático
-export async function previewSocialArt(userId: string, request: { jobId: string; format: 'story' | 'feed' }): Promise<Buffer> {
+export async function previewSocialArt(userId: string, request: { jobId: string; format: 'story' | 'feed'; channel?: SocialChannel }): Promise<Buffer> {
   const job = await findOwnJob(userId, request.jobId);
   const candidate = job && job.status === 'enviado' ? toCandidate(job) : null;
   if (!candidate) throw new SocialPublishError('Oferta não encontrada entre as enviadas por esta conta.', 404);
@@ -474,7 +490,18 @@ export async function previewSocialArt(userId: string, request: { jobId: string;
     format: request.format, title: candidate.title, imagePathOrUrl: candidate.imageUrl, priceCurrent: candidate.priceCurrent,
     priceOriginal: candidate.priceOriginal, discountPct: candidate.discountPct, coupon: candidate.coupon || undefined,
     offerNumber: existing || undefined,
+    footerCta: request.channel ? footerCtaFor(request.channel) : undefined,
   });
+}
+
+/** Andamento de uma publicação do próprio cliente (para a tela acompanhar o envio em segundo plano). */
+export async function getSocialPost(userId: string, postId: string): Promise<Pick<SocialPostRecord, 'id' | 'channel' | 'status' | 'error' | 'externalId'> | null> {
+  if (useDb()) {
+    const { data } = await supabase!.from('social_posts').select('id, channel, status, error, external_id').eq('id', postId).eq('user_id', userId).maybeSingle();
+    return data ? { id: data.id, channel: data.channel, status: data.status, error: data.error, externalId: data.external_id } : null;
+  }
+  const post = readLocalSocial().posts.find(p => p.id === postId && p.userId === userId);
+  return post ? { id: post.id, channel: post.channel, status: post.status, error: post.error, externalId: post.externalId } : null;
 }
 
 export interface AutopostSettings {
