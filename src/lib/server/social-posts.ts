@@ -367,7 +367,8 @@ export function buildSocialCaption(offer: SocialOffer, channel: SocialChannel, h
   lines.push(offer.priceOriginal ? `💰 De R$ ${money(offer.priceOriginal)} por R$ ${money(offer.priceCurrent)}` : `💰 R$ ${money(offer.priceCurrent)}`);
   if (offer.coupon) lines.push(`🎟️ Cupom: ${offer.coupon}`);
   lines.push('');
-  if (channel === 'whatsapp_status' || channel === 'whatsapp_group_status') lines.push(`🛒 Oferta #${offer.offerNumber}: ${offer.affiliateUrl}`);
+  // WhatsApp: legenda curta como na referência aprovada (o resto já está na arte).
+  if (channel === 'whatsapp_status' || channel === 'whatsapp_group_status') return `Link do Produto ➡️ ${offer.affiliateUrl}`;
   else lines.push(`🔗 Oferta #${offer.offerNumber} — link na bio${handle ? ` (${handle})` : ''}`);
   return lines.join('\n');
 }
@@ -399,8 +400,17 @@ async function sendWhatsAppStatus(userId: string, connectionId: string | undefin
 export type PublishRequest = { jobId: string; channel: SocialChannel; connectionId?: string; groupJids?: string[]; groupNames?: Record<string, string>; origin?: 'manual' | 'automatico' };
 
 /** WhatsApp leva o link clicável na legenda: a arte não fala em "link na bio". */
-export const footerCtaFor = (channel: SocialChannel): string | undefined =>
-  channel === 'whatsapp_status' || channel === 'whatsapp_group_status' ? '' : undefined;
+export const isWhatsAppChannel = (channel: SocialChannel) => channel === 'whatsapp_status' || channel === 'whatsapp_group_status';
+export const footerCtaFor = (channel: SocialChannel): string | undefined => (isWhatsAppChannel(channel) ? '' : undefined);
+
+/** Forma de pagamento ("no Pix", "em até 4x") lida da mensagem original da oferta; nunca inventada. */
+async function paymentNoteForJob(userId: string, jobId: string): Promise<string | null> {
+  try {
+    const job = await findOwnJob(userId, jobId);
+    const { paymentNoteFromText } = await import('./offer-art/promo-texts');
+    return paymentNoteFromText((job as { messageText?: string } | null)?.messageText);
+  } catch { return null; }
+}
 
 /** Gera a arte e publica (story, feed, status). Pode demorar: as rotas chamam isto em segundo plano. */
 export async function publishSocialPost(userId: string, request: PublishRequest) {
@@ -445,6 +455,8 @@ export async function executeSocialPost(userId: string, prepared: { offer: Socia
       title: offer.title, imagePathOrUrl: offer.imageUrl as string /* garantido em prepareSocialPost */, priceCurrent: offer.priceCurrent, priceOriginal: offer.priceOriginal,
       discountPct: offer.discountPct, coupon: offer.coupon || undefined, offerNumber: offer.offerNumber,
       footerCta: footerCtaFor(request.channel),
+      channel: isWhatsAppChannel(request.channel) ? 'whatsapp' : 'instagram',
+      paymentNote: await paymentNoteForJob(userId, request.jobId),
     });
     artUrl = await uploadArt(userId, art);
     const brand = await getBrandSettings(userId);
@@ -491,6 +503,8 @@ export async function previewSocialArt(userId: string, request: { jobId: string;
     priceOriginal: candidate.priceOriginal, discountPct: candidate.discountPct, coupon: candidate.coupon || undefined,
     offerNumber: existing || undefined,
     footerCta: request.channel ? footerCtaFor(request.channel) : undefined,
+    channel: request.channel && isWhatsAppChannel(request.channel) ? 'whatsapp' : 'instagram',
+    paymentNote: (await import('./offer-art/promo-texts')).paymentNoteFromText((job as { messageText?: string } | null)?.messageText),
   });
 }
 

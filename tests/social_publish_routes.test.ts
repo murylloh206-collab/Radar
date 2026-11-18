@@ -111,7 +111,7 @@ test('status do WhatsApp usa a conexão do próprio cliente e registra o número
   const call = calls.find(c => c.url.includes('/message/sendStatus/'))!;
   assert.equal(call.url, 'https://gw.test/message/sendStatus/inst_a');
   assert.equal(call.body.type, 'image');
-  assert.match(call.body.caption, /Oferta #1/);
+  assert.match(call.body.caption, /^Link do Produto ➡️ /);
   assert.match(call.body.caption, /s\.shopee\.com\.br\/jobA/);
 });
 

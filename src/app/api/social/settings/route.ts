@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 async function identityOf(userId: string) {
   const brand = await getBrandSettings(userId);
-  return { panelName: brand.panelName, watermarkHandle: brand.watermarkHandle, panelLogoUrl: brand.panelLogoUrl, accentColor: brand.accentColor, artBackground: brand.artBackground };
+  return { panelName: brand.panelName, watermarkHandle: brand.watermarkHandle, panelLogoUrl: brand.panelLogoUrl, accentColor: brand.accentColor, artBackground: brand.artBackground, campaignText: brand.campaignText || '' };
 }
 
 export async function GET(req: NextRequest) {
@@ -40,6 +40,7 @@ export async function PUT(req: NextRequest) {
         panelLogoUrl: logo === undefined ? undefined : /^https:\/\//i.test(logo) ? logo.slice(0, 500) : null,
         accentColor: typeof id.accentColor === 'string' ? id.accentColor : undefined,
         artBackground: id.artBackground === 'light' ? 'light' : id.artBackground === 'dark' ? 'dark' : undefined,
+        campaignText: typeof id.campaignText === 'string' ? id.campaignText : undefined,
       });
     }
     return NextResponse.json({ ok: true, settings, identity: await identityOf(session.userId) });

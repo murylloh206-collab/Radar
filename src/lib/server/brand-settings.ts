@@ -20,6 +20,8 @@ export interface BrandSettingsRecord {
   panelLogoUrl: string | null;
   accentColor: string;
   artBackground: 'dark' | 'light';
+  /** Texto repetido em diagonal no fundo das artes (ex.: "Mês da Black Friday"); vazio = fundo liso. */
+  campaignText: string;
   watermarkEnabled: boolean;
   watermarkHandle: string;
   watermarkLogoUrl: string | null;
@@ -43,6 +45,7 @@ export function getDefaultBrandSettings(userId: string = ADMIN_UUID): BrandSetti
     panelLogoUrl: null,
     accentColor: '#6366f1',
     artBackground: 'dark',
+    campaignText: '',
     watermarkEnabled: true,
     watermarkHandle: DEFAULT_PLATFORM_WATERMARK.handle,
     watermarkLogoUrl: null,
@@ -106,6 +109,7 @@ export async function getBrandSettings(userIdInput?: string): Promise<BrandSetti
           panelLogoUrl: data.panel_logo_url || null,
           accentColor: data.accent_color || '#6366f1',
           artBackground: data.art_background === 'light' ? 'light' : 'dark',
+          campaignText: typeof data.art_campaign_text === 'string' ? data.art_campaign_text : '',
           watermarkEnabled: data.watermark_enabled !== false,
           watermarkHandle: data.watermark_handle || DEFAULT_PLATFORM_WATERMARK.handle,
           watermarkLogoUrl: data.watermark_logo_url || null,
@@ -166,6 +170,10 @@ export async function saveBrandSettings(
       partial.artBackground === 'light' || partial.artBackground === 'dark'
         ? partial.artBackground
         : current.artBackground || 'dark',
+    campaignText:
+      typeof partial.campaignText === 'string'
+        ? partial.campaignText.replace(/\s+/g, ' ').trim().slice(0, 40)
+        : current.campaignText || '',
     watermarkEnabled:
       typeof partial.watermarkEnabled === 'boolean'
         ? partial.watermarkEnabled
@@ -235,6 +243,8 @@ export async function saveBrandSettings(
       );
       // Gravado à parte: se a migração 09 ainda não rodou, só o fundo da arte deixa de ser salvo no banco.
       await supabase.from('brand_settings').update({ art_background: updated.artBackground }).eq('user_id', userId);
+      // Gravado à parte: sem a migração 16, só o texto de campanha deixa de ser salvo no banco.
+      await supabase.from('brand_settings').update({ art_campaign_text: updated.campaignText || null }).eq('user_id', userId);
     } catch {}
   }
 

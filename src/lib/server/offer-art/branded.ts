@@ -6,7 +6,8 @@ import { getBrandSettings } from '../brand-settings';
 import { DEFAULT_PLATFORM_WATERMARK } from '../../plans-config';
 import { ADMIN_UUID } from '../auth';
 import { buildArtTheme } from './theme';
-import { renderOfferArt } from './render';
+import { renderPromoArt } from './promo';
+import { couponForChannel } from './promo-texts';
 import { fetchProductImage } from './fetch-image';
 
 export interface BrandedArtRequest {
@@ -20,6 +21,10 @@ export interface BrandedArtRequest {
   offerNumber?: number;
   /** Texto do rodapé (padrão do Instagram: "link na bio"). */
   footerCta?: string;
+  /** Para onde vai: o cupom só aparece no WhatsApp. Padrão: instagram. */
+  channel?: 'instagram' | 'whatsapp';
+  /** "no Pix", "em até 4x"… lido da mensagem original (nunca inventado). */
+  paymentNote?: string | null;
 }
 
 async function loadImage(source: string): Promise<Buffer> {
@@ -35,47 +40,35 @@ async function loadImage(source: string): Promise<Buffer> {
   return fs.readFileSync(resolved);
 }
 
-/** Gera a arte da oferta com a identidade (nome, logo, cor e fundo) do cliente. */
+/**
+ * Gera a arte da oferta (modelo "promo", referência aprovada em 18/11) com a identidade do cliente:
+ * fundo do template (quando o plano permite e há imagem), cor de destaque no preço, @ no topo e
+ * texto de campanha em diagonal. Cupom só no WhatsApp; "link na bio" só no Instagram.
+ */
 export async function renderBrandedOfferArt(userId: string, request: BrandedArtRequest): Promise<Buffer> {
-  // Ultimate com fundo próprio de story: template (fundo do cliente + cartão branco com a oferta).
-  if (request.format === 'story') {
-    const { checkPlanFeatureAccess } = await import('../plan-guard');
-    const access = await checkPlanFeatureAccess('story_template', userId).catch(() => null);
-    if (access?.allowed) {
-      const { loadStoryBackground } = await import('../brand-assets');
-      const background = await loadStoryBackground(userId);
-      if (background) {
-        const { renderStoryTemplate } = await import('./story-template');
-        return renderStoryTemplate({
-          background,
-          product: await loadImage(request.imagePathOrUrl),
-          title: request.title,
-          current: request.priceCurrent,
-          original: request.priceOriginal ?? null,
-          discountPct: request.discountPct ?? null,
-          coupon: couponForFormat(request.format, request.coupon) || null,
-          offerNumber: request.offerNumber ?? null,
-          footerCta: request.footerCta,
-        });
-      }
-    }
-  }
   const brand = await getBrandSettings(userId);
-  let logo: Buffer | null = null;
-  if (brand.panelLogoUrl) {
-    try { logo = await loadImage(brand.panelLogoUrl); } catch { logo = null; }
+  let background: Buffer | null = null;
+  const { checkPlanFeatureAccess } = await import('../plan-guard');
+  const access = await checkPlanFeatureAccess('story_template', userId).catch(() => null);
+  if (access?.allowed) {
+    const { loadStoryBackground } = await import('../brand-assets');
+    background = await loadStoryBackground(userId).catch(() => null);
   }
   // O @ padrão da plataforma só aparece na conta dona; clientes mostram o próprio @ (ou nenhum).
   const handle = brand.watermarkHandle && (brand.watermarkHandle !== DEFAULT_PLATFORM_WATERMARK.handle || userId === ADMIN_UUID)
     ? brand.watermarkHandle : undefined;
-  return renderOfferArt({
+  const channel = request.channel || 'instagram';
+  return renderPromoArt({
     format: request.format,
     theme: buildArtTheme(brand.accentColor, brand.artBackground || 'dark'),
-    brand: { name: brand.panelName || 'Minha loja', handle, logo },
+    background,
+    handle,
+    campaignText: brand.campaignText || null,
     product: { title: request.title, image: await loadImage(request.imagePathOrUrl) },
-    pricing: { current: request.priceCurrent, original: request.priceOriginal ?? null, discountPct: request.discountPct ?? null },
-    coupon: couponForFormat(request.format, request.coupon),
-    offerNumber: request.offerNumber,
+    pricing: { current: request.priceCurrent, original: request.priceOriginal ?? null },
+    paymentNote: request.paymentNote || null,
+    coupon: couponForChannel(channel, request.coupon),
+    offerNumber: request.offerNumber ?? null,
     footerCta: request.footerCta,
   });
 }

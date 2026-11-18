@@ -66,3 +66,22 @@ test('arte do WhatsApp sai sem "link na bio"; Instagram continua com', () => {
   assert.equal(wa.hasCta, false);
   assert.equal(storyTemplateTexts({ title: 't', current: 10, footerCta: '' }).footer, null);
 });
+
+import { couponForChannel, paymentNoteFromText, paymentWarning } from '../src/lib/server/offer-art/promo-texts';
+
+test('forma de pagamento só quando a mensagem traz (nunca inventada)', () => {
+  assert.equal(paymentNoteFromText('🔥 Fone JBL por R$ 199 no Pix'), 'no Pix');
+  assert.equal(paymentNoteFromText('R$ 110,41 em até 4x'), 'em até 4x');
+  assert.equal(paymentNoteFromText('ou 10x sem juros no cartão'), 'em até 10x sem juros');
+  assert.equal(paymentNoteFromText('Por R$ 59,90 à vista'), 'à vista');
+  assert.equal(paymentNoteFromText('Camiseta por R$ 59,90'), null);
+  assert.equal(paymentNoteFromText(null), null);
+});
+
+test('cupom só no WhatsApp; aviso muda quando há cupom', () => {
+  assert.equal(couponForChannel('instagram', 'BLACK10'), null);
+  assert.equal(couponForChannel('whatsapp', ' BLACK10 '), 'BLACK10');
+  assert.equal(couponForChannel('whatsapp', ''), null);
+  assert.match(paymentWarning(true), /cupom/);
+  assert.doesNotMatch(paymentWarning(false), /cupom/);
+});

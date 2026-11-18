@@ -22,7 +22,7 @@ interface Offer {
 }
 interface Quota { limit: number | null; usedToday: number; allowed: boolean; reason?: string }
 interface Autopost { enabled: boolean; channels: Channel[]; minIntervalMinutes: number; windowStart: string; windowEnd: string; minDiscountPct: number; connectionId: string | null }
-interface Identity { panelName: string; watermarkHandle: string; panelLogoUrl: string | null; accentColor: string; artBackground: 'dark' | 'light' }
+interface Identity { panelName: string; watermarkHandle: string; panelLogoUrl: string | null; accentColor: string; artBackground: 'dark' | 'light'; campaignText?: string }
 
 const CHANNELS: Array<{ id: Channel; label: string; short: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'instagram_story', label: 'Story do Instagram', short: 'Story', icon: Camera },
@@ -344,8 +344,11 @@ function IdentityForm({ identity, busy, onSave }: { identity: Identity; busy: bo
         <label className="rp-field">@ do Instagram
           <input value={form.watermarkHandle} maxLength={40} onChange={e => setForm({ ...form, watermarkHandle: e.target.value })} />
         </label>
-        <label className="rp-field">Cor da marca
+        <label className="rp-field">Cor da marca (cor do preço)
           <input type="color" value={form.accentColor} onChange={e => setForm({ ...form, accentColor: e.target.value })} style={{ height: 44 }} />
+        </label>
+        <label className="rp-field">Texto de campanha no fundo
+          <input value={form.campaignText || ''} maxLength={40} placeholder="Ex.: Mês da Black Friday (vazio = fundo liso)" onChange={e => setForm({ ...form, campaignText: e.target.value })} />
         </label>
       </div>
       <div style={{ marginTop: 12 }}>
