@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStrictSession } from '@/lib/server/auth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { copierConnections } from '@/lib/server/copier-group-catalog';
-import { checkPlanFeatureAccess } from '@/lib/server/plan-guard';
+import { isAssistantOwner } from '@/lib/server/assistant/access';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   const session = getStrictSession(req);
   if (!session) return NextResponse.json({ ok: false, error: 'Entre na sua conta.' }, { status: 401 });
-  const access = await checkPlanFeatureAccess('whatsapp_assistant', session.userId).catch(() => null);
-  if (!access?.allowed) return NextResponse.json({ ok: false, locked: true, error: access?.error || 'Recurso do plano Ultimate.' }, { status: 403 });
+  if (!isAssistantOwner(session.userId)) return NextResponse.json({ ok: false, locked: true, error: 'Página não encontrada.' }, { status: 404 });
   if (!isSupabaseConfigured || !supabase) return NextResponse.json({ ok: false, error: 'Banco de dados não configurado.' }, { status: 503 });
 
   const connections = await copierConnections(session).catch(() => []);
@@ -46,8 +45,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = getStrictSession(req);
   if (!session) return NextResponse.json({ ok: false, error: 'Entre na sua conta.' }, { status: 401 });
-  const access = await checkPlanFeatureAccess('whatsapp_assistant', session.userId).catch(() => null);
-  if (!access?.allowed) return NextResponse.json({ ok: false, error: access?.error || 'Recurso do plano Ultimate.' }, { status: 403 });
+  if (!isAssistantOwner(session.userId)) return NextResponse.json({ ok: false, locked: true, error: 'Página não encontrada.' }, { status: 404 });
   if (!isSupabaseConfigured || !supabase) return NextResponse.json({ ok: false, error: 'Banco de dados não configurado.' }, { status: 503 });
   const body = await req.json().catch(() => null);
   const connectionId = typeof body?.connectionId === 'string' ? body.connectionId : '';

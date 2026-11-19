@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Bot, CheckCircle2, Link2, Loader2, MessageCircle, Power, XCircle } from 'lucide-react';
-import { PlanGateCard } from '@/components/PlanGateCard';
 
 interface Connection { id: string; label: string; phoneNumber: string | null; status: string; enabled: boolean }
 interface Recent { id: string; connectionId: string; status: string; kind: string | null; linksTotal: number; linksOk: number; error: string | null; at: string }
@@ -59,9 +58,7 @@ export default function AssistentePage() {
       </header>
 
       {locked ? (
-        <PlanGateCard feature="whatsapp_assistant" title="Assistente WhatsApp" description="Converte automaticamente os links que as pessoas mandam no seu privado para os seus links de afiliado." >
-          <div />
-        </PlanGateCard>
+        <div className="rp-panel">Página não encontrada.</div>
       ) : !data ? (
         <div className="rp-panel" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {error ? <><XCircle className="w-4 h-4" /> {error}</> : <><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</>}

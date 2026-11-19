@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, inspectRequestSession } from '@/lib/server/auth';
+import { isAssistantOwner } from '@/lib/server/assistant/access';
 
 export async function GET(req: NextRequest) {
   const inspection = inspectRequestSession(req);
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
         userId: inspection.session.userId,
         email: inspection.session.email,
         role: inspection.session.role,
+        isOwner: isAssistantOwner(inspection.session.userId),
       },
     });
   }

@@ -54,10 +54,13 @@ test('só responde no privado (nunca grupo, status ou broadcast)', () => {
   assert.ok(!isPrivateChat(undefined));
 });
 
-import { planHasFeature } from '../src/lib/plans-config';
+import { isAssistantOwner } from '../src/lib/server/assistant/access';
+import { ADMIN_UUID } from '../src/lib/server/auth';
+import { PLANS_CONFIG } from '../src/lib/plans-config';
 
-test('assistente é recurso do Ultimate', () => {
-  assert.equal(planHasFeature('ultimate', 'whatsapp_assistant'), true);
-  assert.equal(planHasFeature('plus', 'whatsapp_assistant'), false);
-  assert.equal(planHasFeature('impulse', 'whatsapp_assistant'), false);
+test('assistente é exclusivo da conta dona e não aparece em nenhum plano', () => {
+  assert.equal(isAssistantOwner(ADMIN_UUID), true);
+  assert.equal(isAssistantOwner('11111111-2222-3333-4444-555555555555'), false);
+  assert.equal(isAssistantOwner(null), false);
+  assert.doesNotMatch(JSON.stringify(PLANS_CONFIG), /assistant|Assistente/i);
 });

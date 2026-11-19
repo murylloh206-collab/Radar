@@ -81,6 +81,7 @@ export function AppShell({ children }: AppShellProps) {
   // Informações de autenticação e conexão reais
   const [userName, setUserName] = useState<string>('Minha Conta');
   const [userEmail, setUserEmail] = useState<string>('');
+  const [isOwner, setIsOwner] = useState(false);
   const [waConnected, setWaConnected] = useState<boolean>(false);
   const [waStatusLabel, setWaStatusLabel] = useState('Consultando WhatsApp…');
   const [waPhone, setWaPhone] = useState<string>('');
@@ -100,6 +101,7 @@ export function AppShell({ children }: AppShellProps) {
       .then((r) => r.json())
       .then((data) => {
         if (data.ok && data.user) {
+          setIsOwner(data.user.isOwner === true);
           if (data.user.email) {
             setUserEmail(data.user.email);
             const prefix = data.user.email.split('@')[0];
@@ -278,16 +280,18 @@ export function AppShell({ children }: AppShellProps) {
             Criar conteúdo
           </Link>
 
-          <Link
-            href="/assistente"
-            className={isCurrent('/assistente') ? 'rdv3-active' : ''}
-            aria-current={isCurrent('/assistente') ? 'page' : undefined}
-          >
-            <span className="nav-icon">
-              <Bot className="w-3.5 h-3.5" />
-            </span>
-            Assistente
-          </Link>
+          {isOwner && (
+            <Link
+              href="/assistente"
+              className={isCurrent('/assistente') ? 'rdv3-active' : ''}
+              aria-current={isCurrent('/assistente') ? 'page' : undefined}
+            >
+              <span className="nav-icon">
+                <Bot className="w-3.5 h-3.5" />
+              </span>
+              Assistente
+            </Link>
+          )}
 
           <Link
             href="/instagram-pro"

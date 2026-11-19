@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { extractWhatsAppMessageText } from '@/lib/server/copier-service';
 import { buildReply, extractLinks, HELP_TEXT, isPrivateChat, MAX_LINKS_PER_MESSAGE, type ConvertedLink } from './link-message';
+import { isAssistantOwner } from './access';
 
 /*
  * Assistente WhatsApp v1: mensagens do privado com links → links de afiliado do dono da conta.
@@ -45,7 +46,7 @@ export async function acceptAssistantMessages(connection: { id: string; user_id:
     const ts = Number(entry.messageTimestamp || 0) * 1000;
     return !ts || Date.now() - ts <= MAX_AGE_MS;
   });
-  if (!candidates.length || !(await assistantEnabled(String(connection.id)))) return 0;
+  if (!candidates.length || !isAssistantOwner(connection.user_id) || !(await assistantEnabled(String(connection.id)))) return 0;
   const rows = candidates
     .map(entry => ({ entry, text: extractWhatsAppMessageText(entry) }))
     .filter(({ text }) => text && text.trim())
