@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { extractWhatsAppMessageText } from '@/lib/server/copier-service';
-import { buildReply, extractLinks, HELP_TEXT, isPrivateChat, MAX_LINKS_PER_MESSAGE, type ConvertedLink } from './link-message';
+import { buildReply, extractLinks, HELP_TEXT, isPrivateChat, MAX_LINKS_PER_MESSAGE, replyWithoutLink, type ConvertedLink } from './link-message';
 import { isAssistantOwner } from './access';
 
 /*
@@ -12,8 +12,10 @@ import { isAssistantOwner } from './access';
 
 /** Limite de links convertidos por contato por dia (protege a conta de afiliado e o número). */
 export const DAILY_LINKS_PER_CONTACT = 40;
-/** A ajuda ("me mande um link…") vai no máximo uma vez a cada 6 h para o mesmo contato. */
+/** A explicação completa vai na primeira conversa (e de novo depois de 6 h); no meio, respostas curtas pedindo o link. */
 const HELP_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+/** Trava contra loop (ex.: outro robô conversando): no máximo 8 respostas sem link por contato por hora. */
+const MAX_NO_LINK_REPLIES_PER_HOUR = 8;
 /** Mensagens mais antigas que isso (ex.: o WhatsApp reconectou e despejou o histórico) são ignoradas. */
 const MAX_AGE_MS = 10 * 60 * 1000;
 
@@ -115,6 +117,13 @@ async function linksToday(connectionId: string, hash: string, now: number): Prom
   return (data || []).reduce((sum: number, row: Row) => sum + (Number(row.links_ok) || 0), 0);
 }
 
+async function noLinkRepliesLastHour(connectionId: string, hash: string, now: number): Promise<number> {
+  const since = new Date(now - 60 * 60 * 1000).toISOString();
+  const { data } = await db().from('assistant_inbox').select('id')
+    .eq('connection_id', connectionId).eq('contact_hash', hash).in('kind', ['ajuda', 'conversa']).gte('received_at', since);
+  return data?.length || 0;
+}
+
 async function recentlyHelped(connectionId: string, hash: string, now: number): Promise<boolean> {
   const since = new Date(now - HELP_COOLDOWN_MS).toISOString();
   const { data } = await db().from('assistant_inbox').select('id')
@@ -134,9 +143,15 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
   };
   try {
     if (!links.length) {
-      if (await recentlyHelped(entry.connection_id, entry.contact_hash, now)) return finish({ status: 'ignored', kind: 'sem_link' });
-      await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, HELP_TEXT);
-      return finish({ status: 'done', kind: 'ajuda' });
+      if (await noLinkRepliesLastHour(entry.connection_id, entry.contact_hash, now) >= MAX_NO_LINK_REPLIES_PER_HOUR) {
+        return finish({ status: 'ignored', kind: 'sem_link' });
+      }
+      if (!(await recentlyHelped(entry.connection_id, entry.contact_hash, now))) {
+        await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, HELP_TEXT);
+        return finish({ status: 'done', kind: 'ajuda' });
+      }
+      await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, replyWithoutLink(entry.message_text || ''));
+      return finish({ status: 'done', kind: 'conversa' });
     }
     const used = await linksToday(entry.connection_id, entry.contact_hash, now);
     if (used >= DAILY_LINKS_PER_CONTACT) {

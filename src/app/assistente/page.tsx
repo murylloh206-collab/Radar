@@ -12,7 +12,8 @@ const phone = (n: string | null) => (n ? `+${n.replace(/^(\d{2})(\d{2})(\d{4,5})
 
 function describe(r: Recent): string {
   if (r.kind === 'ajuda') return 'Mandou mensagem sem link: recebeu as instruções';
-  if (r.kind === 'sem_link') return 'Mensagem sem link (instruções já enviadas antes)';
+  if (r.kind === 'conversa') return 'Mandou mensagem sem link: o bot respondeu e pediu o link';
+  if (r.kind === 'sem_link') return 'Muitas mensagens sem link em 1 hora: o bot pausou com esta pessoa';
   if (r.kind === 'limite') return 'Atingiu o limite diário de links';
   if (r.status === 'failed') return `Não respondido: ${r.error || 'falha'}`;
   if (r.status === 'pending' || r.status === 'processing') return 'Respondendo…';
@@ -108,7 +109,7 @@ export default function AssistentePage() {
           </section>
 
           <div className="rp-panel" style={{ fontSize: 12.5, opacity: 0.85 }}>
-            <strong>Como funciona:</strong> a pessoa manda um ou vários links (até 10 por mensagem, 40 por dia). O assistente usa as mesmas contas de afiliado do Copiador e só devolve links confirmados da sua conta; se não conseguir, avisa em vez de mandar o link original. Mensagens sem link recebem uma explicação curta (no máximo uma vez a cada 6 horas). A conexão de WhatsApp não é oficial: responder muitas mensagens aumenta o risco de restrição do número.
+            <strong>Como funciona:</strong> a pessoa manda um ou vários links (até 10 por mensagem, 40 por dia). O assistente usa as mesmas contas de afiliado do Copiador e só devolve links confirmados da sua conta; se não conseguir, avisa em vez de mandar o link original. Mensagens sem link recebem uma resposta curta pedindo o link (a explicação completa vai na primeira conversa); com mais de 8 mensagens sem link em 1 hora, ele pausa com aquela pessoa para não entrar em loop. A conexão de WhatsApp não é oficial: responder muitas mensagens aumenta o risco de restrição do número.
           </div>
         </>
       )}

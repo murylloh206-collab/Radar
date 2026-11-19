@@ -64,3 +64,14 @@ test('assistente é exclusivo da conta dona e não aparece em nenhum plano', () 
   assert.equal(isAssistantOwner(null), false);
   assert.doesNotMatch(JSON.stringify(PLANS_CONFIG), /assistant|Assistente/i);
 });
+
+import { replyWithoutLink } from '../src/lib/server/assistant/link-message';
+
+test('sem link: responde ao que a pessoa disse e pede o link', () => {
+  assert.match(replyWithoutLink('tudo bem?'), /^Tudo sim.*link do produto/);
+  assert.match(replyWithoutLink('Bom diaaa'), /^Bom dia/);
+  assert.match(replyWithoutLink('obrigado!!'), /^De nada/);
+  assert.match(replyWithoutLink('Olá'), /^Oi!/);
+  assert.match(replyWithoutLink('tem cupom?'), /cupom/);
+  assert.match(replyWithoutLink('quero uma air fryer'), /link do produto/);
+});
