@@ -11,8 +11,13 @@ const time = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-di
 const phone = (n: string | null) => (n ? `+${n.replace(/^(\d{2})(\d{2})(\d{4,5})(\d{4})$/, '$1 ($2) $3-$4')}` : 'Sem número');
 
 function describe(r: Recent): string {
-  if (r.kind === 'ajuda') return 'Mandou mensagem sem link: recebeu as instruções';
   if (r.kind === 'conversa') return 'Mandou mensagem sem link: o bot respondeu e pediu o link';
+  if (r.kind === 'pediu_link') return 'Escolheu 1 (converter link)';
+  if (r.kind === 'pediu_busca') return 'Escolheu 4 (buscar na Shopee)';
+  if (r.kind === 'ofertas') return 'Escolheu 2 (ofertas de hoje)';
+  if (r.kind === 'cupons') return 'Escolheu 3 (cupons de hoje)';
+  if (r.kind === 'busca') return `Buscou na Shopee: ${r.linksOk} ${r.linksOk === 1 ? 'opção confiável' : 'opções confiáveis'}`;
+  if (r.kind === 'ajuda') return 'Recebeu o menu';
   if (r.kind === 'sem_link') return 'Muitas mensagens sem link em 1 hora: o bot pausou com esta pessoa';
   if (r.kind === 'limite') return 'Atingiu o limite diário de links';
   if (r.status === 'failed') return `Não respondido: ${r.error || 'falha'}`;

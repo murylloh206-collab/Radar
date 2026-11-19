@@ -75,3 +75,50 @@ test('sem link: responde ao que a pessoa disse e pede o link', () => {
   assert.match(replyWithoutLink('tem cupom?'), /cupom/);
   assert.match(replyWithoutLink('quero uma air fryer'), /link do produto/);
 });
+
+import { formatSearch, formatTodayCoupons, formatTodayOffers, MENU_TEXT, parseGroupOffer, parseMenuChoice, trustedHits } from '../src/lib/server/assistant/link-message';
+
+test('menu: números, emojis de número e "menu"', () => {
+  assert.equal(parseMenuChoice('1'), 'link');
+  assert.equal(parseMenuChoice('2️⃣'), 'ofertas');
+  assert.equal(parseMenuChoice('opção 3'), 'cupons');
+  assert.equal(parseMenuChoice(' 4. '), 'busca');
+  assert.equal(parseMenuChoice('Menu'), 'menu');
+  assert.equal(parseMenuChoice('0'), 'menu');
+  assert.equal(parseMenuChoice('5'), null);
+  assert.equal(parseMenuChoice('quero 2 air fryers'), null);
+  assert.match(MENU_TEXT, /1️⃣[\s\S]*2️⃣[\s\S]*3️⃣[\s\S]*4️⃣/);
+});
+
+const GTA = "OFERTA ESPECIAL EM GAMES! 🎮\n\n*Grand Theft Auto VI PlayStation 5*\n\nDe: ~R$ 499,00~\n🔥 *Por R$ 371,00* (26% OFF)\n'🎟️ Cupom: *DIADATECH*'\n\n🛒 *Compre aqui com segurança:*\nhttps://meli.la/1yA4x5o\n\n🎯 *Radar de Ofertas*";
+
+test('lê título, preço, cupom e link da mensagem real do grupo', () => {
+  assert.deepEqual(parseGroupOffer(GTA, 'https://meli.la/1yA4x5o'),
+    { title: 'Grand Theft Auto VI PlayStation 5', price: '371,00', coupon: 'DIADATECH', link: 'https://meli.la/1yA4x5o' });
+  assert.equal(parseGroupOffer('sem nada', null), null);
+});
+
+test('ofertas e cupons de hoje: listas curtas, aviso de cupom e mensagem quando não há', () => {
+  const gta = parseGroupOffer(GTA, null)!;
+  assert.match(formatTodayOffers([gta]), /\*1\. Grand Theft Auto VI PlayStation 5\* — R\$ 371,00\nhttps:\/\/meli\.la\/1yA4x5o/);
+  assert.match(formatTodayCoupons([gta]), /Cupom: \*DIADATECH\*[\s\S]*pode esgotar/);
+  assert.match(formatTodayOffers([]), /ainda não saiu oferta/);
+  assert.match(formatTodayCoupons([{ ...gta, coupon: null }]), /ainda não saiu oferta com cupom/);
+});
+
+test('busca na Shopee só mostra nota 4,5+ com 100+ vendidos, mais baratos primeiro', () => {
+  const hits = trustedHits([
+    { title: 'A', price: 300, rating: 4.9, sold: 5000, link: 'https://s.shopee.com.br/a' },
+    { title: 'B barata sem nota', price: 90, rating: null, sold: 20, link: 'https://s.shopee.com.br/b' },
+    { title: 'C', price: 250, rating: 4.6, sold: 150, link: 'https://s.shopee.com.br/c' },
+    { title: 'D nota baixa', price: 100, rating: 4.1, sold: 9000, link: 'https://s.shopee.com.br/d' },
+  ]);
+  assert.deepEqual(hits.map(h => h.title), ['C', 'A']);
+  assert.match(formatSearch('air fryer', hits), /R\$ 250,00 · ⭐ 4,6 · 150 vendidos/);
+  assert.match(formatSearch('air fryer', []), /Não achei na Shopee uma opção confiável/);
+});
+
+test('"Cupom: ATIVE" não é código de cupom', () => {
+  const msg = "*Kit 2 Regata Alcinha Urban*\n\n🔥 *Por R$ 61,00*\n🎟️ Cupom: *ATIVE*\n\nhttps://meli.la/1k6csqZ";
+  assert.equal(parseGroupOffer(msg, null)?.coupon, null);
+});

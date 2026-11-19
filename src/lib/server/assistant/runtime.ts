@@ -2,7 +2,11 @@ import 'server-only';
 import { createHash } from 'crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { extractWhatsAppMessageText } from '@/lib/server/copier-service';
-import { buildReply, extractLinks, HELP_TEXT, isPrivateChat, MAX_LINKS_PER_MESSAGE, replyWithoutLink, type ConvertedLink } from './link-message';
+import {
+  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, extractLinks, formatSearch, formatTodayCoupons, formatTodayOffers, isPrivateChat,
+  MAX_LINKS_PER_MESSAGE, MENU_TEXT, parseGroupOffer, parseMenuChoice, replyWithoutLink, trustedHits,
+  type ConvertedLink, type GroupOffer, type SearchHit,
+} from './link-message';
 import { isAssistantOwner } from './access';
 
 /*
@@ -70,7 +74,37 @@ export async function acceptAssistantMessages(connection: { id: string; user_id:
 export interface AssistantDeps {
   convert: (userId: string, url: string) => Promise<{ affiliateUrl?: string; error?: string }>;
   send: (userId: string, connectionId: string, remoteJid: string, text: string) => Promise<void>;
+  /** Ofertas que o Copiador enviou hoje aos grupos do cliente (mais recentes primeiro). */
+  todayOffers?: (userId: string) => Promise<GroupOffer[]>;
+  /** Busca ao vivo na Shopee pela API oficial de afiliado do cliente. */
+  searchShopee?: (userId: string, query: string) => Promise<SearchHit[]>;
   now?: () => number;
+}
+
+/** Ofertas enviadas hoje (horário de Brasília) aos grupos, uma por oferta, mais recentes primeiro. */
+async function defaultTodayOffers(userId: string): Promise<GroupOffer[]> {
+  const start = new Date(Date.now() - 3 * 60 * 60 * 1000); start.setUTCHours(0, 0, 0, 0);
+  const since = new Date(start.getTime() + 3 * 60 * 60 * 1000).toISOString();
+  const { data } = await db().from('publication_jobs').select('message_text, affiliate_url, runtime_inbox_id, sent_at')
+    .eq('user_id', userId).eq('status', 'enviado').gte('sent_at', since).order('sent_at', { ascending: false }).limit(300);
+  const seen = new Set<string>();
+  const offers: GroupOffer[] = [];
+  for (const row of data || []) {
+    const offer = parseGroupOffer(row.message_text || '', row.affiliate_url);
+    if (!offer) continue;
+    const key = row.runtime_inbox_id || offer.title;
+    if (seen.has(key) || seen.has(offer.title)) continue;
+    seen.add(key); seen.add(offer.title);
+    offers.push(offer);
+  }
+  return offers;
+}
+
+async function defaultSearchShopee(userId: string, query: string): Promise<SearchHit[]> {
+  const { runComparatorSearch } = await import('@/lib/server/comparator-search');
+  const result = await runComparatorSearch({ query, userId });
+  return result.offers.filter(o => o.store === 'shopee' && o.isAffiliateLinkVerified)
+    .map(o => ({ title: o.title, price: o.price, rating: o.rating, sold: o.soldCount, link: o.affiliateUrl }));
 }
 
 /** Conversão real: o mesmo conversor e as mesmas contas de afiliado do Copiador. */
@@ -108,7 +142,15 @@ async function defaultSend(userId: string, connectionId: string, remoteJid: stri
   if (!res.ok) throw new Error(`O WhatsApp recusou a resposta (HTTP ${res.status}).`);
 }
 
-const defaults: AssistantDeps = { convert: defaultConvert, send: defaultSend };
+const defaults: AssistantDeps = { convert: defaultConvert, send: defaultSend, todayOffers: defaultTodayOffers, searchShopee: defaultSearchShopee };
+
+/** O que o bot pediu por último a este contato (para entender a resposta seguinte), nos últimos 15 min. */
+async function lastAsked(connectionId: string, hash: string, entryId: string, now: number): Promise<string | null> {
+  const since = new Date(now - 15 * 60 * 1000).toISOString();
+  const { data } = await db().from('assistant_inbox').select('kind').eq('connection_id', connectionId).eq('contact_hash', hash)
+    .eq('status', 'done').neq('id', entryId).gte('received_at', since).order('received_at', { ascending: false }).limit(1);
+  return data?.[0]?.kind || null;
+}
 
 async function linksToday(connectionId: string, hash: string, now: number): Promise<number> {
   const since = new Date(now - 24 * 60 * 60 * 1000).toISOString();
@@ -120,7 +162,7 @@ async function linksToday(connectionId: string, hash: string, now: number): Prom
 async function noLinkRepliesLastHour(connectionId: string, hash: string, now: number): Promise<number> {
   const since = new Date(now - 60 * 60 * 1000).toISOString();
   const { data } = await db().from('assistant_inbox').select('id')
-    .eq('connection_id', connectionId).eq('contact_hash', hash).in('kind', ['ajuda', 'conversa']).gte('received_at', since);
+    .eq('connection_id', connectionId).eq('contact_hash', hash).in('kind', ['ajuda', 'conversa', 'pediu_link', 'pediu_busca', 'ofertas', 'cupons', 'busca']).gte('received_at', since);
   return data?.length || 0;
 }
 
@@ -143,14 +185,32 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
   };
   try {
     if (!links.length) {
+      const say = (text: string) => deps.send(entry.user_id, entry.connection_id, entry.remote_jid, text);
       if (await noLinkRepliesLastHour(entry.connection_id, entry.contact_hash, now) >= MAX_NO_LINK_REPLIES_PER_HOUR) {
         return finish({ status: 'ignored', kind: 'sem_link' });
       }
+      const choice = parseMenuChoice(entry.message_text || '');
+      if (choice === 'menu') { await say(MENU_TEXT); return finish({ status: 'done', kind: 'ajuda' }); }
+      if (choice === 'link') { await say(ASK_LINK_TEXT); return finish({ status: 'done', kind: 'pediu_link' }); }
+      if (choice === 'busca') { await say(ASK_SEARCH_TEXT); return finish({ status: 'done', kind: 'pediu_busca' }); }
+      if (choice === 'ofertas' || choice === 'cupons') {
+        const offers = deps.todayOffers ? await deps.todayOffers(entry.user_id) : [];
+        await say(choice === 'ofertas' ? formatTodayOffers(offers.slice(0, 5)) : formatTodayCoupons(offers.filter(o => o.coupon).slice(0, 5)));
+        return finish({ status: 'done', kind: choice });
+      }
+      // Resposta à pergunta "o que você procura?": busca ao vivo na Shopee.
+      if (await lastAsked(entry.connection_id, entry.contact_hash, entry.id, now) === 'pediu_busca' && deps.searchShopee) {
+        const query = String(entry.message_text || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        await say(`Procurando *${query}* na Shopee… 🔎`);
+        const hits = trustedHits(await deps.searchShopee(entry.user_id, query).catch(() => []));
+        await say(formatSearch(query, hits));
+        return finish({ status: 'done', kind: 'busca', links_total: hits.length, links_ok: hits.length });
+      }
       if (!(await recentlyHelped(entry.connection_id, entry.contact_hash, now))) {
-        await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, HELP_TEXT);
+        await say(MENU_TEXT);
         return finish({ status: 'done', kind: 'ajuda' });
       }
-      await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, replyWithoutLink(entry.message_text || ''));
+      await say(`${replyWithoutLink(entry.message_text || '')}\n\nOu digite *menu* para ver as opções.`);
       return finish({ status: 'done', kind: 'conversa' });
     }
     const used = await linksToday(entry.connection_id, entry.contact_hash, now);

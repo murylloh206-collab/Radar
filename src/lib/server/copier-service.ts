@@ -576,6 +576,9 @@ export function extractOfferDetailsFromWhatsAppText(
     const invalidCouponWords = new Set([
       'PARA', 'PODER', 'USAR', 'AQUI', 'HOJE', 'LINK', 'MAIS', 'SITE',
       'CUPOM', 'RESGATE', 'APARTIR', 'MEIA', 'NOITE', 'ABAIXO', 'TELA', 'LOJA',
+      // Instruções, não códigos (ex.: "Cupom: ATIVE na página")
+      'ATIVE', 'ATIVAR', 'ATIVO', 'APLIQUE', 'APLICAR', 'CLIQUE', 'ACESSE', 'PAGINA', 'PÁGINA', 'ANUNCIO', 'ANÚNCIO',
+      'PRODUTO', 'VALIDO', 'VÁLIDO', 'DISPONIVEL', 'DISPONÍVEL', 'AUTOMATICO', 'AUTOMÁTICO', 'CARRINHO', 'APP',
     ]);
     if (!invalidCouponWords.has(candidateCoupon)) {
       couponCode = candidateCoupon;

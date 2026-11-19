@@ -113,3 +113,10 @@ test('5. Template limpa tags ausentes quando não há cupom nem ou', () => {
   assert.doesNotMatch(rendered, /\{preco_ou\}/);
   assert.doesNotMatch(rendered, /\{cupom\}/);
 });
+
+test('"Cupom: ATIVE na página" é instrução, não código de cupom', () => {
+  const details = extractOfferDetailsFromWhatsAppText('Kit 2 Regata Alcinha Urban\n🔥 Por R$ 61,00\n🎟️ Cupom: ATIVE na página\nhttps://meli.la/abc123', 'mercadolivre');
+  assert.equal(details.couponCode, undefined);
+  const real = extractOfferDetailsFromWhatsAppText('Pote de Vidro\nPor R$ 74,00\nCupom: OFFHOJEML\nhttps://meli.la/abc124', 'mercadolivre');
+  assert.equal(real.couponCode, 'OFFHOJEML');
+});

@@ -95,3 +95,85 @@ export function replyWithoutLink(text: string): string {
   if (/\b(cupom|desconto|promo)/.test(t)) return 'Me manda o link do produto que eu preparo o seu link pra comprar. Se houver cupom na oferta do grupo, ele vale no carrinho. 😉';
   return 'Me manda o link do produto que eu preparo o seu link pra comprar. 😉';
 }
+
+// ---------------------------------------------------------------- menu com números
+export const MENU_TEXT = [
+  'Oi! 👋 Sou o assistente do *Radar de Ofertas*. Responda com o número:',
+  '',
+  '1️⃣ Transformar o link de um produto no link pra comprar',
+  '2️⃣ Ofertas de hoje do grupo',
+  '3️⃣ Cupons de hoje',
+  '4️⃣ Buscar um produto na Shopee',
+  '',
+  'Se preferir, me mande direto o link do produto. 😉',
+].join('\n');
+
+export const ASK_LINK_TEXT = 'Beleza! Me manda o link do produto (pode ser vários, um por linha) que eu preparo o seu link pra comprar. 🔗';
+export const ASK_SEARCH_TEXT = 'O que você procura? Escreve o nome do produto, por exemplo: *air fryer 4 litros* 🔎';
+
+export type MenuChoice = 'menu' | 'link' | 'ofertas' | 'cupons' | 'busca';
+
+/** "1", "1️⃣", "opção 2", "menu", "0"… → escolha do menu; texto comum → null. */
+export function parseMenuChoice(text: string): MenuChoice | null {
+  const t = String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[⃣️]/g, '').trim();
+  if (/^(menu|inicio|opcoes|0)$/.test(t)) return 'menu';
+  const n = /^(?:opcao|op|numero|n)?\s*([1-4])\s*[.)!]?$/.exec(t)?.[1];
+  return n === '1' ? 'link' : n === '2' ? 'ofertas' : n === '3' ? 'cupons' : n === '4' ? 'busca' : null;
+}
+
+export interface GroupOffer { title: string; price: string | null; coupon: string | null; link: string }
+
+/** Lê título, preço, cupom e link de uma mensagem que o Copiador enviou aos grupos. */
+export function parseGroupOffer(messageText: string, affiliateUrl?: string | null): GroupOffer | null {
+  const text = String(messageText || '');
+  const bold = [...text.matchAll(/\*([^*\n]{4,})\*/g)].map(m => m[1].trim());
+  const title = bold.find(b => !/^(por\s|r\$|de\s|cupom|compre|oferta|radar)/i.test(b) && !/^[A-Z0-9]{4,20}$/.test(b));
+  const price = /Por\s*R\$\s*([\d.]+,\d{2})/i.exec(text)?.[1] || null;
+  const rawCoupon = /Cupom:\s*\*?([A-Z0-9][A-Z0-9_-]{2,30})\*?/i.exec(text)?.[1]?.toUpperCase() || null;
+  // "ATIVE", "APLIQUE"… são instruções, não códigos.
+  const coupon = rawCoupon && !/^(ATIVE|ATIVAR|ATIVO|APLIQUE|APLICAR|CLIQUE|ACESSE|PAGINA|ANUNCIO|PRODUTO|CARRINHO|APP|AQUI|LINK)$/.test(rawCoupon) ? rawCoupon : null;
+  const urls = text.match(/https?:\/\/[^\s<>"'`]+/g) || [];
+  const link = (affiliateUrl && /^https?:\/\//.test(affiliateUrl) ? affiliateUrl : urls[urls.length - 1] || '').replace(/[)\].,;:!?…*_~']+$/, '');
+  if (!title || !link) return null;
+  return { title: title.length > 70 ? `${title.slice(0, 67).trimEnd()}…` : title, price, coupon, link };
+}
+
+export function formatTodayOffers(offers: GroupOffer[]): string {
+  if (!offers.length) return 'Hoje ainda não saiu oferta no grupo. Volta mais tarde ou me manda o link de um produto. 😉';
+  const lines = ['🔥 *Ofertas de hoje do grupo:*'];
+  offers.forEach((o, i) => { lines.push('', `*${i + 1}. ${o.title}*${o.price ? ` — R$ ${o.price}` : ''}`, o.link); });
+  lines.push('', 'Digite *menu* para ver as opções.');
+  return lines.join('\n');
+}
+
+export function formatTodayCoupons(offers: GroupOffer[]): string {
+  const withCoupon = offers.filter(o => o.coupon);
+  if (!withCoupon.length) return 'Hoje ainda não saiu oferta com cupom no grupo. Digite *2* para ver as ofertas de hoje. 😉';
+  const lines = ['🎟️ *Cupons de hoje do grupo:*'];
+  withCoupon.forEach((o, i) => { lines.push('', `*${i + 1}. ${o.title}*`, `Cupom: *${o.coupon}*${o.price ? ` · R$ ${o.price} com o cupom` : ''}`, o.link); });
+  lines.push('', '⚠️ Cupom tem limite de uso e pode esgotar. Aplique no carrinho antes de pagar.');
+  return lines.join('\n');
+}
+
+export interface SearchHit { title: string; price: number; rating: number | null; sold: number | null; link: string }
+
+/** Só recomenda o que tem prova de qualidade (decisão do dono): nota ≥ 4,5 e ≥ 100 vendidos. */
+export function trustedHits(hits: SearchHit[], limit = 3): SearchHit[] {
+  return hits.filter(h => (h.rating || 0) >= 4.5 && (h.sold || 0) >= 100 && h.link)
+    .sort((a, b) => a.price - b.price).slice(0, limit);
+}
+
+const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const soldLabel = (n: number) => (n >= 1000 ? `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil vendidos` : `${n} vendidos`);
+
+export function formatSearch(query: string, hits: SearchHit[]): string {
+  if (!hits.length) return `Não achei na Shopee uma opção confiável de *${query}* (nota 4,5+ e muitos vendidos). Tenta outro nome ou me manda o link do produto. 🔎`;
+  const lines = [`🔎 *${query}* na Shopee (os mais baratos com boa nota):`];
+  hits.forEach((h, i) => {
+    lines.push('', `*${i + 1}. ${h.title.length > 70 ? `${h.title.slice(0, 67).trimEnd()}…` : h.title}*`,
+      `R$ ${brl(h.price)} · ⭐ ${h.rating?.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} · ${soldLabel(h.sold || 0)}`, h.link);
+  });
+  lines.push('', 'Digite *4* para buscar outro produto ou *menu* para as opções.');
+  return lines.join('\n');
+}
