@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { acceptCopierEvent, runDurableCopierCycle, CopierRuntimeError } from '@/lib/server/copier-runtime';
 
 export const runtime = 'nodejs';
@@ -27,6 +27,15 @@ export async function POST(req: NextRequest) {
       } catch (cycleErr) {
         console.error('[Webhook] Falha no ciclo imediato pós-recebimento:', cycleErr);
       }
+    }
+
+    // Assistente: responde depois de devolver o 202 ao gateway (a resposta leva alguns segundos por link).
+    if ((result as { assistantInserted?: number }).assistantInserted) {
+      const task = async () => {
+        try { const { runAssistantCycle } = await import('@/lib/server/assistant/runtime'); await runAssistantCycle({ budgetMs: 45_000 }); }
+        catch (error) { console.error('[Assistente] ciclo falhou:', error instanceof Error ? error.message : error); }
+      };
+      try { after(task); } catch { void task(); }
     }
 
     return NextResponse.json({ ok: true, ...result, cycle: cycleResult }, { status: 202,

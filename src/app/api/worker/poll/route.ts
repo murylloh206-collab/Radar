@@ -24,8 +24,15 @@ async function handlePoll(req: NextRequest) {
     try { social = await runSocialAutopostCycle({ budgetMs: Math.min(15000, remaining - 3000), deadlineAt: started + 55000 }); }
     catch { social = { error: 'Ciclo de posts automáticos não concluído.' }; }
   }
-  if (copierError) return NextResponse.json({ ok: false, error: copierError, social }, { status: 500 });
-  return NextResponse.json({ ok: true, report, social });
+  // Assistente WhatsApp: recolhe o que ficou na fila (ex.: falha temporária do gateway). Isolado do copiador.
+  let assistant: unknown = null;
+  const left = 52000 - (Date.now() - started);
+  if (left > 6000) {
+    try { const { runAssistantCycle } = await import('@/lib/server/assistant/runtime'); assistant = await runAssistantCycle({ budgetMs: left - 4000 }); }
+    catch { assistant = { error: 'Ciclo do assistente não concluído.' }; }
+  }
+  if (copierError) return NextResponse.json({ ok: false, error: copierError, social, assistant }, { status: 500 });
+  return NextResponse.json({ ok: true, report, social, assistant });
 }
 
 export async function GET(req: NextRequest) {

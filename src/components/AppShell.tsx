@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Bot } from 'lucide-react';
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -156,6 +157,7 @@ export function AppShell({ children }: AppShellProps) {
     if (pathname === '/painel') return 'Início';
     if (pathname.startsWith('/copiador')) return 'Copiador';
     if (pathname.startsWith('/criar-conteudo') || pathname.startsWith('/gerar-postagem') || pathname.startsWith('/mensagem-avulsa') || pathname.startsWith('/stories')) return 'Criar conteúdo';
+    if (pathname.startsWith('/assistente')) return 'Assistente';
     if (pathname.startsWith('/instagram-pro')) return 'Instagram Pro';
     if (pathname.startsWith('/ofertas')) return 'Ofertas';
     if (pathname.startsWith('/envios') || pathname.startsWith('/agenda')) return 'Envios';
@@ -274,6 +276,17 @@ export function AppShell({ children }: AppShellProps) {
               <PenTool className="w-3.5 h-3.5" />
             </span>
             Criar conteúdo
+          </Link>
+
+          <Link
+            href="/assistente"
+            className={isCurrent('/assistente') ? 'rdv3-active' : ''}
+            aria-current={isCurrent('/assistente') ? 'page' : undefined}
+          >
+            <span className="nav-icon">
+              <Bot className="w-3.5 h-3.5" />
+            </span>
+            Assistente
           </Link>
 
           <Link

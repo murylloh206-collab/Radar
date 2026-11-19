@@ -60,6 +60,14 @@ export async function acceptCopierEvent(payload: EvolutionWebhookPayload, suppli
     return { accepted: true, inserted: 0 };
   }
   if (event && event !== 'messages.upsert') return { accepted: true, inserted: 0 };
+  // Assistente WhatsApp: mensagens do privado vão para a fila própria dele (nunca para a do Copiador).
+  let assistantInserted = 0;
+  try {
+    const { acceptAssistantMessages } = await import('./assistant/runtime');
+    assistantInserted = await acceptAssistantMessages(connection, (Array.isArray(payload.data) ? payload.data : [payload.data]) as any[]);
+  } catch (error) {
+    console.error('[Assistente] não foi possível receber a mensagem do privado:', error instanceof Error ? error.message : error);
+  }
   const sources = checked(await client.from('copy_sources').select('source_jid,configuration')
     .eq('user_id', connection.user_id).eq('connection_id', connection.id).eq('is_active', true), 'Origens monitoradas');
   const monitored = new Set((sources || []).filter(source => source.configuration?.ownerJid === connection.owner_jid).map(source => source.source_jid));
@@ -68,7 +76,7 @@ export async function acceptCopierEvent(payload: EvolutionWebhookPayload, suppli
     const key = entry?.key;
     return !key?.fromMe && monitored.has(key?.remoteJid) && key?.id && typeof key.id === 'string' && /^\d{5,30}@g\.us$/.test(key.remoteJid || '');
   });
-  if (!candidateEntries.length) return { accepted: true, inserted: 0 };
+  if (!candidateEntries.length) return { accepted: true, inserted: 0, assistantInserted };
 
   // Deduplicação na entrada: evita que múltiplos bots do grupo de origem (com message_id diferentes ou caracteres invisíveis)
   // enfileirem a mesma oferta duas vezes no copier_inbox
@@ -144,7 +152,7 @@ export async function acceptCopierEvent(payload: EvolutionWebhookPayload, suppli
   if (records.length) checked(await client.from('copier_inbox').upsert(records, {
     onConflict: 'user_id,connection_id,message_id', ignoreDuplicates: true,
   }), 'Persistência do evento');
-  return { accepted: true, inserted: records.length };
+  return { accepted: true, inserted: records.length, assistantInserted };
 }
 
 async function snapshot(userId: string, connectionId: string) {

@@ -1228,3 +1228,20 @@ dialog.rp-dialog[open] { animation: rv7-modal 0.45s var(--rv-spring) both; }
 
 /* ================= v19 — envio em segundo plano ================= */
 .rgs-sending { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px !important; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(245, 197, 66, 0.4); background: rgba(245, 197, 66, 0.08); color: #f8e3aa !important; font-size: 12.5px !important; }
+
+/* ================= v20 — ASSISTENTE WHATSAPP ================= */
+.rast-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.rast-figures > div { display: grid; gap: 4px; padding: 18px 20px; border-radius: 20px; border: 1px solid #2a2a2e; background: linear-gradient(180deg, #151517, #0f0f11); }
+.rast-figures svg { color: #f5c542; }
+.rast-figures strong { font: 800 36px/1 var(--radar-display); letter-spacing: -0.03em; color: #f6f2e8; }
+.rast-figures span { font-size: 12.5px; color: #a8a398; }
+.rast-list, .rast-recent { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.rast-list li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 16px; border-radius: 16px; border: 1px solid #2a2a2e; background: #111113; }
+.rast-list li > svg { color: #f5c542; flex: none; }
+.rast-list li > span:first-of-type { flex: 1; min-width: 160px; }
+.rast-list strong { display: block; color: #f6f2e8; }
+.rast-list small { display: block; color: #8b867b; font-size: 12px; }
+.rast-recent li { display: flex; gap: 14px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); font-size: 13.5px; color: #d8d3c7; animation: rv7-panel 0.4s var(--rv-fly) both; }
+.rast-recent time { flex: none; color: #8b867b; font-variant-numeric: tabular-nums; }
+.rast-recent li[data-status="failed"] span { color: #ffb4b4; }
+@media (max-width: 700px) { .rast-figures { grid-template-columns: 1fr; } }

@@ -29,6 +29,7 @@ export type PlanFeatureKey =
   | 'full_store_metrics'
   | 'price_drop_alert'
   | 'story_template'
+  | 'whatsapp_assistant'
   | 'copier_template'
   | 'what_to_post_today'
   | 'weekly_report'
@@ -265,6 +266,7 @@ export const PLANS_CONFIG: Record<PlanId, PlanDefinition> = {
       'story_image_cards',
       'instagram_pro',
       'story_template',
+      'whatsapp_assistant',
       'copier_template',
       'telegram_posting',
       'post_scheduling',
@@ -385,6 +387,11 @@ export const FEATURE_METADATA: Record<
     label: 'Template das fotos do copiador',
     minPlan: 'ultimate',
     description: 'Fundo próprio nas fotos das ofertas automáticas do WhatsApp, com o produto num cartão no centro.',
+  },
+  whatsapp_assistant: {
+    label: 'Assistente WhatsApp',
+    minPlan: 'ultimate',
+    description: 'Converte os links que as pessoas mandam no seu privado para os seus links de afiliado.',
   },
   story_template: {
     label: 'Template do story',
