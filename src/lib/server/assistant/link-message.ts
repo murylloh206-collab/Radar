@@ -88,9 +88,9 @@ export function replyWithoutLink(text: string): string {
   const t = String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   if (/\b(obrigad|valeu|vlw|brigad|agradec)/.test(t)) return 'De nada! Quando precisar, é só mandar outro link. 😉';
   if (/\b(tudo bem|td bem|tudo bom|td bom|como vai|como voce esta|blz|beleza)\b/.test(t)) return 'Tudo sim, e com você? 😊 Qual o link do produto que você quer?';
-  if (/\bbom dia\b/.test(t)) return 'Bom dia! ☀️ Me manda o link do produto que eu preparo pra você.';
-  if (/\bboa tarde\b/.test(t)) return 'Boa tarde! Me manda o link do produto que eu preparo pra você.';
-  if (/\bboa noite\b/.test(t)) return 'Boa noite! 🌙 Me manda o link do produto que eu preparo pra você.';
+  if (/\bbom dia+/.test(t)) return 'Bom dia! ☀️ Me manda o link do produto que eu preparo pra você.';
+  if (/\bboa tarde+/.test(t)) return 'Boa tarde! Me manda o link do produto que eu preparo pra você.';
+  if (/\bboa noite+/.test(t)) return 'Boa noite! 🌙 Me manda o link do produto que eu preparo pra você.';
   if (/^(oi+|ola|opa|eai|e ai|hey|salve)\b/.test(t)) return 'Oi! 👋 Me manda o link do produto que eu preparo o seu link pra comprar.';
   if (/\b(cupom|desconto|promo)/.test(t)) return 'Me manda o link do produto que eu preparo o seu link pra comprar. Se houver cupom na oferta do grupo, ele vale no carrinho. 😉';
   return 'Me manda o link do produto que eu preparo o seu link pra comprar. 😉';
