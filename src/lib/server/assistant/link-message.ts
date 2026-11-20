@@ -189,3 +189,23 @@ export function formatSearch(query: string, hits: SearchHit[]): string {
   lines.push('', 'Digite *4* para buscar outro produto ou *menu* para as opções.');
   return lines.join('\n');
 }
+
+// ---------------------------------------------------------------- resposta por link (foto + link + cupom)
+/** Legenda de cada produto: só o link novo e o cupom (ou o aviso de que não achou). */
+export function linkCaption(affiliateUrl: string, coupon?: string | null): string {
+  return coupon
+    ? `🔗 ${affiliateUrl}\n\n🎟️ Cupom: *${coupon}*: aplique no carrinho (pode esgotar)`
+    : `🔗 ${affiliateUrl}\n\n🎟️ Não achei cupom para este produto agora.`;
+}
+
+/** Código que identifica o produto no endereço (para achar a mesma oferta nos grupos). */
+export function productKey(cleanUrl?: string | null): string | null {
+  const u = String(cleanUrl || '');
+  return /\/(?:p|up)\/(MLBU?\d{6,})/i.exec(u)?.[1]?.toUpperCase()
+    || /\b(MLB)-?(\d{6,})\b/i.exec(u)?.slice(1).join('').toUpperCase()
+    || /\/product\/\d+\/(\d{5,})/.exec(u)?.[1]
+    || /-i\.\d+\.(\d{5,})/.exec(u)?.[1]
+    || /\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i.exec(u)?.[1]?.toUpperCase()
+    || /netshoes\.com\.br\/(?:p\/)?[^?#]*?([A-Z0-9]{3}-[A-Z0-9]{4}-[A-Z0-9]{3})/i.exec(u)?.[1]?.toUpperCase()
+    || null;
+}

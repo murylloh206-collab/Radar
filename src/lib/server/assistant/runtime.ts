@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { extractWhatsAppMessageText } from '@/lib/server/copier-service';
 import {
-  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, countLinks, extractLinks, formatSearch, formatTodayCoupons, formatTodayOffers, isPrivateChat,
+  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, countLinks, extractLinks, linkCaption, productKey, shortLinkName, formatSearch, formatTodayCoupons, formatTodayOffers, isPrivateChat,
   MAX_LINKS_PER_MESSAGE, MENU_TEXT, parseGroupOffer, parseMenuChoice, replyWithoutLink, trustedHits,
   type ConvertedLink, type GroupOffer, type SearchHit,
 } from './link-message';
@@ -32,6 +32,12 @@ function db() {
 
 export const contactHash = (connectionId: string, jid: string) =>
   createHash('sha256').update(`${connectionId}:${jid}`).digest('hex').slice(0, 32);
+
+function messageHasPhoto(entry: any): boolean {
+  const m = entry?.message || {};
+  const inner = m.ephemeralMessage?.message || m.viewOnceMessage?.message || m.viewOnceMessageV2?.message || m;
+  return Boolean(inner?.imageMessage);
+}
 
 /** Assistente ligado nesta conexão? (sem a migração 17, sempre desligado) */
 export async function assistantEnabled(connectionId: string): Promise<boolean> {
@@ -63,16 +69,26 @@ export async function acceptAssistantMessages(connection: { id: string; user_id:
       remote_jid: entry.key.remoteJid,
       contact_hash: contactHash(String(connection.id), entry.key.remoteJid),
       message_text: text.slice(0, 4000),
+      source_message: messageHasPhoto(entry) ? { key: entry.key, message: entry.message } : null,
     }));
   if (!rows.length) return 0;
   // Mensagem repetida (o gateway reenviou) não entra de novo: conflito ignorado pela chave única.
-  const { data, error } = await db().from('assistant_inbox').upsert(rows, { onConflict: 'connection_id,message_id', ignoreDuplicates: true }).select('id');
+  let { data, error } = await db().from('assistant_inbox').upsert(rows, { onConflict: 'connection_id,message_id', ignoreDuplicates: true }).select('id');
+  // Sem a migração 18 a coluna da foto não existe: guarda sem ela (o bot só não usa a foto que a pessoa mandou).
+  if (error && /source_message/.test(error.message)) {
+    ({ data, error } = await db().from('assistant_inbox').upsert(rows.map(({ source_message: _ignored, ...row }) => row), { onConflict: 'connection_id,message_id', ignoreDuplicates: true }).select('id'));
+  }
   if (error) { console.error('[Assistente] falha ao guardar mensagem:', error.message); return 0; }
   return data?.length || 0;
 }
 
 export interface AssistantDeps {
-  convert: (userId: string, url: string) => Promise<{ affiliateUrl?: string; error?: string }>;
+  convert: (userId: string, url: string) => Promise<ConvertOutcome>;
+  /** Foto no estilo do Copiador e cupom da mesma oferta nos grupos (opcional nos testes). */
+  enrich?: (userId: string, converted: ConvertOutcome, sourcePhoto: string | null, id: string) => Promise<{ photoUrl?: string; coupon?: string | null }>;
+  /** Baixa a foto que a pessoa mandou junto com o link. */
+  sourcePhoto?: (userId: string, connectionId: string, message: any, id: string) => Promise<string | null>;
+  sendImage?: (userId: string, connectionId: string, remoteJid: string, imageUrl: string, caption: string) => Promise<void>;
   send: (userId: string, connectionId: string, remoteJid: string, text: string) => Promise<void>;
   /** Ofertas que o Copiador enviou hoje aos grupos do cliente (mais recentes primeiro). */
   todayOffers?: (userId: string) => Promise<GroupOffer[]>;
@@ -108,7 +124,9 @@ async function defaultSearchShopee(userId: string, query: string): Promise<Searc
 }
 
 /** Conversão real: o mesmo conversor e as mesmas contas de afiliado do Copiador. */
-async function defaultConvert(userId: string, url: string): Promise<{ affiliateUrl?: string; error?: string }> {
+export interface ConvertOutcome { affiliateUrl?: string; cleanUrl?: string; store?: string; imageUrl?: string; error?: string }
+
+async function defaultConvert(userId: string, url: string): Promise<ConvertOutcome> {
   const { getStoreCredentialsMapWithSecrets } = await import('@/lib/server/credentials-vault');
   const { convertToAffiliateLink } = await import('@/lib/server/affiliate-converter');
   const creds = await getStoreCredentialsMapWithSecrets(userId);
@@ -122,7 +140,7 @@ async function defaultConvert(userId: string, url: string): Promise<{ affiliateU
     if (!result.affiliateUrl || !result.isAutoDispatchAllowed || result.affiliateUrl === url) {
       return { error: 'não consegui confirmar o link de afiliado desta loja' };
     }
-    return { affiliateUrl: result.affiliateUrl };
+    return { affiliateUrl: result.affiliateUrl, cleanUrl: result.cleanUrl, store: result.store, imageUrl: result.meta?.extractedImageUrl };
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     return { error: /conect|configur|credenc|tag/i.test(message) ? 'loja ainda não conectada no painel' : message.slice(0, 120) || 'falha ao converter' };
@@ -142,7 +160,92 @@ async function defaultSend(userId: string, connectionId: string, remoteJid: stri
   if (!res.ok) throw new Error(`O WhatsApp recusou a resposta (HTTP ${res.status}).`);
 }
 
-const defaults: AssistantDeps = { convert: defaultConvert, send: defaultSend, todayOffers: defaultTodayOffers, searchShopee: defaultSearchShopee };
+async function gateway(userId: string, connectionId: string) {
+  const { copierConnection } = await import('@/lib/server/copier-group-catalog');
+  const session = { userId, role: 'user' as const, email: '', createdAt: 0, expiresAt: 0 };
+  return (await copierConnection(session, connectionId)).connection;
+}
+
+async function defaultSendImage(userId: string, connectionId: string, remoteJid: string, imageUrl: string, caption: string): Promise<void> {
+  const connection = await gateway(userId, connectionId);
+  const res = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/sendMedia/${encodeURIComponent(connection.instanceName)}`, {
+    method: 'POST',
+    headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number: remoteJid, mediatype: 'image', media: imageUrl, caption }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  if (!res.ok) throw new Error(`O WhatsApp recusou a foto (HTTP ${res.status}).`);
+}
+
+async function defaultSourcePhoto(userId: string, connectionId: string, message: any, id: string): Promise<string | null> {
+  try {
+    const connection = await gateway(userId, connectionId);
+    const { fetchSourceImageUrl } = await import('@/lib/server/source-image');
+    return (await fetchSourceImageUrl({ baseUrl: connection.baseUrl, apiKey: connection.apiKey, instanceName: connection.instanceName,
+      messageData: message, messageId: `assistente-${id}` })) || null;
+  } catch { return null; }
+}
+
+/** Mesma oferta enviada aos grupos nos últimos 3 dias (foto já no estilo do Copiador + cupom). */
+async function groupOfferFor(userId: string, cleanUrl?: string): Promise<{ mediaUrl: string | null; coupon: string | null } | null> {
+  const key = productKey(cleanUrl);
+  if (!key) return null;
+  const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await db().from('publication_jobs').select('media_url, message_text')
+    .eq('user_id', userId).eq('status', 'enviado').gte('created_at', since).ilike('clean_url', `%${key}%`)
+    .order('created_at', { ascending: false }).limit(1);
+  const row = data?.[0];
+  if (!row) return null;
+  const { parseGroupOffer } = await import('./link-message');
+  return { mediaUrl: row.media_url || null, coupon: parseGroupOffer(row.message_text || '', 'https://x')?.coupon || null };
+}
+
+/** Foto oficial da loja quando a conversão não trouxe uma (Amazon pelo ASIN, Netshoes pela Rakuten). */
+async function storePhoto(userId: string, converted: ConvertOutcome): Promise<string | null> {
+  if (converted.imageUrl) return converted.imageUrl;
+  try {
+    const { findAmazonPhotoByAsin, findNetshoesPhotoViaRakuten } = await import('@/lib/server/missing-photo');
+    if (converted.store === 'amazon') {
+      const asin = /\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i.exec(converted.cleanUrl || '')?.[1];
+      return (asin && (await findAmazonPhotoByAsin(asin))) || null;
+    }
+    if (converted.store === 'netshoes') {
+      const { getStoreCredentialsMapWithSecrets } = await import('@/lib/server/credentials-vault');
+      const { rakutenCredentialsFrom } = await import('@/lib/server/affiliate-converter');
+      const ns: any = (await getStoreCredentialsMapWithSecrets(userId)).netshoes;
+      return (await findNetshoesPhotoViaRakuten(rakutenCredentialsFrom(ns), String(ns?.sessionData?.netshoesAdvertiserId || ''), converted.cleanUrl || '', '')) || null;
+    }
+  } catch { /* sem foto */ }
+  return null;
+}
+
+/** Foto no estilo do Copiador: template do cliente (Ultimate) ou foto quadrada com a marca d'água. */
+async function styledPhoto(userId: string, raw: string, converted: ConvertOutcome, id: string): Promise<string | undefined> {
+  try {
+    const { applyCopierTemplate } = await import('@/lib/server/copier-photo-template');
+    const templated = await applyCopierTemplate(userId, raw, `assistente-${id}`);
+    if (templated) return templated;
+    const { getBrandSettings } = await import('@/lib/server/brand-settings');
+    const { optimizeProductImageForWhatsApp } = await import('@/lib/server/product-image-optimizer');
+    const brand = await getBrandSettings(userId);
+    const handle = brand.watermarkHandle && brand.watermarkHandle !== '@radar.ofertas.br1' ? brand.watermarkHandle : undefined;
+    return (await optimizeProductImageForWhatsApp(raw, userId, { watermark: brand.watermarkEnabled, watermarkHandle: handle,
+      productPageUrl: converted.cleanUrl, store: converted.store as never })) || raw;
+  } catch { return raw; }
+}
+
+async function defaultEnrich(userId: string, converted: ConvertOutcome, sourcePhoto: string | null, id: string) {
+  const offer = await groupOfferFor(userId, converted.cleanUrl).catch(() => null);
+  const coupon = offer?.coupon || null;
+  if (offer?.mediaUrl) return { photoUrl: offer.mediaUrl, coupon };
+  const raw = sourcePhoto || (await storePhoto(userId, converted));
+  return { photoUrl: raw ? await styledPhoto(userId, raw, converted, id) : undefined, coupon };
+}
+
+const defaults: AssistantDeps = {
+  convert: defaultConvert, send: defaultSend, todayOffers: defaultTodayOffers, searchShopee: defaultSearchShopee,
+  enrich: defaultEnrich, sourcePhoto: defaultSourcePhoto, sendImage: defaultSendImage,
+};
 
 /** O que o bot pediu por último a este contato (para entender a resposta seguinte), nos últimos 15 min. */
 async function lastAsked(connectionId: string, hash: string, entryId: string, now: number): Promise<string | null> {
@@ -179,8 +282,12 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
   const links = extractLinks(entry.message_text || '');
   const finish = async (patch: Row) => {
     // Depois de responder, o número e o texto saem do banco (fica só o código embaralhado do contato).
-    const final = { ...patch, remote_jid: null, message_text: null, processed_at: new Date(now).toISOString() };
-    await db().from('assistant_inbox').update(final).eq('id', entry.id);
+    const final = { ...patch, remote_jid: null, message_text: null, source_message: null, processed_at: new Date(now).toISOString() };
+    const { error } = await db().from('assistant_inbox').update(final).eq('id', entry.id);
+    if (error && /source_message/.test(error.message)) {
+      const { source_message: _ignored, ...withoutPhoto } = final;
+      await db().from('assistant_inbox').update(withoutPhoto).eq('id', entry.id);
+    }
     return final;
   };
   try {
@@ -221,12 +328,28 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
     }
     const allowed = links.slice(0, Math.min(MAX_LINKS_PER_MESSAGE, DAILY_LINKS_PER_CONTACT - used));
     const results: ConvertedLink[] = [];
-    for (const link of allowed) {
-      const converted = await deps.convert(entry.user_id, link.url).catch(error => ({ error: error instanceof Error ? error.message : 'falha ao converter' }));
-      results.push({ label: link.label, url: link.url, ...converted });
+    // A foto que a pessoa mandou só vale quando a mensagem tem um único link (não dá para saber de qual produto é).
+    const ownPhoto = allowed.length === 1 && entry.source_message && deps.sourcePhoto
+      ? await deps.sourcePhoto(entry.user_id, entry.connection_id, entry.source_message, String(entry.id)).catch(() => null) : null;
+    for (const [index, link] of allowed.entries()) {
+      const converted: ConvertOutcome = await deps.convert(entry.user_id, link.url).catch(error => ({ error: error instanceof Error ? error.message : 'falha ao converter' }));
+      results.push({ label: link.label, url: link.url, affiliateUrl: converted.affiliateUrl, error: converted.error });
+      if (!converted.affiliateUrl) continue;
+      const extra = deps.enrich
+        ? await deps.enrich(entry.user_id, converted, ownPhoto, `${entry.id}-${index}`).catch(() => ({ photoUrl: undefined, coupon: null }))
+        : { photoUrl: undefined, coupon: null };
+      const caption = linkCaption(converted.affiliateUrl, extra.coupon);
+      if (extra.photoUrl && deps.sendImage) {
+        try { await deps.sendImage(entry.user_id, entry.connection_id, entry.remote_jid, extra.photoUrl, caption); continue; }
+        catch { /* sem foto: manda só o texto */ }
+      }
+      await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, caption);
     }
-    const reply = buildReply(results, { extraLinksIgnored: allowed.length < countLinks(entry.message_text || '') });
-    await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, reply);
+    const failed = results.filter(r => !r.affiliateUrl);
+    const extraIgnored = allowed.length < countLinks(entry.message_text || '');
+    if (failed.length || extraIgnored) {
+      await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, buildReply(failed, { extraLinksIgnored: extraIgnored }).trim());
+    }
     const ok = results.filter(r => r.affiliateUrl).length;
     const firstError = results.find(r => r.error)?.error || null;
     return finish({ status: 'done', kind: 'links', links_total: results.length, links_ok: ok, error: firstError });
@@ -262,3 +385,4 @@ export async function runAssistantCycle(options: { budgetMs?: number } = {}, dep
     .lt('received_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
   return { processed };
 }
+export { defaultConvert as convertForPreview, defaultEnrich as enrichForPreview };

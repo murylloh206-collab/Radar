@@ -142,3 +142,21 @@ test('bot: nome curto quando não há nome do produto e contagem para o aviso de
   assert.match(reply, /\*meli\.la\/2nXEGmW\*\nhttps:\/\/meli\.la\/2YaPc2L/);
   assert.match(reply, /Preparei os 10 primeiros/);
 });
+
+import { linkCaption, productKey } from '../src/lib/server/assistant/link-message';
+
+test('legenda: só o link novo e o cupom, ou o aviso de que não achou', () => {
+  assert.equal(linkCaption('https://meli.la/2YaPc2L', 'OFFHOJEML'), '🔗 https://meli.la/2YaPc2L\n\n🎟️ Cupom: *OFFHOJEML*: aplique no carrinho (pode esgotar)');
+  assert.equal(linkCaption('https://meli.la/2YaPc2L', null), '🔗 https://meli.la/2YaPc2L\n\n🎟️ Não achei cupom para este produto agora.');
+});
+
+test('código do produto para achar a mesma oferta nos grupos', () => {
+  assert.equal(productKey('https://www.mercadolivre.com.br/p/MLB45892583'), 'MLB45892583');
+  assert.equal(productKey('https://www.mercadolivre.com.br/x/up/MLBU3944258888'), 'MLBU3944258888');
+  assert.equal(productKey('https://produto.mercadolivre.com.br/MLB-4043765471-tenis'), 'MLB4043765471');
+  assert.equal(productKey('https://shopee.com.br/product/1633043208/22694547254'), '22694547254');
+  assert.equal(productKey('https://shopee.com.br/Fone-i.447393034.18899613340'), '18899613340');
+  assert.equal(productKey('https://www.amazon.com.br/dp/B0CF479SWM?tag=x'), 'B0CF479SWM');
+  assert.equal(productKey('https://www.netshoes.com.br/p/tenis-adidas-barreda-masculino-FBA-7432-855'), 'FBA-7432-855');
+  assert.equal(productKey('https://exemplo.com'), null);
+});

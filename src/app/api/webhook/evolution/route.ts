@@ -2,7 +2,8 @@ import { after, NextRequest, NextResponse } from 'next/server';
 import { acceptCopierEvent, runDurableCopierCycle, CopierRuntimeError } from '@/lib/server/copier-runtime';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// O assistente responde depois do 202 (after): 10 links com foto levam bem mais que 60 s.
+export const maxDuration = 180;
 export async function GET() { return NextResponse.json({ ok: true, service: 'Evolution webhook receiver' }); }
 export async function POST(req: NextRequest) {
   if (['secret', 'apikey', 'token'].some(parameter => req.nextUrl.searchParams.has(parameter))) {
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     // Assistente: responde depois de devolver o 202 ao gateway (a resposta leva alguns segundos por link).
     if ((result as { assistantInserted?: number }).assistantInserted) {
       const task = async () => {
-        try { const { runAssistantCycle } = await import('@/lib/server/assistant/runtime'); await runAssistantCycle({ budgetMs: 45_000 }); }
+        try { const { runAssistantCycle } = await import('@/lib/server/assistant/runtime'); await runAssistantCycle({ budgetMs: 150_000 }); }
         catch (error) { console.error('[Assistente] ciclo falhou:', error instanceof Error ? error.message : error); }
       };
       try { after(task); } catch { void task(); }

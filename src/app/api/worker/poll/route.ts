@@ -4,7 +4,8 @@ import { checkCronSecret } from '@/lib/server/cron-auth';
 import { runSocialAutopostCycle } from '@/lib/server/social-posts';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// Inclui o assistente (fotos dos produtos): pode passar de 60 s. A reserva da fila impede resposta dupla.
+export const maxDuration = 180;
 
 async function handlePoll(req: NextRequest) {
   const denied = checkCronSecret(req);
