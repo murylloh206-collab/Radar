@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './grupo.css';
 import GroupNumber from './GroupNumber';
+import GroupTracker from './GroupTracker';
 
 export const metadata: Metadata = {
   title: 'Radar de Ofertas | Grupo no WhatsApp',
@@ -17,6 +18,7 @@ export const viewport: Viewport = {
 export default function GrupoRadarDeOfertasPage() {
   return (
     <div id="inicio" className="radar-grupo-root">
+      <GroupTracker />
       <svg className="icons" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <symbol id="i-tag" viewBox="0 0 24 24">
           <path d="M3 4h8l10 10-7 7L3 10z" />
