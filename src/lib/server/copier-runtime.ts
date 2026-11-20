@@ -35,7 +35,12 @@ function database() {
   return supabase;
 }
 function checked<T>(response: { data: T; error: unknown }, operation: string): T {
-  if (response.error) throw new CopierRuntimeError(`${operation} falhou. Confira a migração 06 e a conexão com o banco.`);
+  if (response.error) {
+    // Mostra no log o motivo real do banco (ex.: tempo esgotado), que antes ficava escondido.
+    const e = response.error as { code?: string; message?: string };
+    console.error(`[Copiador] ${operation} falhou no banco: ${e?.code || ''} ${e?.message || ''}`.trim());
+    throw new CopierRuntimeError(`${operation} falhou. Confira a migração 06 e a conexão com o banco.`);
+  }
   return response.data;
 }
 export const serviceSession = (userId: string): UserSession => ({ userId, role: 'user', email: '', createdAt: 0, expiresAt: 0 });
