@@ -7,6 +7,7 @@ import { DEFAULT_PLATFORM_WATERMARK } from '../../plans-config';
 import { ADMIN_UUID } from '../auth';
 import { buildArtTheme } from './theme';
 import { renderPromoArt } from './promo';
+import { renderVitrineArt } from './vitrine';
 import { couponForChannel } from './promo-texts';
 import { fetchProductImage } from './fetch-image';
 
@@ -60,9 +61,26 @@ export async function renderBrandedOfferArt(userId: string, request: BrandedArtR
   const handle = brand.watermarkHandle && (brand.watermarkHandle !== DEFAULT_PLATFORM_WATERMARK.handle || userId === ADMIN_UUID)
     ? brand.watermarkHandle : undefined;
   const channel = request.channel || 'instagram';
+  const theme = buildArtTheme(brand.accentColor, brand.artBackground || 'dark');
+  // Post do feed: arte "vitrine" (texto à esquerda, produto solto à direita), aprovada em 21/11.
+  if (request.format === 'feed') {
+    return renderVitrineArt({
+      theme,
+      background,
+      handle,
+      campaignText: brand.campaignText || null,
+      product: { title: request.title, image: await loadImage(request.imagePathOrUrl) },
+      pricing: { current: request.priceCurrent, original: request.priceOriginal ?? null },
+      discountPct: request.discountPct ?? null,
+      paymentNote: request.paymentNote || null,
+      coupon: couponForChannel(channel, request.coupon),
+      offerNumber: request.offerNumber ?? null,
+      footerCta: request.footerCta,
+    });
+  }
   return renderPromoArt({
     format: request.format,
-    theme: buildArtTheme(brand.accentColor, brand.artBackground || 'dark'),
+    theme,
     background,
     handle,
     campaignText: brand.campaignText || null,
