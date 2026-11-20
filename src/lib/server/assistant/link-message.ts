@@ -20,6 +20,17 @@ export function cleanLabel(raw: string): string | null {
   return text.length > 80 ? `${text.slice(0, 77).trimEnd()}…` : text;
 }
 
+/** Quantos links diferentes a mensagem tem (para avisar quando passar do limite por mensagem). */
+export function countLinks(text: string): number {
+  return new Set((String(text || '').match(URL_RE) || []).map(u => u.replace(TRAILING, ''))).size;
+}
+
+/** Nome curto do link quando a pessoa não escreveu o nome do produto (ex.: "meli.la/2nXEGmW"). */
+export function shortLinkName(url: string): string {
+  try { const u = new URL(url); return `${u.hostname.replace(/^www\./, '')}${u.pathname}`.replace(/\/$/, '').slice(0, 40); }
+  catch { return url.slice(0, 40); }
+}
+
 /** Links na ordem em que aparecem, sem repetidos, cada um com o texto da linha anterior (ou da mesma linha). */
 export function extractLinks(text: string): FoundLink[] {
   const found: FoundLink[] = [];
@@ -55,18 +66,19 @@ export function buildReply(results: ConvertedLink[], options: { extraLinksIgnore
     lines.push(ok.length === 1 ? '✅ Aqui está o seu link:' : `✅ Aqui estão os seus ${ok.length} links:`);
     ok.forEach((r, i) => {
       lines.push('');
-      lines.push(ok.length > 1 ? `*${i + 1}. ${r.label || 'Produto'}*` : `*${r.label || 'Produto'}*`);
+      const name = r.label || shortLinkName(r.url);
+      lines.push(ok.length > 1 ? `*${i + 1}. ${name}*` : `*${name}*`);
       lines.push(r.affiliateUrl!);
     });
   }
   if (failed.length) {
     if (lines.length) lines.push('');
     lines.push(failed.length === 1 ? '⚠️ Não consegui preparar este link:' : '⚠️ Não consegui preparar estes links:');
-    for (const r of failed) lines.push(`• ${r.label || 'Produto'}: ${r.error || 'loja não suportada'}`);
+    for (const r of failed) lines.push(`• ${r.label || shortLinkName(r.url)}: ${r.error || 'loja não suportada'}`);
   }
   if (options.extraLinksIgnored) {
     lines.push('');
-    lines.push(`Mande no máximo ${MAX_LINKS_PER_MESSAGE} links por mensagem.`);
+    lines.push(`Preparei os ${MAX_LINKS_PER_MESSAGE} primeiros. Manda o resto em outra mensagem (até ${MAX_LINKS_PER_MESSAGE} por vez). 😉`);
   }
   return lines.join('\n');
 }

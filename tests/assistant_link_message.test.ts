@@ -122,3 +122,23 @@ test('"Cupom: ATIVE" não é código de cupom', () => {
   const msg = "*Kit 2 Regata Alcinha Urban*\n\n🔥 *Por R$ 61,00*\n🎟️ Cupom: *ATIVE*\n\nhttps://meli.la/1k6csqZ";
   assert.equal(parseGroupOffer(msg, null)?.coupon, null);
 });
+
+import { mercadoLivreVerificationTarget } from '../src/lib/server/url-resolver';
+import { countLinks, shortLinkName } from '../src/lib/server/assistant/link-message';
+
+test('verificação do Mercado Livre: usa o produto escrito em go=, só se for do próprio ML', () => {
+  const v = 'https://www.mercadolivre.com.br/gz/account-verification?go=https%3A%2F%2Fwww.mercadolivre.com.br%2Fp%2FMLB45892583%3Fmatt_tool%3D38524122&tid=x';
+  assert.equal(mercadoLivreVerificationTarget(v), 'https://www.mercadolivre.com.br/p/MLB45892583?matt_tool=38524122');
+  assert.equal(mercadoLivreVerificationTarget('https://www.mercadolivre.com.br/gz/account-verification?go=https%3A%2F%2Fevil.com%2Fx'), null);
+  assert.equal(mercadoLivreVerificationTarget('https://evil.com/gz/account-verification?go=https%3A%2F%2Fwww.mercadolivre.com.br%2Fp%2FMLB1'), null);
+  assert.equal(mercadoLivreVerificationTarget('https://www.mercadolivre.com.br/p/MLB1'), null);
+});
+
+test('bot: nome curto quando não há nome do produto e contagem para o aviso de limite', () => {
+  assert.equal(shortLinkName('https://meli.la/2nXEGmW'), 'meli.la/2nXEGmW');
+  const many = Array.from({ length: 18 }, (_, i) => `https://meli.la/x${i}`).join('\n');
+  assert.equal(countLinks(many), 18);
+  const reply = buildReply([{ label: null, url: 'https://meli.la/2nXEGmW', affiliateUrl: 'https://meli.la/2YaPc2L' }], { extraLinksIgnored: true });
+  assert.match(reply, /\*meli\.la\/2nXEGmW\*\nhttps:\/\/meli\.la\/2YaPc2L/);
+  assert.match(reply, /Preparei os 10 primeiros/);
+});

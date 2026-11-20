@@ -60,12 +60,24 @@ export function detectStoreFromUrl(urlStr: string): StoreName | null {
   }
 }
 
+/** Destino de uma página de verificação do Mercado Livre (?go=<url>), só se for do próprio Mercado Livre. */
+export function mercadoLivreVerificationTarget(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (!/(^|\.)mercadoli(vre|bre)\.com(\.br)?$/i.test(parsed.hostname) || !parsed.pathname.includes('/gz/account-verification')) return null;
+    const go = parsed.searchParams.get('go');
+    if (!go) return null;
+    const target = new URL(go);
+    return /(^|\.)mercadoli(vre|bre)\.com(\.br)?$/i.test(target.hostname) && !target.pathname.includes('/gz/') ? target.toString() : null;
+  } catch { return null; }
+}
+
 export async function resolveUrlSafely(
   inputUrl: string,
   maxRedirects = 6,
   timeoutMs = 6000
 ): Promise<ResolveResult> {
-  let currentUrl = inputUrl.trim();
+  let currentUrl = mercadoLivreVerificationTarget(inputUrl.trim()) || inputUrl.trim();
   const redirectChain: string[] = [currentUrl];
 
   for (let step = 0; step < maxRedirects; step++) {
@@ -160,6 +172,14 @@ export async function resolveUrlSafely(
         const location = res.headers.get('location');
         if (location) {
           const nextUrl = new URL(location, currentUrl).toString();
+          // Mercado Livre às vezes manda para a verificação anti-robô (/gz/account-verification?go=<produto>).
+          // O destino já vem escrito no próprio endereço: usamos ele e paramos aqui, sem abrir a página protegida.
+          const verificationTarget = mercadoLivreVerificationTarget(nextUrl);
+          if (verificationTarget) {
+            currentUrl = verificationTarget;
+            redirectChain.push(nextUrl, currentUrl);
+            break;
+          }
           if (redirectChain.includes(nextUrl)) {
             // Loop detectado
             break;

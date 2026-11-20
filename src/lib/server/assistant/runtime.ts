@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { extractWhatsAppMessageText } from '@/lib/server/copier-service';
 import {
-  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, extractLinks, formatSearch, formatTodayCoupons, formatTodayOffers, isPrivateChat,
+  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, countLinks, extractLinks, formatSearch, formatTodayCoupons, formatTodayOffers, isPrivateChat,
   MAX_LINKS_PER_MESSAGE, MENU_TEXT, parseGroupOffer, parseMenuChoice, replyWithoutLink, trustedHits,
   type ConvertedLink, type GroupOffer, type SearchHit,
 } from './link-message';
@@ -225,7 +225,7 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
       const converted = await deps.convert(entry.user_id, link.url).catch(error => ({ error: error instanceof Error ? error.message : 'falha ao converter' }));
       results.push({ label: link.label, url: link.url, ...converted });
     }
-    const reply = buildReply(results, { extraLinksIgnored: allowed.length < links.length });
+    const reply = buildReply(results, { extraLinksIgnored: allowed.length < countLinks(entry.message_text || '') });
     await deps.send(entry.user_id, entry.connection_id, entry.remote_jid, reply);
     const ok = results.filter(r => r.affiliateUrl).length;
     const firstError = results.find(r => r.error)?.error || null;

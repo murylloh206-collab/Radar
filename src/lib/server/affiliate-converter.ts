@@ -76,6 +76,9 @@ export function sanitizeStoreUrl(urlStr: string, store: StoreName): string {
       url.searchParams.delete('variation');
       url.searchParams.delete('pdp_filters');
       url.searchParams.delete('searchVariation');
+      // Rastreio de quem compartilhou o link original (vem no destino da verificação do ML).
+      url.searchParams.delete('ua');
+      for (const key of [...url.searchParams.keys()]) if (/^matt_/i.test(key)) url.searchParams.delete(key);
     }
 
     // Netshoes: o endereço do produto vem com o rastreio Rakuten de quem postou a oferta original
