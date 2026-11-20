@@ -204,6 +204,10 @@ async function groupOfferFor(userId: string, cleanUrl?: string): Promise<{ media
 async function storePhoto(userId: string, converted: ConvertOutcome): Promise<string | null> {
   if (converted.imageUrl) return converted.imageUrl;
   try {
+    if (converted.store === 'mercadolivre') {
+      const { mlProductPhoto } = await import('@/lib/server/ml-api');
+      return await mlProductPhoto(userId, productKey(converted.cleanUrl));
+    }
     const { findAmazonPhotoByAsin, findNetshoesPhotoViaRakuten } = await import('@/lib/server/missing-photo');
     if (converted.store === 'amazon') {
       const asin = /\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i.exec(converted.cleanUrl || '')?.[1];

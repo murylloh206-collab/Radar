@@ -130,6 +130,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/cron/') || // a própria rota valida o CRON_SECRET
     pathname.startsWith('/api/extension/') || // a própria rota valida o token da extensão
     pathname === '/api/webhooks/mercadopago' || // a própria rota valida a assinatura x-signature
+    pathname === '/api/integrations/mercadolivre/oauth/callback' || // retorno do ML: a rota valida o state cifrado
     pathname.startsWith('/api/comparator/search') ||
     pathname.startsWith('/api/legal/') // consentimento de cookies e pedidos de titular (validados na rota)
   ) {

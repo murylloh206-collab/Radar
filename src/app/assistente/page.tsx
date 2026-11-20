@@ -5,7 +5,7 @@ import { Bot, CheckCircle2, Link2, Loader2, MessageCircle, Power, XCircle } from
 
 interface Connection { id: string; label: string; phoneNumber: string | null; status: string; enabled: boolean }
 interface Recent { id: string; connectionId: string; status: string; kind: string | null; linksTotal: number; linksOk: number; error: string | null; at: string }
-interface Data { connections: Connection[]; today: { conversations: number; links: number; failures: number }; recent: Recent[] }
+interface Data { mlApi?: { connected: boolean; configured: boolean }; connections: Connection[]; today: { conversations: number; links: number; failures: number }; recent: Recent[] }
 
 const time = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const phone = (n: string | null) => (n ? `+${n.replace(/^(\d{2})(\d{2})(\d{4,5})(\d{4})$/, '$1 ($2) $3-$4')}` : 'Sem número');
@@ -30,6 +30,19 @@ export default function AssistentePage() {
   const [locked, setLocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [mlNotice, setMlNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get('ml');
+    if (!status) return;
+    const texts: Record<string, string> = {
+      ok: 'API do Mercado Livre conectada. As fotos do Mercado Livre já vão no assistente.',
+      erro: 'O Mercado Livre recusou a autorização. Tente de novo; se repetir, me avise.',
+      expirado: 'A autorização demorou ou foi interrompida. Clique em Conectar de novo.',
+      negado: 'Só a conta dona pode conectar a API do Mercado Livre.',
+    };
+    setMlNotice({ ok: status === 'ok', text: texts[status] || 'Autorização concluída.' });
+    window.history.replaceState(null, '', '/assistente');
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +91,17 @@ export default function AssistentePage() {
             <div><Link2 className="w-4 h-4" /><strong>{data.today.links}</strong><span>links convertidos hoje</span></div>
             <div><XCircle className="w-4 h-4" /><strong>{data.today.failures}</strong><span>links que não deu para converter</span></div>
           </div>
+
+          {mlNotice && <p className={mlNotice.ok ? 'rp-tag rp-good' : 'rgs-error'} role="status" style={{ display: 'block', padding: '10px 14px', marginBottom: 14 }}>{mlNotice.text}</p>}
+
+          <section className="rp-panel" aria-labelledby="rast-ml">
+            <h2 id="rast-ml">Fotos do Mercado Livre</h2>
+            <p className="rp-sub">Para mandar a foto dos produtos do Mercado Livre que ainda não saíram nos grupos, o assistente usa a API oficial do Mercado Livre (só leitura). Conecte uma vez; o acesso é renovado sozinho.</p>
+            {data.mlApi?.connected
+              ? <span className="rp-tag rp-good"><CheckCircle2 className="w-3.5 h-3.5" /> API do Mercado Livre conectada</span>
+              : <a className="rp-btn rp-primary" href="/api/integrations/mercadolivre/oauth/start" style={{ display: 'inline-flex', marginTop: 8 }}>Conectar API do Mercado Livre</a>}
+            {data.mlApi && !data.mlApi.configured && <p className="rgs-error" style={{ marginTop: 10 }}>As chaves do aplicativo do Mercado Livre não estão configuradas no servidor.</p>}
+          </section>
 
           <section className="rp-panel" aria-labelledby="rast-numeros">
             <h2 id="rast-numeros">Números</h2>

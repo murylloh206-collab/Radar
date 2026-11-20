@@ -3,6 +3,7 @@ import { getStrictSession } from '@/lib/server/auth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { copierConnections } from '@/lib/server/copier-group-catalog';
 import { isAssistantOwner } from '@/lib/server/assistant/access';
+import { mlApiStatus } from '@/lib/server/ml-api';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +24,10 @@ export async function GET(req: NextRequest) {
     .eq('user_id', session.userId).order('received_at', { ascending: false }).limit(200);
   const rows = recent || [];
   const today = rows.filter(r => r.received_at >= since.toISOString());
+  const mlApi = await mlApiStatus(session.userId);
   return NextResponse.json({
     ok: true,
+    mlApi,
     connections: connections.map(c => ({
       id: c.id, label: c.label, phoneNumber: c.phoneNumber || null, status: c.status,
       enabled: (settings.data || []).some(s => s.connection_id === c.id && s.enabled),
