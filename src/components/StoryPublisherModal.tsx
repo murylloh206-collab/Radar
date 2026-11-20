@@ -367,7 +367,7 @@ export default function StoryPublisherModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[2147482995] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-[#0c0c0d] border border-[#2c2c2c] shadow-2xl flex flex-col text-white">
         {/* Cabeçalho do Modal */}
         <div className="p-4 sm:p-5 border-b border-[#2c2c2c] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#161616]">

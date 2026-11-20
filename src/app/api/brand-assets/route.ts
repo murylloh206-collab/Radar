@@ -6,6 +6,7 @@ import {
   BrandAssetError,
   MAX_ASSET_BYTES,
   copierBackgroundUrl,
+  feedBackgroundUrl,
   normalizeBrandAsset,
   removeBackground,
   saveBrandAsset,
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const unauthorized = () => NextResponse.json({ ok: false, error: 'Entre na sua conta.', code: 'UNAUTHORIZED' }, { status: 401 });
-const featureOf = (kind: 'story_background' | 'copier_background') => (kind === 'copier_background' ? 'copier_template' : 'story_template');
+const featureOf = (kind: 'story_background' | 'feed_background' | 'copier_background') => (kind === 'copier_background' ? 'copier_template' : 'story_template');
 
 /** Situação das imagens da marca: fundos atuais (story e copiador) e se o plano permite. */
 export async function GET(req: NextRequest) {
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
     storyTemplateAllowed: story.allowed,
     storyTemplateMessage: story.allowed ? null : story.error,
     storyBackgroundUrl: story.allowed ? await storyBackgroundUrl(session.userId).catch(() => null) : null,
+    feedBackgroundUrl: story.allowed ? await feedBackgroundUrl(session.userId).catch(() => null) : null,
     copierTemplateAllowed: copier.allowed,
     copierTemplateMessage: copier.allowed ? null : copier.error,
     copierBackgroundUrl: copier.allowed ? await copierBackgroundUrl(session.userId).catch(() => null) : null,
@@ -68,7 +70,7 @@ export async function DELETE(req: NextRequest) {
   const session = getStrictSession(req);
   if (!session) return unauthorized();
   const kind = validateAssetKind(req.nextUrl.searchParams.get('kind'));
-  if (kind !== 'story_background' && kind !== 'copier_background') {
+  if (!kind || kind === 'logo') {
     return NextResponse.json({ ok: false, error: 'Só os fundos podem ser removidos aqui.' }, { status: 400 });
   }
   await removeBackground(session.userId, kind).catch(() => {});

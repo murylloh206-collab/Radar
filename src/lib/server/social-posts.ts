@@ -64,7 +64,9 @@ export interface SocialPostRecord {
   createdAt: string;
 }
 
-const ELIGIBLE_WINDOW_HOURS = 48;
+/** Mesmo tempo que a oferta fica nos grupos: o que o copiador enviou nas últimas 24 h. */
+const ELIGIBLE_WINDOW_HOURS = 24;
+const JOBS_PAGE = 1000;
 /** Status que contam na cota e marcam a oferta como já divulgada (pendente = publicação em andamento ou interrompida). */
 const COUNTED: SocialPostStatus[] = ['publicado', 'incerto', 'pendente'];
 
@@ -120,12 +122,19 @@ export function toCandidate(job: JobLike): SocialOfferCandidate | null {
 async function recentCopierJobs(userId: string): Promise<JobLike[]> {
   const since = new Date(Date.now() - ELIGIBLE_WINDOW_HOURS * 3600e3).toISOString();
   if (useDb()) {
-    const { data, error } = await supabase!.from('publication_jobs')
-      .select('id,status,origin_type,sent_at,affiliate_url,media_url,message_text,runtime_payload')
-      .eq('user_id', userId).eq('origin_type', 'copiador').eq('status', 'enviado').gte('sent_at', since)
-      .order('sent_at', { ascending: false }).limit(120);
-    if (error) throw new Error('Não foi possível carregar as ofertas enviadas.');
-    return (data || []).map(row => ({ id: row.id, status: row.status, originType: row.origin_type, sentAt: row.sent_at,
+    // Sem teto de ofertas: cada oferta vai para vários grupos, então lê todos os envios da janela, em páginas.
+    const data: Record<string, any>[] = [];
+    for (let page = 0; page < 50; page++) {
+      const { data: rows, error } = await supabase!.from('publication_jobs')
+        .select('id,status,origin_type,sent_at,affiliate_url,media_url,message_text,runtime_payload')
+        .eq('user_id', userId).eq('origin_type', 'copiador').eq('status', 'enviado').gte('sent_at', since)
+        .order('sent_at', { ascending: false }).order('id', { ascending: true })
+        .range(page * JOBS_PAGE, page * JOBS_PAGE + JOBS_PAGE - 1);
+      if (error) throw new Error('Não foi possível carregar as ofertas enviadas.');
+      data.push(...(rows || []));
+      if (!rows || rows.length < JOBS_PAGE) break;
+    }
+    return data.map(row => ({ id: row.id, status: row.status, originType: row.origin_type, sentAt: row.sent_at,
       affiliateUrl: row.affiliate_url, mediaUrl: row.media_url, messageText: row.message_text,
       socialOffer: row.runtime_payload?.socialOffer || null }));
   }
@@ -134,7 +143,7 @@ async function recentCopierJobs(userId: string): Promise<JobLike[]> {
     .sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt))) as JobLike[];
 }
 
-/** Ofertas que o copiador enviou nas últimas 48h (uma por oferta, mesmo se foi para vários grupos). */
+/** Ofertas que o copiador enviou nas últimas 24h (uma por oferta, mesmo se foi para vários grupos). */
 export async function listEligibleOffers(userId: string): Promise<SocialOfferCandidate[]> {
   const seen = new Set<string>();
   const result: SocialOfferCandidate[] = [];

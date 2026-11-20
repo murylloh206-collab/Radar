@@ -51,3 +51,13 @@ test('copiador: com fundo e plano liberado monta a foto no template; sem fundo o
   assert.equal(await applyCopierTemplate('u1', 'https://x/p.jpg', 'm', deps({ allowed: async () => false })), undefined);
   assert.equal(await applyCopierTemplate('u1', 'https://x/p.jpg', 'm', deps({ loadPhoto: async () => { throw new Error('404'); } })), undefined);
 });
+
+test('fundo próprio do post do feed vira JPEG 1080x1350 e o tipo é aceito', async () => {
+  assert.equal(validateAssetKind('feed_background'), 'feed_background');
+  const src = await sharp({ create: { width: 1200, height: 1500, channels: 3, background: '#0a2a5c' } }).png().toBuffer();
+  const out = await normalizeBrandAsset('feed_background', src);
+  const m = await sharp(out.buffer).metadata();
+  assert.equal(out.contentType, 'image/jpeg');
+  assert.deepEqual([m.width, m.height], [1080, 1350]);
+  await assert.rejects(normalizeBrandAsset('feed_background', await sharp({ create: { width: 500, height: 600, channels: 3, background: '#000' } }).png().toBuffer()), /pequena/);
+});

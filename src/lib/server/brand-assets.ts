@@ -2,7 +2,8 @@ import 'server-only';
 import sharp from 'sharp';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
-export type BrandAssetKind = 'logo' | 'story_background' | 'copier_background';
+export type BrandAssetKind = 'logo' | 'story_background' | 'feed_background' | 'copier_background';
+export type BackgroundKind = Exclude<BrandAssetKind, 'logo'>;
 export const MAX_ASSET_BYTES = 8 * 1024 * 1024;
 
 export class BrandAssetError extends Error {
@@ -31,6 +32,11 @@ export async function normalizeBrandAsset(kind: BrandAssetKind, input: Buffer): 
     const buffer = await sharp(input).rotate().resize(1080, 1080, { fit: 'cover', position: 'centre' }).jpeg({ quality: 90 }).toBuffer();
     return { buffer, contentType: 'image/jpeg' };
   }
+  if (kind === 'feed_background') {
+    if ((meta.width || 0) < 540 || (meta.height || 0) < 675) throw new BrandAssetError('Imagem de fundo pequena demais (mínimo 540×675, ideal 1080×1350).');
+    const buffer = await sharp(input).rotate().resize(1080, 1350, { fit: 'cover', position: 'centre' }).jpeg({ quality: 90 }).toBuffer();
+    return { buffer, contentType: 'image/jpeg' };
+  }
   if ((meta.width || 0) < 540 || (meta.height || 0) < 960) throw new BrandAssetError('Imagem de fundo pequena demais (mínimo 540×960, ideal 1080×1920).');
   const buffer = await sharp(input).rotate().resize(1080, 1920, { fit: 'cover', position: 'centre' }).jpeg({ quality: 90 }).toBuffer();
   return { buffer, contentType: 'image/jpeg' };
@@ -38,8 +44,10 @@ export async function normalizeBrandAsset(kind: BrandAssetKind, input: Buffer): 
 
 export const storyBackgroundPath = (userId: string) => `brand/${userId}/story-background.jpg`;
 export const copierBackgroundPath = (userId: string) => `brand/${userId}/copier-background.jpg`;
-const backgroundPath = (userId: string, kind: 'story_background' | 'copier_background') =>
-  kind === 'copier_background' ? copierBackgroundPath(userId) : storyBackgroundPath(userId);
+/** Fundo próprio do post do feed; sem ele, o feed usa o mesmo fundo do story. */
+export const feedBackgroundPath = (userId: string) => `brand/${userId}/feed-background.jpg`;
+const backgroundPath = (userId: string, kind: BackgroundKind) =>
+  kind === 'copier_background' ? copierBackgroundPath(userId) : kind === 'feed_background' ? feedBackgroundPath(userId) : storyBackgroundPath(userId);
 
 function bucket() {
   if (!isSupabaseConfigured || !supabase) throw new BrandAssetError('Armazenamento indisponível.', 503);
@@ -70,7 +78,23 @@ export async function removeStoryBackground(userId: string): Promise<void> {
 }
 
 export function validateAssetKind(value: unknown): BrandAssetKind | null {
-  return value === 'logo' || value === 'story_background' || value === 'copier_background' ? value : null;
+  return value === 'logo' || value === 'story_background' || value === 'feed_background' || value === 'copier_background' ? value : null;
+}
+
+async function loadAt(path: string): Promise<Buffer | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const { data, error } = await supabase.storage.from('radar-media').download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
+
+/** Fundo próprio do feed (ou null: aí o feed usa o do story). */
+export async function loadFeedBackground(userId: string): Promise<Buffer | null> {
+  return loadAt(feedBackgroundPath(userId));
+}
+
+export async function feedBackgroundUrl(userId: string): Promise<string | null> {
+  return (await loadFeedBackground(userId)) ? `${bucket().getPublicUrl(feedBackgroundPath(userId)).data.publicUrl}?v=${Date.now()}` : null;
 }
 
 /** Fundo das fotos do copiador (ou null). */
@@ -85,6 +109,6 @@ export async function copierBackgroundUrl(userId: string): Promise<string | null
   return (await loadCopierBackground(userId)) ? `${bucket().getPublicUrl(copierBackgroundPath(userId)).data.publicUrl}?v=${Date.now()}` : null;
 }
 
-export async function removeBackground(userId: string, kind: 'story_background' | 'copier_background'): Promise<void> {
+export async function removeBackground(userId: string, kind: BackgroundKind): Promise<void> {
   await bucket().remove([backgroundPath(userId, kind)]);
 }

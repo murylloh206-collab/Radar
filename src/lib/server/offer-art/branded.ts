@@ -51,8 +51,10 @@ export async function renderBrandedOfferArt(userId: string, request: BrandedArtR
   const { checkPlanFeatureAccess } = await import('../plan-guard');
   const access = await checkPlanFeatureAccess('story_template', userId).catch(() => null);
   if (access?.allowed) {
-    const { loadStoryBackground } = await import('../brand-assets');
-    background = await loadStoryBackground(userId).catch(() => null);
+    const { loadFeedBackground, loadStoryBackground } = await import('../brand-assets');
+    // Post do feed: fundo próprio, se o cliente enviou um; senão, o mesmo do story.
+    if (request.format === 'feed') background = await loadFeedBackground(userId).catch(() => null);
+    if (!background) background = await loadStoryBackground(userId).catch(() => null);
   }
   // O @ padrão da plataforma só aparece na conta dona; clientes mostram o próprio @ (ou nenhum).
   const handle = brand.watermarkHandle && (brand.watermarkHandle !== DEFAULT_PLATFORM_WATERMARK.handle || userId === ADMIN_UUID)

@@ -74,7 +74,7 @@ export default function CopierHistoryModal({ isOpen, onClose }: CopierHistoryMod
 
   return (
     <>
-      <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+      <div className="fixed inset-0 z-[2147482990] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
         <div className="relative w-full max-w-4xl bg-[#0b0b0a] border border-[#2c2c2c] rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden my-auto">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#2c2c2c] bg-[#0c0c0d] shrink-0">

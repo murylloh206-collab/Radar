@@ -207,7 +207,7 @@ export default function InstagramProPage() {
           {!loading && !error && (
             offers.length === 0 ? (
               <div className="rp-panel rp-empty">
-                <h2>Nenhuma oferta nas últimas 48 horas</h2>
+                <h2>Nenhuma oferta nas últimas 24 horas</h2>
                 <p>Assim que o copiador enviar ofertas para os seus grupos, elas aparecem aqui prontas para postar.</p>
               </div>
             ) : (
@@ -247,7 +247,8 @@ export default function InstagramProPage() {
         </>
       )}
 
-      <CopierHistoryModal isOpen={showHistory} onClose={() => setShowHistory(false)} />
+      {/* Portal no <body>, como os outros modais: dentro da página animada ele ficava preso e invisível. */}
+      {showHistory && createPortal(<CopierHistoryModal isOpen onClose={() => setShowHistory(false)} />, document.body)}
 
       {dialog && (() => {
         const channel = CHANNELS.find(c => c.id === dialog.channel)!;
@@ -304,7 +305,7 @@ export default function InstagramProPage() {
               <button type="button" className="rp-btn" onClick={() => setSettingsTab(null)} aria-label="Fechar"><X className="w-4 h-4" /></button>
             </div>
             <div role="tablist" style={{ display: 'flex', gap: 6, padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,.08)', flexWrap: 'wrap' }}>
-              {([['identidade', 'Identidade visual', Palette], ['story', 'Template do story', Layers], ['automatico', 'Automático', Zap]] as const).map(([id, label, Icon]) => (
+              {([['identidade', 'Identidade visual', Palette], ['story', 'Templates', Layers], ['automatico', 'Automático', Zap]] as const).map(([id, label, Icon]) => (
                 <button key={id} role="tab" type="button" aria-selected={settingsTab === id} onClick={() => setSettingsTab(id)} className="rp-btn"
                   style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 999, ...(settingsTab === id ? { background: '#eeba2a', color: '#1e1d1c', borderColor: '#eeba2a' } : {}) }}>
                   <Icon className="w-4 h-4" /> {label}
@@ -410,16 +411,22 @@ function AutopostForm({ settings, busy, onSave }: { settings: Autopost; busy: bo
 }
 
 function StoryTemplatePanel({ sampleJobId }: { sampleJobId: string | null }) {
-  const [state, setState] = useState<{ allowed: boolean; message: string | null; url: string | null } | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [state, setState] = useState<{ allowed: boolean; message: string | null; url: string | null; feedUrl: string | null } | null>(null);
+  /** Post do feed: mesmo fundo do story ou um fundo próprio. */
+  const [feedMode, setFeedMode] = useState<'mesmo' | 'proprio'>('mesmo');
+  const [preview, setPreview] = useState<{ story: string | null; feed: string | null }>({ story: null, feed: null });
   const [previewing, setPreviewing] = useState(false);
 
   const refreshPreview = useCallback(async () => {
     if (!sampleJobId) return;
     setPreviewing(true);
-    const res = await fetch('/api/social/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: sampleJobId, format: 'story' }) }).catch(() => null);
-    const data = res ? await res.json().catch(() => null) : null;
-    setPreview(data?.image || null);
+    const one = async (format: 'story' | 'feed') => {
+      const res = await fetch('/api/social/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: sampleJobId, format }) }).catch(() => null);
+      const data = res ? await res.json().catch(() => null) : null;
+      return (data?.image as string) || null;
+    };
+    const [story, feed] = await Promise.all([one('story'), one('feed')]);
+    setPreview({ story, feed });
     setPreviewing(false);
   }, [sampleJobId]);
 
@@ -427,8 +434,9 @@ function StoryTemplatePanel({ sampleJobId }: { sampleJobId: string | null }) {
     void (async () => {
       const res = await fetch('/api/brand-assets', { cache: 'no-store' }).catch(() => null);
       const data = res ? await res.json().catch(() => null) : null;
-      setState({ allowed: Boolean(data?.storyTemplateAllowed), message: data?.storyTemplateMessage || null, url: data?.storyBackgroundUrl || null });
-      if (data?.storyTemplateAllowed && data?.storyBackgroundUrl) void refreshPreview();
+      setState({ allowed: Boolean(data?.storyTemplateAllowed), message: data?.storyTemplateMessage || null, url: data?.storyBackgroundUrl || null, feedUrl: data?.feedBackgroundUrl || null });
+      setFeedMode(data?.feedBackgroundUrl ? 'proprio' : 'mesmo');
+      if (data?.storyTemplateAllowed && (data?.storyBackgroundUrl || data?.feedBackgroundUrl)) void refreshPreview();
     })();
   }, [refreshPreview]);
 
@@ -436,32 +444,67 @@ function StoryTemplatePanel({ sampleJobId }: { sampleJobId: string | null }) {
   if (!state.allowed) {
     return (
       <div>
-        <h3 style={{ margin: '0 0 4px' }}>Template do story <span className="rp-tag">Ultimate</span></h3>
-        <p style={{ fontSize: 13, opacity: 0.8 }}>Use um fundo seu nos stories, com a oferta num cartão no centro. {state.message}</p>
+        <h3 style={{ margin: '0 0 4px' }}>Templates do story e do post <span className="rp-tag">Ultimate</span></h3>
+        <p style={{ fontSize: 13, opacity: 0.8 }}>Use um fundo seu nos stories e nos posts, com a oferta num cartão no centro. {state.message}</p>
         <a href="/planos" className="rp-btn rp-primary" style={{ display: 'inline-block', marginTop: 8 }}>Ver o plano Ultimate</a>
       </div>
     );
   }
-  const remove = async () => {
-    await fetch('/api/brand-assets?kind=story_background', { method: 'DELETE' }).catch(() => null);
-    setState({ ...state, url: null });
-    setPreview(null);
+  const remove = async (kind: 'story_background' | 'feed_background') => {
+    await fetch(`/api/brand-assets?kind=${kind}`, { method: 'DELETE' }).catch(() => null);
+    setState(s => s && (kind === 'feed_background' ? { ...s, feedUrl: null } : { ...s, url: null }));
+    void refreshPreview();
   };
+  const chooseSame = async () => {
+    setFeedMode('mesmo');
+    if (state.feedUrl) await remove('feed_background');
+  };
+  const box = (aspect: string, img: string | null, label: string) => (
+    <div style={{ aspectRatio: aspect, borderRadius: 14, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {previewing ? <Loader2 className="w-5 h-5 animate-spin" /> : img ? <img src={img} alt={label} style={{ width: '100%' }} /> : <span style={{ fontSize: 12, opacity: 0.6, padding: 12, textAlign: 'center' }}>{label}</span>}
+    </div>
+  );
   return (
-    <div>
-      <h3 style={{ margin: '0 0 4px' }}>Template do story</h3>
-      <p style={{ fontSize: 13, opacity: 0.8, marginTop: 0 }}>
-        Envie um fundo vertical (ideal 1080×1920) com o seu logo no topo e o centro livre: a oferta entra num cartão branco no meio.
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 18, alignItems: 'start' }}>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <ImageDropZone kind="story_background" label="Fundo do story" aspect="9 / 16" hint="PNG, JPG ou WebP. Imagens grandes são reduzidas automaticamente."
-            currentUrl={state.url} onUploaded={url => { setState({ ...state, url }); void refreshPreview(); }} />
-          {state.url && <button type="button" className="rp-btn" onClick={remove} style={{ justifySelf: 'start' }}>Remover fundo e voltar à arte padrão</button>}
-          {!sampleJobId && <p style={{ fontSize: 12, opacity: 0.7 }}>A prévia aparece quando houver uma oferta enviada com foto.</p>}
+    <div style={{ display: 'grid', gap: 22 }}>
+      <div>
+        <h3 style={{ margin: '0 0 4px' }}>Template do story</h3>
+        <p style={{ fontSize: 13, opacity: 0.8, marginTop: 0 }}>
+          Envie um fundo vertical (ideal 1080×1920) com o seu logo no topo e o centro livre: a oferta entra num cartão no meio.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 18, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <ImageDropZone kind="story_background" label="Fundo do story" aspect="9 / 16" hint="PNG, JPG ou WebP. Imagens grandes são reduzidas automaticamente."
+              currentUrl={state.url} onUploaded={url => { setState(s => s && { ...s, url }); void refreshPreview(); }} />
+            {state.url && <button type="button" className="rp-btn" onClick={() => remove('story_background')} style={{ justifySelf: 'start' }}>Remover fundo e voltar à arte padrão</button>}
+            {!sampleJobId && <p style={{ fontSize: 12, opacity: 0.7 }}>A prévia aparece quando houver uma oferta enviada com foto.</p>}
+          </div>
+          {box('9 / 16', preview.story, 'Prévia do story')}
         </div>
-        <div style={{ aspectRatio: '9 / 16', borderRadius: 14, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {previewing ? <Loader2 className="w-5 h-5 animate-spin" /> : preview ? <img src={preview} alt="Prévia do story com o seu fundo" style={{ width: '100%' }} /> : <span style={{ fontSize: 12, opacity: 0.6, padding: 12, textAlign: 'center' }}>Prévia do story</span>}
+      </div>
+
+      <div>
+        <h3 style={{ margin: '0 0 4px' }}>Template do post (feed)</h3>
+        <div role="radiogroup" aria-label="Template do post" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '6px 0 12px' }}>
+          <button type="button" role="radio" aria-checked={feedMode === 'mesmo'} className={`rp-btn ${feedMode === 'mesmo' ? 'rp-primary' : ''}`} onClick={() => void chooseSame()}>
+            Mesmo template do story
+          </button>
+          <button type="button" role="radio" aria-checked={feedMode === 'proprio'} className={`rp-btn ${feedMode === 'proprio' ? 'rp-primary' : ''}`} onClick={() => setFeedMode('proprio')}>
+            Template próprio para o post
+          </button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 18, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {feedMode === 'mesmo' ? (
+              <p style={{ fontSize: 13, opacity: 0.8, margin: 0 }}>O post usa o mesmo fundo do story, ajustado ao formato do feed.</p>
+            ) : (
+              <>
+                <p style={{ fontSize: 13, opacity: 0.8, margin: 0 }}>Envie um fundo no formato do feed (ideal 1080×1350). Até enviar, o post continua com o fundo do story.</p>
+                <ImageDropZone kind="feed_background" label="Fundo do post" aspect="4 / 5" hint="PNG, JPG ou WebP. Imagens grandes são reduzidas automaticamente."
+                  currentUrl={state.feedUrl} onUploaded={url => { setState(s => s && { ...s, feedUrl: url }); void refreshPreview(); }} />
+              </>
+            )}
+          </div>
+          {box('4 / 5', preview.feed, 'Prévia do post')}
         </div>
       </div>
     </div>

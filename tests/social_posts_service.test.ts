@@ -29,11 +29,11 @@ async function seed(jobs: unknown[], plans: Record<string, string> = {}) {
   for (const [user, plan] of Object.entries(plans)) await setDevTestPlan(user, plan as any, { ciclo: 'mensal' } as any);
 }
 
-test('só ofertas do próprio cliente, enviadas pelo copiador nas últimas 48h, sem repetir', async () => {
+test('só ofertas do próprio cliente, enviadas pelo copiador nas últimas 24h (mesmo tempo dos grupos), sem repetir', async () => {
   await seed([
     job('a1', 'userA'),
     job('a1-grupo2', 'userA', { affiliateUrl: 'https://s.shopee.com.br/a1', sentAt: hoursAgo(1.5) }), // mesma oferta em outro grupo
-    job('a2', 'userA', { sentAt: hoursAgo(50) }), // velha demais
+    job('a2', 'userA', { sentAt: hoursAgo(25) }), // já saiu da janela de 24 h dos grupos
     job('a3', 'userA', { originType: 'fila' }), // não é do copiador
     job('a4', 'userA', { status: 'falha' }),
     job('b1', 'userB'),
@@ -45,6 +45,16 @@ test('só ofertas do próprio cliente, enviadas pelo copiador nas últimas 48h, 
   assert.equal(offers[0].priceCurrent, 99.9);
   assert.equal(offers[0].priceOriginal, 199.9);
   assert.equal(offers[0].coupon, 'FONE10');
+});
+
+test('sem limite de ofertas dentro das 24 h (cada uma em vários grupos)', async () => {
+  const jobs = [];
+  for (let i = 0; i < 150; i++) for (let g = 0; g < 5; g++) {
+    jobs.push(job(`o${i}-g${g}`, 'userA', { affiliateUrl: `https://s.shopee.com.br/o${i}`, sentAt: hoursAgo(23 * i / 150 + g / 100) }));
+  }
+  await seed(jobs);
+  const { listEligibleOffers } = await import('../src/lib/server/social-posts');
+  assert.equal((await listEligibleOffers('userA')).length, 150);
 });
 
 test('resumo estruturado do copiador tem prioridade (foto limpa, sem marca d\'água)', async () => {
