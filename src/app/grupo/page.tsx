@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './grupo.css';
 import GroupNumber from './GroupNumber';
 import GroupTracker from './GroupTracker';
+import { groupShowcase } from '@/lib/server/group-showcase';
 
 export const metadata: Metadata = {
   title: 'Radar de Ofertas | Grupo no WhatsApp',
@@ -9,8 +10,8 @@ export const metadata: Metadata = {
     'Receba promoções, cupons e achados direto no grupo do Radar de Ofertas no WhatsApp.',
 };
 
-/** Refaz a página de hora em hora (o título de Black Friday sai sozinho quando a data passa). */
-export const revalidate = 3600;
+/** Refaz a página a cada 10 min (ofertas novas; o título de Black Friday sai sozinho quando a data passa). */
+export const revalidate = 600;
 
 /** 1º/12 à meia-noite de Brasília. */
 const BLACK_FRIDAY_END = Date.parse('2026-12-01T03:00:00Z');
@@ -21,7 +22,8 @@ export const viewport: Viewport = {
   themeColor: '#020b1f',
 };
 
-export default function GrupoRadarDeOfertasPage() {
+export default async function GrupoRadarDeOfertasPage() {
+  const offers = await groupShowcase();
   const blackFriday = Date.now() < BLACK_FRIDAY_END;
   return (
     <div id="inicio" className="radar-grupo-root">
@@ -109,6 +111,23 @@ export default function GrupoRadarDeOfertasPage() {
             </ul>
           </div>
 
+          {offers.length > 0 ? (
+            <div className="showcase">
+              <h2>Enviadas no grupo nas últimas 24 horas</h2>
+              <ul>
+                {offers.map(offer => (
+                  <li key={offer.imageUrl}>
+                    <span className="showcase-photo"><img src={offer.imageUrl} alt="" referrerPolicy="no-referrer" /></span>
+                    <span className="showcase-store">{offer.store}</span>
+                    <span className="showcase-title">{offer.title}</span>
+                    <strong>{offer.price}</strong>
+                  </li>
+                ))}
+              </ul>
+              <p>Preço no momento do envio. Pode mudar ou esgotar na loja.</p>
+              <a className="join" href="/grupo/entrar">Quero receber as próximas</a>
+            </div>
+          ) : (
           <div className="art" aria-hidden="true">
             <svg viewBox="0 0 560 450" xmlns="http://www.w3.org/2000/svg">
               <defs>
@@ -270,6 +289,7 @@ export default function GrupoRadarDeOfertasPage() {
               />
             </svg>
           </div>
+          )}
         </section>
 
         <section className="steps" id="como-funciona" aria-labelledby="como-titulo">
