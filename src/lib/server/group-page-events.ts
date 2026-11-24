@@ -47,7 +47,7 @@ export function clickNotice(source: string, clicks: number, visits: number) {
   const rate = visits > 0 ? ` (${Math.round((clicks / visits) * 100)}% das visitas)` : '';
   return {
     title: `Clique no grupo: ${clicks}º de hoje`,
-    body: `Alguém tocou em "Entrar no grupo" (veio de: ${source}).\nHoje: ${clicks} cliques e ${visits} visitas${rate}.`,
+    body: `Alguém tocou no botão do grupo (veio de: ${source}).\nHoje: ${clicks} cliques e ${visits} visitas${rate}.`,
     tags: 'busts_in_silhouette',
     priority: 'low' as const,
     click: 'https://radarofertasbr.vercel.app/grupo',

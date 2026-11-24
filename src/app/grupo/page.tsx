@@ -9,13 +9,20 @@ export const metadata: Metadata = {
     'Receba promoções, cupons e achados direto no grupo do Radar de Ofertas no WhatsApp.',
 };
 
+/** Refaz a página de hora em hora (o título de Black Friday sai sozinho quando a data passa). */
+export const revalidate = 3600;
+
+/** 1º/12 à meia-noite de Brasília. */
+const BLACK_FRIDAY_END = Date.parse('2026-12-01T03:00:00Z');
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0b0b0a',
+  themeColor: '#020b1f',
 };
 
 export default function GrupoRadarDeOfertasPage() {
+  const blackFriday = Date.now() < BLACK_FRIDAY_END;
   return (
     <div id="inicio" className="radar-grupo-root">
       <GroupTracker />
@@ -61,16 +68,16 @@ export default function GrupoRadarDeOfertasPage() {
           <div>
             <p className="eyebrow">Grupo de ofertas<GroupNumber /></p>
             <h1 id="titulo">
-              Seu próximo achado tá no <span>WhatsApp.</span>
+              Ofertas e cupons {blackFriday ? 'de Black Friday ' : ''}no seu <span>WhatsApp.</span>
             </h1>
             <p className="intro">
-              Entre no grupo para receber promoções e cupons direto no celular e aproveitar quando o preço baixar.
+              <strong>Só administradores postam:</strong> zero conversa paralela. Você recebe o link direto da oferta no Mercado Livre, Amazon, Shopee e Netshoes.
             </p>
             <a className="join" href="/grupo/entrar">
               <svg fill="currentColor" aria-hidden="true">
                 <use href="#i-whatsapp" />
               </svg>
-              Entrar no grupo
+              Acessar ofertas no WhatsApp
               <svg
                 className="arrow"
                 fill="none"
@@ -83,32 +90,36 @@ export default function GrupoRadarDeOfertasPage() {
                 <use href="#i-arrow" />
               </svg>
             </a>
-            <p className="join-note">
-              <svg
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <use href="#i-check" />
-              </svg>
-              Participação gratuita
-            </p>
+            <ul className="join-notes">
+              {['Participação gratuita', 'Link direto da loja', 'Saia quando quiser'].map(note => (
+                <li key={note}>
+                  <svg
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-check" />
+                  </svg>
+                  {note}
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="art" aria-hidden="true">
             <svg viewBox="0 0 560 450" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <linearGradient id="ticket" x2="1" y2="1" gradientUnits="objectBoundingBox">
-                  <stop stopColor="#ffe7a3" />
-                  <stop offset=".56" stopColor="#faca45" />
-                  <stop offset="1" stopColor="#efbe37" />
+                  <stop stopColor="#a9f1ff" />
+                  <stop offset=".56" stopColor="#22d3f5" />
+                  <stop offset="1" stopColor="#1496f0" />
                 </linearGradient>
                 <linearGradient id="tag" x2="1" y2="1" gradientUnits="objectBoundingBox">
                   <stop stopColor="#f8f8f8" />
-                  <stop offset="1" stopColor="#fad673" />
+                  <stop offset="1" stopColor="#7fe3fa" />
                 </linearGradient>
                 <pattern
                   id="lines"
@@ -129,11 +140,11 @@ export default function GrupoRadarDeOfertasPage() {
                   />
                 </filter>
               </defs>
-              <g fill="none" stroke="#ffd970" strokeOpacity=".29">
+              <g fill="none" stroke="#4fd8f7" strokeOpacity=".29">
                 <circle cx="281" cy="222" r="158" strokeDasharray="3 8" />
                 <circle cx="281" cy="222" r="181" />
               </g>
-              <g fill="#ffe7a3">
+              <g fill="#a9f1ff">
                 <path
                   className="sparkle"
                   d="M441 74q2 16 18 18-16 2-18 18-2-16-18-18 16-2 18-18Z"
@@ -151,13 +162,13 @@ export default function GrupoRadarDeOfertasPage() {
                   width="288"
                   height="174"
                   rx="18"
-                  fill="#2a2209"
-                  stroke="#ecb213"
+                  fill="#072048"
+                  stroke="#1ccaf2"
                   strokeWidth="1.5"
                 />
                 <path
                   d="M227 14v146"
-                  stroke="#ecb213"
+                  stroke="#1ccaf2"
                   strokeOpacity=".55"
                   strokeDasharray="4 6"
                 />
@@ -241,7 +252,7 @@ export default function GrupoRadarDeOfertasPage() {
                 />
               </g>
               <g
-                fill="#f7e09f"
+                fill="#b5efff"
                 opacity=".84"
                 fontFamily="monospace"
                 fontSize="10"
@@ -254,7 +265,7 @@ export default function GrupoRadarDeOfertasPage() {
               <path
                 d="M25 397v21h22m467-384h22v21"
                 fill="none"
-                stroke="#f1c54d"
+                stroke="#1ccaf2"
                 strokeOpacity=".6"
               />
             </svg>

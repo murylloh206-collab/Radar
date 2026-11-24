@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-/** Conta a visita e o toque em "Entrar no grupo" (sem cookies; o envio não atrasa a ida para o WhatsApp). */
+/** Conta a visita e o toque em "Acessar ofertas no WhatsApp" (sem cookies; o envio não atrasa a ida para o WhatsApp). */
 export default function GroupTracker() {
   useEffect(() => {
     const utm = new URLSearchParams(window.location.search).get('utm_source');

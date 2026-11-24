@@ -1,18 +1,18 @@
 html:has(.radar-grupo-root),
 body:has(.radar-grupo-root) {
-  background: #0b0b0a;
-  color: #f6f2e8;
+  background: #020b1f;
+  color: #f3f8ff;
 }
 
 .radar-grupo-root {
   color-scheme: dark;
-  --page: #0b0b0a;
-  --panel: #161616;
-  --paper: #f6f2e8;
-  --muted: #b3ada2;
-  --cyan: #f5c542;
-  --button: #f5c542;
-  --line: #2c2c2c;
+  --page: #020b1f;
+  --panel: #071530;
+  --paper: #f3f8ff;
+  --muted: #a9b8d0;
+  --cyan: #1ccaf2;
+  --button: #25d366;
+  --line: #17294b;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: normal;
   min-height: 100vh;
@@ -113,7 +113,7 @@ body:has(.radar-grupo-root) {
 }
 
 .radar-grupo-root h1 {
-  max-width: 12ch;
+  max-width: 13ch;
   margin: 17px 0 18px;
   font-size: clamp(3.05rem, 6.25vw, 5.35rem);
   font-weight: 900;
@@ -151,8 +151,8 @@ body:has(.radar-grupo-root) {
 }
 
 .radar-grupo-root .join:hover {
-  background: #f9dc85;
-  box-shadow: 0 5px 27px #38cfff33;
+  background: #4be084;
+  box-shadow: 0 5px 27px #25d36640;
 }
 
 .radar-grupo-root .join svg {
@@ -167,16 +167,29 @@ body:has(.radar-grupo-root) {
   height: 16px;
 }
 
-.radar-grupo-root .join-note {
+.radar-grupo-root .intro strong {
+  color: var(--paper);
+}
+
+.radar-grupo-root .join-notes {
   display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 12px 0 0;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
   color: var(--muted);
   font-size: 0.82rem;
 }
 
-.radar-grupo-root .join-note svg {
+.radar-grupo-root .join-notes li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radar-grupo-root .join-notes svg {
+  flex: none;
   width: 16px;
   height: 16px;
   color: var(--cyan);
@@ -190,9 +203,9 @@ body:has(.radar-grupo-root) {
   justify-self: end;
   aspect-ratio: 560 / 450;
   overflow: hidden;
-  border: 1px solid #3d3d3d;
+  border: 1px solid #1b3a6b;
   border-radius: 26px;
-  background: radial-gradient(ellipse at 55% 43%, #2a2209 0%, #161616 46%, #0c0c0d 85%);
+  background: radial-gradient(ellipse at 55% 43%, #0a2c63 0%, #061633 46%, #020b1f 85%);
 }
 
 .radar-grupo-root .art::before {
@@ -295,7 +308,7 @@ body:has(.radar-grupo-root) {
   width: 37px;
   height: 37px;
   border-radius: 10px;
-  background: #20201f;
+  background: #0c2348;
   color: var(--cyan);
 }
 
@@ -365,6 +378,9 @@ body:has(.radar-grupo-root) {
   }
   .radar-grupo-root .intro {
     margin-bottom: 20px;
+  }
+  .radar-grupo-root .join {
+    width: 100%;
   }
   .radar-grupo-root .art {
     justify-self: start;
