@@ -12,10 +12,11 @@ const phone = (n: string | null) => (n ? `+${n.replace(/^(\d{2})(\d{2})(\d{4,5})
 
 function describe(r: Recent): string {
   if (r.kind === 'conversa') return 'Mandou mensagem sem link: o bot respondeu e pediu o link';
-  if (r.kind === 'pediu_link') return 'Escolheu 1 (converter link)';
+  if (r.kind === 'pediu_link') return 'Escolheu 1 (procurar cupom)';
   if (r.kind === 'pediu_busca') return 'Escolheu 4 (buscar nas lojas)';
   if (r.kind === 'ofertas') return 'Escolheu 2 (ofertas de hoje)';
   if (r.kind === 'cupons') return 'Escolheu 3 (cupons de hoje)';
+  if (r.kind === 'grupo') return 'Escolheu 5 (link do grupo)';
   if (r.kind === 'busca') return `Buscou nas lojas: ${r.linksOk} ${r.linksOk === 1 ? 'opção confiável' : 'opções confiáveis'}`;
   if (r.kind === 'ajuda') return 'Recebeu o menu';
   if (r.kind === 'sem_link') return 'Muitas mensagens sem link em 1 hora: o bot pausou com esta pessoa';

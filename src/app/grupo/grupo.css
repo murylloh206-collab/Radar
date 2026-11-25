@@ -171,6 +171,39 @@ body:has(.radar-grupo-root) {
   color: var(--paper);
 }
 
+.radar-grupo-root .join-bot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: fit-content;
+  min-width: 345px;
+  max-width: 100%;
+  min-height: 54px;
+  margin-top: 10px;
+  padding: 9px 18px;
+  border: 1.5px solid #2b5590;
+  border-radius: 12px;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.radar-grupo-root .join-bot:hover {
+  border-color: var(--cyan);
+  background: #0a1f42;
+}
+
+.radar-grupo-root .join-bot strong {
+  font-size: 0.95rem;
+}
+
+.radar-grupo-root .join-bot span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .radar-grupo-root .join-notes {
   display: flex;
   flex-wrap: wrap;
@@ -473,6 +506,10 @@ body:has(.radar-grupo-root) {
   }
   .radar-grupo-root .join {
     width: 100%;
+  }
+  .radar-grupo-root .join-bot {
+    width: 100%;
+    min-width: 0;
   }
   .radar-grupo-root .art {
     justify-self: start;

@@ -76,7 +76,7 @@ test('sem link: responde ao que a pessoa disse e pede o link', () => {
   assert.match(replyWithoutLink('quero uma air fryer'), /link do produto/);
 });
 
-import { ASK_LINK_TEXT, formatTodayCoupons, formatTodayOffers, HELP_TEXT, MENU_TEXT, parseGroupOffer, parseMenuChoice } from '../src/lib/server/assistant/link-message';
+import { ASK_LINK_TEXT, groupInviteText, formatTodayCoupons, formatTodayOffers, HELP_TEXT, MENU_TEXT, parseGroupOffer, parseMenuChoice } from '../src/lib/server/assistant/link-message';
 
 test('menu: números, emojis de número e "menu"', () => {
   assert.equal(parseMenuChoice('1'), 'link');
@@ -85,7 +85,12 @@ test('menu: números, emojis de número e "menu"', () => {
   assert.equal(parseMenuChoice(' 4. '), 'busca');
   assert.equal(parseMenuChoice('Menu'), 'menu');
   assert.equal(parseMenuChoice('0'), 'menu');
-  assert.equal(parseMenuChoice('5'), null);
+  assert.equal(parseMenuChoice('5️⃣'), 'grupo');
+  for (const t of ['grupo', 'Link do grupo?', 'quero entrar no grupo', 'me manda o link do grupo']) assert.equal(parseMenuChoice(t), 'grupo', t);
+  assert.equal(parseMenuChoice('vi no grupo uma air fryer'), null);
+  assert.equal(parseMenuChoice('6'), null);
+  assert.match(MENU_TEXT, /5️⃣ Entrar no grupo/);
+  assert.match(groupInviteText('https://chat.whatsapp.com/abc'), /chat\.whatsapp\.com\/abc[\s\S]*opcional/);
   assert.equal(parseMenuChoice('quero 2 air fryers'), null);
   assert.match(MENU_TEXT, /1️⃣[\s\S]*2️⃣[\s\S]*3️⃣[\s\S]*4️⃣/);
   assert.match(MENU_TEXT, /1️⃣ Procurar cupom pro seu produto \(cole o link\)/);

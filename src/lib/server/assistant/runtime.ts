@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { extractWhatsAppMessageText } from '@/lib/server/copier-service';
 import {
-  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, countLinks, extractLinks, linkCaption, productKey, formatTodayCoupons, formatTodayOffers, isPrivateChat,
+  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, countLinks, extractLinks, linkCaption, productKey, formatTodayCoupons, formatTodayOffers, groupInviteText, isPrivateChat,
   MAX_LINKS_PER_MESSAGE, MENU_TEXT, parseGroupOffer, parseMenuChoice, replyWithoutLink,
   type ConvertedLink, type GroupOffer,
 } from './link-message';
@@ -96,6 +96,8 @@ export interface AssistantDeps {
   todayOffers?: (userId: string) => Promise<GroupOffer[]>;
   /** Busca nas lojas: ao vivo onde há API (Shopee) e ofertas de hoje do grupo (todas as lojas). */
   searchStores?: (userId: string, query: string) => Promise<StoreSearch>;
+  /** Convite do grupo da vez (mesmo rodízio da página /grupo). */
+  groupInvite?: () => Promise<string>;
   now?: () => number;
 }
 
@@ -288,6 +290,7 @@ async function defaultEnrich(userId: string, converted: ConvertOutcome, sourcePh
 
 const defaults: AssistantDeps = {
   convert: defaultConvert, send: defaultSend, todayOffers: defaultTodayOffers, searchStores: defaultSearchStores,
+  groupInvite: async () => (await import('@/lib/server/group-rotation-live')).resolveRotationInvite(),
   enrich: defaultEnrich, sourcePhoto: defaultSourcePhoto, sendImage: defaultSendImage,
 };
 
@@ -309,7 +312,7 @@ async function linksToday(connectionId: string, hash: string, now: number): Prom
 async function noLinkRepliesLastHour(connectionId: string, hash: string, now: number): Promise<number> {
   const since = new Date(now - 60 * 60 * 1000).toISOString();
   const { data } = await db().from('assistant_inbox').select('id')
-    .eq('connection_id', connectionId).eq('contact_hash', hash).in('kind', ['ajuda', 'conversa', 'pediu_link', 'pediu_busca', 'ofertas', 'cupons', 'busca']).gte('received_at', since);
+    .eq('connection_id', connectionId).eq('contact_hash', hash).in('kind', ['ajuda', 'conversa', 'pediu_link', 'pediu_busca', 'ofertas', 'cupons', 'busca', 'grupo']).gte('received_at', since);
   return data?.length || 0;
 }
 
@@ -344,6 +347,10 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
       if (choice === 'menu') { await say(MENU_TEXT); return finish({ status: 'done', kind: 'ajuda' }); }
       if (choice === 'link') { await say(ASK_LINK_TEXT); return finish({ status: 'done', kind: 'pediu_link' }); }
       if (choice === 'busca') { await say(ASK_SEARCH_TEXT); return finish({ status: 'done', kind: 'pediu_busca' }); }
+      if (choice === 'grupo' && deps.groupInvite) {
+        await say(groupInviteText(await deps.groupInvite()));
+        return finish({ status: 'done', kind: 'grupo' });
+      }
       if (choice === 'ofertas' || choice === 'cupons') {
         const offers = deps.todayOffers ? await deps.todayOffers(entry.user_id) : [];
         await say(choice === 'ofertas' ? formatTodayOffers(offers.slice(0, 5)) : formatTodayCoupons(offers.filter(o => o.coupon).slice(0, 5)));

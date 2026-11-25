@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const ua = req.headers.get('user-agent') || '';
   let body: { kind?: unknown; ref?: unknown; utm?: unknown } = {};
   try { body = JSON.parse(await req.text()); } catch { /* corpo vazio */ }
-  const kind = body.kind === 'clique' ? 'clique' : body.kind === 'visita' ? 'visita' : null;
+  const kind = body.kind === 'clique' || body.kind === 'clique_bot' || body.kind === 'visita' ? body.kind : null;
   if (!kind || isBot(ua)) return new NextResponse(null, { status: 204 });
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || req.headers.get('x-real-ip') || '';
   const day = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);

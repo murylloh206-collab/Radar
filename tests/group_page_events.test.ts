@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clickNotice, isBot, sourceOf, startOfTodayBrt, visitorCode } from '../src/lib/server/group-page-events';
+import { botClickNotice, clickNotice, isBot, sourceOf, startOfTodayBrt, visitorCode } from '../src/lib/server/group-page-events';
 
 test('robôs e prévias de link não contam', () => {
   assert.equal(isBot('facebookexternalhit/1.1'), true);
@@ -34,4 +34,13 @@ test('aviso do clique traz total do dia e taxa', () => {
   assert.equal(n.title, 'Clique no grupo: 3º de hoje');
   assert.match(n.body, /veio de: instagram/);
   assert.match(n.body, /3 cliques e 12 visitas \(25% das visitas\)/);
+});
+
+import { botChatUrl } from '../src/lib/server/group-bot';
+
+test('botão do bot: conversa com "menu" escrito; número inválido não gera link', () => {
+  assert.equal(botChatUrl('5511999990000:12@s.whatsapp.net'), 'https://wa.me/5511999990000?text=menu');
+  assert.equal(botChatUrl('+55 11 99999-0000'), 'https://wa.me/5511999990000?text=menu');
+  assert.equal(botChatUrl(null), null);
+  assert.match(botClickNotice('ig', 2, 10).title, /Toque no bot: 2º/);
 });

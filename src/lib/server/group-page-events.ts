@@ -8,7 +8,7 @@ import { notifyOwner } from '@/lib/server/owner-notify';
  * Sem IP guardado: o visitante vira um código do dia (hash com segredo), só para não contar repetido.
  */
 
-export type GroupEventKind = 'visita' | 'clique';
+export type GroupEventKind = 'visita' | 'clique' | 'clique_bot';
 const REPEAT_WINDOW_MIN = 30;
 
 export function isBot(userAgent: string): boolean {
@@ -54,13 +54,18 @@ export function clickNotice(source: string, clicks: number, visits: number) {
   };
 }
 
+export function botClickNotice(source: string, clicks: number, visits: number) {
+  return { ...clickNotice(source, clicks, visits), title: `Toque no bot: ${clicks}º de hoje`,
+    body: `Alguém abriu a conversa com o bot pela página do grupo (veio de: ${source}).\nHoje: ${clicks} toques no bot e ${visits} visitas.` };
+}
+
 const count = async (kind: GroupEventKind, since: string) => {
   const { count: n } = await supabase!.from('group_page_events').select('id', { count: 'exact', head: true })
     .eq('kind', kind).gte('created_at', since);
   return n || 0;
 };
 
-/** Registra a visita/clique (uma vez por pessoa a cada 30 min) e, no clique, avisa no ntfy. */
+/** Registra a visita/clique (uma vez por pessoa a cada 30 min) e, nos cliques, avisa no ntfy. */
 export async function recordGroupEvent(input: { kind: GroupEventKind; visitor: string; source: string }): Promise<'gravado' | 'repetido' | 'sem_banco'> {
   if (!isSupabaseConfigured || !supabase) return 'sem_banco';
   const recent = new Date(Date.now() - REPEAT_WINDOW_MIN * 60e3).toISOString();
@@ -68,11 +73,11 @@ export async function recordGroupEvent(input: { kind: GroupEventKind; visitor: s
     .eq('visitor', input.visitor).eq('kind', input.kind).gte('created_at', recent).limit(1);
   if (seen?.length) return 'repetido';
   const { error } = await supabase.from('group_page_events').insert({ kind: input.kind, visitor: input.visitor, source: input.source });
-  if (error) { console.error('[Grupo] contador sem a migração 20?', error.message); return 'sem_banco'; }
-  if (input.kind === 'clique') {
+  if (error) { console.error('[Grupo] contador sem a migração 20/22?', error.message); return 'sem_banco'; }
+  if (input.kind !== 'visita') {
     const since = startOfTodayBrt();
-    const [clicks, visits] = await Promise.all([count('clique', since), count('visita', since)]);
-    await notifyOwner(clickNotice(input.source, clicks, visits));
+    const [clicks, visits] = await Promise.all([count(input.kind, since), count('visita', since)]);
+    await notifyOwner((input.kind === 'clique' ? clickNotice : botClickNotice)(input.source, clicks, visits));
   }
   return 'gravado';
 }

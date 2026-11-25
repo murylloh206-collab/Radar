@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './grupo.css';
 import GroupNumber from './GroupNumber';
 import GroupTracker from './GroupTracker';
+import { botAvailable } from '@/lib/server/group-bot';
 import { groupShowcase } from '@/lib/server/group-showcase';
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export const viewport: Viewport = {
 };
 
 export default async function GrupoRadarDeOfertasPage() {
-  const offers = await groupShowcase();
+  const [offers, hasBot] = await Promise.all([groupShowcase(), botAvailable().catch(() => false)]);
   const blackFriday = Date.now() < BLACK_FRIDAY_END;
   return (
     <div id="inicio" className="radar-grupo-root">
@@ -92,6 +93,12 @@ export default async function GrupoRadarDeOfertasPage() {
                 <use href="#i-arrow" />
               </svg>
             </a>
+            {hasBot && (
+              <a className="join-bot" href="/grupo/bot" rel="nofollow">
+                <strong>Prefere usar só o bot?</strong>
+                <span>Procure cupom sem entrar no grupo</span>
+              </a>
+            )}
             <ul className="join-notes">
               {['Participação gratuita', 'Link direto da loja', 'Saia quando quiser'].map(note => (
                 <li key={note}>

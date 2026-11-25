@@ -116,6 +116,7 @@ export const MENU_TEXT = [
   '2️⃣ Ofertas de hoje do grupo',
   '3️⃣ Cupons de hoje',
   '4️⃣ Buscar um produto nas lojas',
+  '5️⃣ Entrar no grupo de ofertas',
   '',
   'Se preferir, me mande direto o link do produto. 😉',
 ].join('\n');
@@ -123,15 +124,21 @@ export const MENU_TEXT = [
 export const ASK_LINK_TEXT = 'Cola aqui o link do produto que eu procuro cupom pra ele 🎟️ (pode mandar vários, um por linha)';
 export const ASK_SEARCH_TEXT = 'O que você procura? Escreve o nome do produto, por exemplo: *air fryer 4 litros* 🔎';
 
-export type MenuChoice = 'menu' | 'link' | 'ofertas' | 'cupons' | 'busca';
+/** Convite do grupo. Entrar é opcional: o bot continua funcionando para quem não entra. */
+export function groupInviteText(url: string): string {
+  return `👥 *Grupo Radar de Ofertas*\nSó administradores postam. Entre por aqui:\n${url}\n\nEntrar é opcional: você pode continuar usando o bot por aqui. 😉`;
+}
 
-/** "1", "1️⃣", "opção 2", "menu", "0"… → escolha do menu; texto comum → null. */
+export type MenuChoice = 'menu' | 'link' | 'ofertas' | 'cupons' | 'busca' | 'grupo';
+
+/** "1", "1️⃣", "opção 2", "menu", "0", "link do grupo"… → escolha do menu; texto comum → null. */
 export function parseMenuChoice(text: string): MenuChoice | null {
   const t = String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[⃣️]/g, '').trim();
   if (/^(menu|inicio|opcoes|0)$/.test(t)) return 'menu';
-  const n = /^(?:opcao|op|numero|n)?\s*([1-4])\s*[.)!]?$/.exec(t)?.[1];
-  return n === '1' ? 'link' : n === '2' ? 'ofertas' : n === '3' ? 'cupons' : n === '4' ? 'busca' : null;
+  if (/^(?:(?:quero|como|me manda|manda|qual|posso)\s+)?(?:o\s+|eu\s+)?(?:(?:link|convite)\s+(?:do|de|pro|para o)\s+)?(?:entrar\s+(?:no|em um|num)\s+)?grupo(?:\s+de ofertas)?\s*[?!.]*$/.test(t)) return 'grupo';
+  const n = /^(?:opcao|op|numero|n)?\s*([1-5])\s*[.)!]?$/.exec(t)?.[1];
+  return n === '1' ? 'link' : n === '2' ? 'ofertas' : n === '3' ? 'cupons' : n === '4' ? 'busca' : n === '5' ? 'grupo' : null;
 }
 
 export interface GroupOffer { title: string; price: string | null; coupon: string | null; link: string }
@@ -155,7 +162,7 @@ export function formatTodayOffers(offers: GroupOffer[]): string {
   if (!offers.length) return 'Hoje ainda não saiu oferta no grupo. Volta mais tarde ou me manda o link de um produto. 😉';
   const lines = ['🔥 *Ofertas de hoje do grupo:*'];
   offers.forEach((o, i) => { lines.push('', `*${i + 1}. ${o.title}*${o.price ? ` — R$ ${o.price}` : ''}`, o.link); });
-  lines.push('', 'Digite *menu* para ver as opções.');
+  lines.push('', 'Digite *menu* para ver as opções ou *5* para entrar no grupo.');
   return lines.join('\n');
 }
 
