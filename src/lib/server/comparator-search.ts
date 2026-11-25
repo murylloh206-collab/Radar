@@ -54,6 +54,9 @@ export interface ComparatorSearchResult {
   storeDiagnostics: StoreSearchDiagnostic[];
 }
 
+/** Origem dos itens do catálogo salvo (não são consultados na hora). */
+export const CATALOG_SOURCE_LABEL = 'Catálogo Verificado do Painel';
+
 // Cache em memória de 5 minutos (configurável)
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const comparatorCache = new Map<
@@ -403,9 +406,20 @@ async function searchMercadoLivreOfficialApi(
 /**
  * Busca na API Oficial de Afiliados da Shopee (`productOfferV2` GraphQL)
  */
-async function searchShopeeOfficialAffiliateApi(
+/** A API da Shopee devolve "System Error" (10000) de vez em quando: tenta até 3 vezes. */
+async function searchShopeeOfficialAffiliateApi(query: string, userId: string, limit = 6) {
+  let result = await searchShopeeOnce(query, userId, limit);
+  for (let attempt = 1; attempt < 3 && result.diagnostic.status === 'error' && /\[10000\]|System Error/i.test(result.diagnostic.message); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 700 * attempt));
+    result = await searchShopeeOnce(query, userId, limit);
+  }
+  return result;
+}
+
+async function searchShopeeOnce(
   query: string,
-  userId: string
+  userId: string,
+  limit = 6
 ): Promise<{
   offers: Omit<ComparatorOfferItem, 'costBenefitScore' | 'isBestValue' | 'bestValueReason'>[];
   diagnostic: StoreSearchDiagnostic;
@@ -428,7 +442,7 @@ async function searchShopeeOfficialAffiliateApi(
 
   const nowSec = Math.floor(Date.now() / 1000);
   const gqlQuery = `query {
-    productOfferV2(keyword: ${JSON.stringify(query)}, sortType: 2, limit: 6) {
+    productOfferV2(keyword: ${JSON.stringify(query)}, sortType: 2, limit: ${Math.min(50, Math.max(1, Math.floor(limit)))}) {
       nodes {
         itemId
         productName
@@ -633,7 +647,8 @@ export interface ComparatorStoreProvider {
   description: string;
   executeSearch?: (
     query: string,
-    userId: string
+    userId: string,
+    limit?: number
   ) => Promise<{
     offers: Omit<ComparatorOfferItem, 'costBenefitScore' | 'isBestValue' | 'bestValueReason'>[];
     diagnostic: StoreSearchDiagnostic;
@@ -713,6 +728,8 @@ export async function runComparatorSearch(params: {
   query: string;
   userId?: string;
   forceRefresh?: boolean;
+  /** Resultados por loja (padrão de cada loja: 6). */
+  perStoreLimit?: number;
 }): Promise<ComparatorSearchResult> {
   const userId = params.userId || ADMIN_UUID;
   const rawQuery = (params.query || '').trim();
@@ -720,7 +737,7 @@ export async function runComparatorSearch(params: {
   const suggestion = await resolveDidYouMeanSuggestion(rawQuery);
   const effectiveQuery = suggestion.effectiveQuery || rawQuery;
 
-  const cacheKey = `${userId}::${normalizeTextUnaccent(effectiveQuery)}`;
+  const cacheKey = `${userId}::${params.perStoreLimit || ''}::${normalizeTextUnaccent(effectiveQuery)}`;
   if (!params.forceRefresh) {
     const cached = comparatorCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -739,7 +756,7 @@ export async function runComparatorSearch(params: {
     (p) => p.enabled && typeof p.executeSearch === 'function'
   );
   const providerResults = await Promise.all(
-    activeProviders.map((prov) => prov.executeSearch!(effectiveQuery, userId))
+    activeProviders.map((prov) => prov.executeSearch!(effectiveQuery, userId, params.perStoreLimit))
   );
 
   const liveOffers = providerResults.flatMap((r) => r.offers);
@@ -799,7 +816,7 @@ export async function runComparatorSearch(params: {
         affiliateUrl: prod.affiliateUrl || prod.productUrl,
         isAffiliateLinkVerified: true,
         commissionRatePct: null,
-        dataSourceLabel: 'Catálogo Verificado do Painel',
+        dataSourceLabel: CATALOG_SOURCE_LABEL,
       });
     }
   }
@@ -845,10 +862,13 @@ export async function runComparatorSearch(params: {
     storeDiagnostics,
   };
 
-  comparatorCache.set(cacheKey, {
-    expiresAt: Date.now() + CACHE_TTL_MS,
-    payload,
-  });
+  // Falha da Shopee não fica guardada: a próxima busca tenta de novo.
+  if (!liveDiagnostics.some((d) => d.store === 'shopee' && d.status === 'error')) {
+    comparatorCache.set(cacheKey, {
+      expiresAt: Date.now() + CACHE_TTL_MS,
+      payload,
+    });
+  }
 
   return payload;
 }

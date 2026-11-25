@@ -3,10 +3,12 @@ import { createHash } from 'crypto';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { extractWhatsAppMessageText } from '@/lib/server/copier-service';
 import {
-  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, countLinks, extractLinks, linkCaption, productKey, shortLinkName, formatSearch, formatTodayCoupons, formatTodayOffers, isPrivateChat,
-  MAX_LINKS_PER_MESSAGE, MENU_TEXT, parseGroupOffer, parseMenuChoice, replyWithoutLink, trustedHits,
-  type ConvertedLink, type GroupOffer, type SearchHit,
+  ASK_LINK_TEXT, ASK_SEARCH_TEXT, buildReply, countLinks, extractLinks, linkCaption, productKey, formatTodayCoupons, formatTodayOffers, isPrivateChat,
+  MAX_LINKS_PER_MESSAGE, MENU_TEXT, parseGroupOffer, parseMenuChoice, replyWithoutLink,
+  type ConvertedLink, type GroupOffer,
 } from './link-message';
+import { matchGroupOffer, normalizeLink, offersFromRows, type GroupRow } from './group-match';
+import { formatSearch, searchProducts, type SearchHit, type StoreSearch } from './product-search';
 import { isAssistantOwner } from './access';
 
 /*
@@ -85,48 +87,103 @@ export async function acceptAssistantMessages(connection: { id: string; user_id:
 export interface AssistantDeps {
   convert: (userId: string, url: string) => Promise<ConvertOutcome>;
   /** Foto no estilo do Copiador e cupom da mesma oferta nos grupos (opcional nos testes). */
-  enrich?: (userId: string, converted: ConvertOutcome, sourcePhoto: string | null, id: string) => Promise<{ photoUrl?: string; coupon?: string | null }>;
+  enrich?: (userId: string, converted: ConvertOutcome, sourcePhoto: string | null, id: string) => Promise<{ photoUrl?: string; coupon?: string | null; price?: string | null }>;
   /** Baixa a foto que a pessoa mandou junto com o link. */
   sourcePhoto?: (userId: string, connectionId: string, message: any, id: string) => Promise<string | null>;
   sendImage?: (userId: string, connectionId: string, remoteJid: string, imageUrl: string, caption: string) => Promise<void>;
   send: (userId: string, connectionId: string, remoteJid: string, text: string) => Promise<void>;
   /** Ofertas que o Copiador enviou hoje aos grupos do cliente (mais recentes primeiro). */
   todayOffers?: (userId: string) => Promise<GroupOffer[]>;
-  /** Busca ao vivo na Shopee pela API oficial de afiliado do cliente. */
-  searchShopee?: (userId: string, query: string) => Promise<SearchHit[]>;
+  /** Busca nas lojas: ao vivo onde há API (Shopee) e ofertas de hoje do grupo (todas as lojas). */
+  searchStores?: (userId: string, query: string) => Promise<StoreSearch>;
   now?: () => number;
 }
 
-/** Ofertas enviadas hoje (horário de Brasília) aos grupos, uma por oferta, mais recentes primeiro. */
-async function defaultTodayOffers(userId: string): Promise<GroupOffer[]> {
+const STORE_NAMES: Record<string, string> = { mercadolivre: 'Mercado Livre', shopee: 'Shopee', amazon: 'Amazon', netshoes: 'Netshoes' };
+
+/** Tudo o que foi enviado hoje (horário de Brasília) aos grupos, mais recente primeiro. Base da opção 3, do cupom por link e da busca. */
+async function todayGroupRows(userId: string): Promise<GroupRow[]> {
   const start = new Date(Date.now() - 3 * 60 * 60 * 1000); start.setUTCHours(0, 0, 0, 0);
   const since = new Date(start.getTime() + 3 * 60 * 60 * 1000).toISOString();
-  const { data } = await db().from('publication_jobs').select('message_text, affiliate_url, runtime_inbox_id, sent_at')
-    .eq('user_id', userId).eq('status', 'enviado').gte('sent_at', since).order('sent_at', { ascending: false }).limit(300);
-  const seen = new Set<string>();
-  const offers: GroupOffer[] = [];
-  for (const row of data || []) {
-    const offer = parseGroupOffer(row.message_text || '', row.affiliate_url);
-    if (!offer) continue;
-    const key = row.runtime_inbox_id || offer.title;
-    if (seen.has(key) || seen.has(offer.title)) continue;
-    seen.add(key); seen.add(offer.title);
-    offers.push(offer);
+  const rows: Row[] = [];
+  for (let page = 0; page < 10; page++) {
+    const { data, error } = await db().from('publication_jobs')
+      .select('message_text, affiliate_url, media_url, runtime_inbox_id, runtime_verified_url, sent_at, clean_url, original_url, payload_clean:runtime_payload->>cleanUrl, payload_original:runtime_payload->>originalUrl, payload_store:runtime_payload->socialOffer->>store, payload_title:runtime_payload->socialOffer->>title')
+      .eq('user_id', userId).eq('status', 'enviado').gte('sent_at', since)
+      .order('sent_at', { ascending: false }).order('id', { ascending: true }).range(page * 1000, page * 1000 + 999);
+    if (error) throw new Error(`Não consegui ler as ofertas de hoje: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) break;
   }
-  return offers;
+  return rows.map(row => ({
+    messageText: row.message_text || '',
+    affiliateUrl: row.affiliate_url || null,
+    // O endereço do produto fica no runtime_payload; as colunas só são preenchidas nas ofertas novas.
+    cleanUrl: row.clean_url || row.payload_clean || null,
+    originalUrl: row.original_url || row.payload_original || null,
+    mediaUrl: row.media_url || null,
+    inboxId: row.runtime_inbox_id || null,
+    store: row.payload_store || null,
+    title: row.payload_title || parseGroupOffer(row.message_text || '', row.affiliate_url)?.title || null,
+    verified: Boolean(row.affiliate_url && row.runtime_verified_url === row.affiliate_url),
+  }));
 }
 
-async function defaultSearchShopee(userId: string, query: string): Promise<SearchHit[]> {
-  const { runComparatorSearch } = await import('@/lib/server/comparator-search');
-  const result = await runComparatorSearch({ query, userId });
-  return result.offers.filter(o => o.store === 'shopee' && o.isAffiliateLinkVerified)
-    .map(o => ({ title: o.title, price: o.price, rating: o.rating, sold: o.soldCount, link: o.affiliateUrl }));
+async function defaultTodayOffers(userId: string): Promise<GroupOffer[]> {
+  return offersFromRows(await todayGroupRows(userId));
+}
+
+/** Ofertas de hoje do grupo como resultado de busca (preço e link reais do envio). */
+export function groupHits(rows: GroupRow[]): SearchHit[] {
+  const seen = new Set<string>();
+  const hits: SearchHit[] = [];
+  for (const row of rows) {
+    const offer = parseGroupOffer(row.messageText, row.affiliateUrl);
+    const store = STORE_NAMES[row.store || ''];
+    if (!offer?.price || !row.verified || !store || seen.has(offer.link)) continue;
+    seen.add(offer.link);
+    hits.push({ title: row.title || offer.title, price: Number(offer.price.replace(/\./g, '').replace(',', '.')), rating: null, sold: null, link: offer.link, store, coupon: offer.coupon });
+  }
+  return hits;
+}
+
+async function defaultSearchStores(userId: string, query: string): Promise<StoreSearch> {
+  const { CATALOG_SOURCE_LABEL, runComparatorSearch } = await import('@/lib/server/comparator-search');
+  const [result, rows] = await Promise.all([
+    runComparatorSearch({ query, userId, perStoreLimit: 20 }).catch(() => null),
+    todayGroupRows(userId).catch(() => []),
+  ]);
+  // O catálogo do painel fica de fora: preços antigos e link sem verificação na hora.
+  const live = (result?.offers || []).filter(o => o.isAffiliateLinkVerified && o.dataSourceLabel !== CATALOG_SOURCE_LABEL)
+    .map(o => ({ title: o.title, price: o.price, rating: o.rating, sold: o.soldCount, link: o.affiliateUrl, store: o.storeDisplayName }));
+  const unavailable = !result || result.storeDiagnostics.some(d => d.store === 'shopee' && d.status === 'error');
+  return { hits: [...groupHits(rows), ...live], unavailable };
 }
 
 /** Conversão real: o mesmo conversor e as mesmas contas de afiliado do Copiador. */
-export interface ConvertOutcome { affiliateUrl?: string; cleanUrl?: string; store?: string; imageUrl?: string; error?: string }
+export interface ConvertOutcome { affiliateUrl?: string; cleanUrl?: string; store?: string; imageUrl?: string; sourceUrl?: string; error?: string }
+
+/** Aceita só link confirmado da conta. Se o recebido já era o da própria conta, a conversão devolve ele mesmo, e está certo. */
+export function acceptConversion(result: { store?: string | null; affiliateUrl?: string | null; isAutoDispatchAllowed?: boolean; cleanUrl?: string; meta?: { extractedImageUrl?: string } }, url: string): ConvertOutcome {
+  if (!result.store) return { error: 'loja não suportada (Mercado Livre, Shopee, Amazon ou Netshoes)' };
+  if (!result.affiliateUrl || !result.isAutoDispatchAllowed) return { error: 'não consegui confirmar o link de afiliado desta loja' };
+  return { affiliateUrl: result.affiliateUrl, cleanUrl: result.cleanUrl, store: result.store, imageUrl: result.meta?.extractedImageUrl, sourceUrl: url };
+}
+
+/** Link que a própria conta já enviou e confirmou (copiado do grupo): devolve ele mesmo, sem converter de novo. */
+async function ownSentLink(userId: string, url: string): Promise<ConvertOutcome | null> {
+  const candidates = [...new Set([url, normalizeLink(url)].filter(Boolean))];
+  const { data } = await db().from('publication_jobs')
+    .select('affiliate_url, runtime_verified_url, clean_url, payload_clean:runtime_payload->>cleanUrl, payload_store:runtime_payload->socialOffer->>store, payload_image:runtime_payload->socialOffer->>imageUrl')
+    .eq('user_id', userId).eq('status', 'enviado').in('affiliate_url', candidates).order('sent_at', { ascending: false }).limit(1);
+  const row: Row | undefined = data?.[0];
+  if (!row || row.runtime_verified_url !== row.affiliate_url) return null;
+  return { affiliateUrl: row.affiliate_url, cleanUrl: row.clean_url || row.payload_clean || undefined, store: row.payload_store || undefined, imageUrl: row.payload_image || undefined, sourceUrl: url };
+}
 
 async function defaultConvert(userId: string, url: string): Promise<ConvertOutcome> {
+  const own = await ownSentLink(userId, url).catch(() => null);
+  if (own) return own;
   const { getStoreCredentialsMapWithSecrets } = await import('@/lib/server/credentials-vault');
   const { convertToAffiliateLink } = await import('@/lib/server/affiliate-converter');
   const creds = await getStoreCredentialsMapWithSecrets(userId);
@@ -135,12 +192,7 @@ async function defaultConvert(userId: string, url: string): Promise<ConvertOutco
       convertToAffiliateLink(url, creds),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('a loja demorou para responder')), 25_000)),
     ]);
-    if (!result.store) return { error: 'loja não suportada (Mercado Livre, Shopee, Amazon ou Netshoes)' };
-    // Mesmo critério do Copiador: só link confirmado da conta; nunca o link recebido de volta.
-    if (!result.affiliateUrl || !result.isAutoDispatchAllowed || result.affiliateUrl === url) {
-      return { error: 'não consegui confirmar o link de afiliado desta loja' };
-    }
-    return { affiliateUrl: result.affiliateUrl, cleanUrl: result.cleanUrl, store: result.store, imageUrl: result.meta?.extractedImageUrl };
+    return acceptConversion(result, url);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     return { error: /conect|configur|credenc|tag/i.test(message) ? 'loja ainda não conectada no painel' : message.slice(0, 120) || 'falha ao converter' };
@@ -186,20 +238,6 @@ async function defaultSourcePhoto(userId: string, connectionId: string, message:
   } catch { return null; }
 }
 
-/** Mesma oferta enviada aos grupos nos últimos 3 dias (foto já no estilo do Copiador + cupom). */
-async function groupOfferFor(userId: string, cleanUrl?: string): Promise<{ mediaUrl: string | null; coupon: string | null } | null> {
-  const key = productKey(cleanUrl);
-  if (!key) return null;
-  const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await db().from('publication_jobs').select('media_url, message_text')
-    .eq('user_id', userId).eq('status', 'enviado').gte('created_at', since).ilike('clean_url', `%${key}%`)
-    .order('created_at', { ascending: false }).limit(1);
-  const row = data?.[0];
-  if (!row) return null;
-  const { parseGroupOffer } = await import('./link-message');
-  return { mediaUrl: row.media_url || null, coupon: parseGroupOffer(row.message_text || '', 'https://x')?.coupon || null };
-}
-
 /** Foto oficial da loja quando a conversão não trouxe uma (Amazon pelo ASIN, Netshoes pela Rakuten). */
 async function storePhoto(userId: string, converted: ConvertOutcome): Promise<string | null> {
   if (converted.imageUrl) return converted.imageUrl;
@@ -239,15 +277,17 @@ async function styledPhoto(userId: string, raw: string, converted: ConvertOutcom
 }
 
 async function defaultEnrich(userId: string, converted: ConvertOutcome, sourcePhoto: string | null, id: string) {
-  const offer = await groupOfferFor(userId, converted.cleanUrl).catch(() => null);
+  const rows = await todayGroupRows(userId).catch(error => { console.error('[Assistente] cupom:', error instanceof Error ? error.message : error); return []; });
+  const offer = matchGroupOffer(rows, converted);
   const coupon = offer?.coupon || null;
-  if (offer?.mediaUrl) return { photoUrl: offer.mediaUrl, coupon };
+  const price = offer?.price || null;
+  if (offer?.mediaUrl) return { photoUrl: offer.mediaUrl, coupon, price };
   const raw = sourcePhoto || (await storePhoto(userId, converted));
-  return { photoUrl: raw ? await styledPhoto(userId, raw, converted, id) : undefined, coupon };
+  return { photoUrl: raw ? await styledPhoto(userId, raw, converted, id) : undefined, coupon, price };
 }
 
 const defaults: AssistantDeps = {
-  convert: defaultConvert, send: defaultSend, todayOffers: defaultTodayOffers, searchShopee: defaultSearchShopee,
+  convert: defaultConvert, send: defaultSend, todayOffers: defaultTodayOffers, searchStores: defaultSearchStores,
   enrich: defaultEnrich, sourcePhoto: defaultSourcePhoto, sendImage: defaultSendImage,
 };
 
@@ -309,13 +349,14 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
         await say(choice === 'ofertas' ? formatTodayOffers(offers.slice(0, 5)) : formatTodayCoupons(offers.filter(o => o.coupon).slice(0, 5)));
         return finish({ status: 'done', kind: choice });
       }
-      // Resposta à pergunta "o que você procura?": busca ao vivo na Shopee.
-      if (await lastAsked(entry.connection_id, entry.contact_hash, entry.id, now) === 'pediu_busca' && deps.searchShopee) {
+      // Resposta à pergunta "o que você procura?": busca nas lojas.
+      if (await lastAsked(entry.connection_id, entry.contact_hash, entry.id, now) === 'pediu_busca' && deps.searchStores) {
         const query = String(entry.message_text || '').replace(/\s+/g, ' ').trim().slice(0, 80);
-        await say(`Procurando *${query}* na Shopee… 🔎`);
-        const hits = trustedHits(await deps.searchShopee(entry.user_id, query).catch(() => []));
-        await say(formatSearch(query, hits));
-        return finish({ status: 'done', kind: 'busca', links_total: hits.length, links_ok: hits.length });
+        await say(`Procurando *${query}* nas lojas… 🔎`);
+        const search = deps.searchStores;
+        const outcome = await searchProducts(query, q => search(entry.user_id, q).catch(() => ({ hits: [], unavailable: true })));
+        await say(formatSearch(query, outcome));
+        return finish({ status: 'done', kind: 'busca', links_total: outcome.items.length, links_ok: outcome.items.length });
       }
       if (!(await recentlyHelped(entry.connection_id, entry.contact_hash, now))) {
         await say(MENU_TEXT);
@@ -340,9 +381,9 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
       results.push({ label: link.label, url: link.url, affiliateUrl: converted.affiliateUrl, error: converted.error });
       if (!converted.affiliateUrl) continue;
       const extra = deps.enrich
-        ? await deps.enrich(entry.user_id, converted, ownPhoto, `${entry.id}-${index}`).catch(() => ({ photoUrl: undefined, coupon: null }))
-        : { photoUrl: undefined, coupon: null };
-      const caption = linkCaption(converted.affiliateUrl, extra.coupon);
+        ? await deps.enrich(entry.user_id, converted, ownPhoto, `${entry.id}-${index}`).catch(() => ({ photoUrl: undefined, coupon: null, price: null }))
+        : { photoUrl: undefined, coupon: null, price: null };
+      const caption = linkCaption(converted.affiliateUrl, extra.coupon, extra.price);
       if (extra.photoUrl && deps.sendImage) {
         try { await deps.sendImage(entry.user_id, entry.connection_id, entry.remote_jid, extra.photoUrl, caption); continue; }
         catch { /* sem foto: manda só o texto */ }
@@ -389,4 +430,4 @@ export async function runAssistantCycle(options: { budgetMs?: number } = {}, dep
     .lt('received_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
   return { processed };
 }
-export { defaultConvert as convertForPreview, defaultEnrich as enrichForPreview };
+export { defaultConvert as convertForPreview, defaultEnrich as enrichForPreview, defaultSearchStores as searchForPreview, defaultTodayOffers as todayOffersForPreview };

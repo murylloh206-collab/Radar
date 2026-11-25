@@ -219,6 +219,19 @@ async function snapshot(userId: string, connectionId: string) {
   return initial;
 }
 
+/**
+ * A função do banco guarda o endereço do produto só no runtime_payload; aqui ele vai também para as colunas.
+ * É um complemento: se falhar, o envio segue e a leitura usa o payload.
+ */
+async function recordProductUrls(userId: string, jobs: Array<{ id: string; cleanUrl?: string; originalUrl?: string }>) {
+  for (const url of new Set(jobs.map(job => job.cleanUrl).filter(Boolean))) {
+    const same = jobs.filter(job => job.cleanUrl === url);
+    const { error } = await database().from('publication_jobs').update({ clean_url: url, original_url: same[0].originalUrl || null })
+      .in('id', same.map(job => job.id)).eq('user_id', userId);
+    if (error) throw new Error(error.message);
+  }
+}
+
 async function processEntry(entry: InboxEntry) {
   const started = performance.now();
   const raw = Array.isArray(entry.payload.data) ? entry.payload.data[0] : entry.payload.data;
@@ -254,6 +267,8 @@ async function processEntry(entry: InboxEntry) {
       processingMs: Math.round(performance.now() - started) }, p_jobs: jobs,
   }), 'Conclusão atômica do processamento');
   if (!completed) throw new CopierRuntimeError('A reserva do evento expirou; nenhuma publicação foi liberada por esta execução.');
+  await recordProductUrls(entry.user_id, jobs).catch(error =>
+    console.error('[Copiador] endereço do produto não gravado:', error instanceof Error ? error.message : error));
 }
 
 function minuteOfDay(time: string) {

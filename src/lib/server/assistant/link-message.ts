@@ -84,8 +84,8 @@ export function buildReply(results: ConvertedLink[], options: { extraLinksIgnore
 }
 
 export const HELP_TEXT = [
-  'Oi! 👋 Me mande o link de um produto (Mercado Livre, Shopee, Amazon ou Netshoes)',
-  'que eu te devolvo o link pronto para comprar.',
+  'Oi! 👋 Cola aqui o link de um produto (Mercado Livre, Shopee, Amazon ou Netshoes)',
+  'que eu procuro cupom pra ele e te devolvo o link pronto para comprar. 🎟️',
   '',
   'Pode mandar vários de uma vez, um por linha.',
 ].join('\n');
@@ -100,27 +100,27 @@ export function replyWithoutLink(text: string): string {
   const t = String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   if (/\b(obrigad|valeu|vlw|brigad|agradec)/.test(t)) return 'De nada! Quando precisar, é só mandar outro link. 😉';
   if (/\b(tudo bem|td bem|tudo bom|td bom|como vai|como voce esta|blz|beleza)\b/.test(t)) return 'Tudo sim, e com você? 😊 Qual o link do produto que você quer?';
-  if (/\bbom dia+/.test(t)) return 'Bom dia! ☀️ Me manda o link do produto que eu preparo pra você.';
-  if (/\bboa tarde+/.test(t)) return 'Boa tarde! Me manda o link do produto que eu preparo pra você.';
-  if (/\bboa noite+/.test(t)) return 'Boa noite! 🌙 Me manda o link do produto que eu preparo pra você.';
-  if (/^(oi+|ola|opa|eai|e ai|hey|salve)\b/.test(t)) return 'Oi! 👋 Me manda o link do produto que eu preparo o seu link pra comprar.';
-  if (/\b(cupom|desconto|promo)/.test(t)) return 'Me manda o link do produto que eu preparo o seu link pra comprar. Se houver cupom na oferta do grupo, ele vale no carrinho. 😉';
-  return 'Me manda o link do produto que eu preparo o seu link pra comprar. 😉';
+  if (/\bbom dia+/.test(t)) return 'Bom dia! ☀️ Me manda o link do produto que eu procuro cupom pra ele. 🎟️';
+  if (/\bboa tarde+/.test(t)) return 'Boa tarde! Me manda o link do produto que eu procuro cupom pra ele. 🎟️';
+  if (/\bboa noite+/.test(t)) return 'Boa noite! 🌙 Me manda o link do produto que eu procuro cupom pra ele. 🎟️';
+  if (/^(oi+|ola|opa|eai|e ai|hey|salve)\b/.test(t)) return 'Oi! 👋 Me manda o link do produto que eu procuro cupom pra ele. 🎟️';
+  if (/\b(cupom|desconto|promo)/.test(t)) return 'Cola aqui o link do produto que eu procuro cupom pra ele 🎟️ Ou digite *3* pra ver os cupons de hoje.';
+  return 'Me manda o link do produto que eu procuro cupom pra ele. 🎟️';
 }
 
 // ---------------------------------------------------------------- menu com números
 export const MENU_TEXT = [
   'Oi! 👋 Sou o assistente do *Radar de Ofertas*. Responda com o número:',
   '',
-  '1️⃣ Transformar o link de um produto no link pra comprar',
+  '1️⃣ Procurar cupom pro seu produto (cole o link)',
   '2️⃣ Ofertas de hoje do grupo',
   '3️⃣ Cupons de hoje',
-  '4️⃣ Buscar um produto na Shopee',
+  '4️⃣ Buscar um produto nas lojas',
   '',
   'Se preferir, me mande direto o link do produto. 😉',
 ].join('\n');
 
-export const ASK_LINK_TEXT = 'Beleza! Me manda o link do produto (pode ser vários, um por linha) que eu preparo o seu link pra comprar. 🔗';
+export const ASK_LINK_TEXT = 'Cola aqui o link do produto que eu procuro cupom pra ele 🎟️ (pode mandar vários, um por linha)';
 export const ASK_SEARCH_TEXT = 'O que você procura? Escreve o nome do produto, por exemplo: *air fryer 4 litros* 🔎';
 
 export type MenuChoice = 'menu' | 'link' | 'ofertas' | 'cupons' | 'busca';
@@ -168,34 +168,12 @@ export function formatTodayCoupons(offers: GroupOffer[]): string {
   return lines.join('\n');
 }
 
-export interface SearchHit { title: string; price: number; rating: number | null; sold: number | null; link: string }
-
-/** Só recomenda o que tem prova de qualidade (decisão do dono): nota ≥ 4,5 e ≥ 100 vendidos. */
-export function trustedHits(hits: SearchHit[], limit = 3): SearchHit[] {
-  return hits.filter(h => (h.rating || 0) >= 4.5 && (h.sold || 0) >= 100 && h.link)
-    .sort((a, b) => a.price - b.price).slice(0, limit);
-}
-
-const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const soldLabel = (n: number) => (n >= 1000 ? `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil vendidos` : `${n} vendidos`);
-
-export function formatSearch(query: string, hits: SearchHit[]): string {
-  if (!hits.length) return `Não achei na Shopee uma opção confiável de *${query}* (nota 4,5+ e muitos vendidos). Tenta outro nome ou me manda o link do produto. 🔎`;
-  const lines = [`🔎 *${query}* na Shopee (os mais baratos com boa nota):`];
-  hits.forEach((h, i) => {
-    lines.push('', `*${i + 1}. ${h.title.length > 70 ? `${h.title.slice(0, 67).trimEnd()}…` : h.title}*`,
-      `R$ ${brl(h.price)} · ⭐ ${h.rating?.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} · ${soldLabel(h.sold || 0)}`, h.link);
-  });
-  lines.push('', 'Digite *4* para buscar outro produto ou *menu* para as opções.');
-  return lines.join('\n');
-}
-
 // ---------------------------------------------------------------- resposta por link (foto + link + cupom)
-/** Legenda de cada produto: só o link novo e o cupom (ou o aviso de que não achou). */
-export function linkCaption(affiliateUrl: string, coupon?: string | null): string {
+/** Legenda de cada produto: o link e o cupom (com o preço da oferta real do grupo, quando há) ou o aviso de que não achou. */
+export function linkCaption(affiliateUrl: string, coupon?: string | null, price?: string | null): string {
   return coupon
-    ? `🔗 ${affiliateUrl}\n\n🎟️ Cupom: *${coupon}*: aplique no carrinho (pode esgotar)`
-    : `🔗 ${affiliateUrl}\n\n🎟️ Não achei cupom para este produto agora.`;
+    ? `🔗 ${affiliateUrl}\n🎟️ Cupom: *${coupon}*${price ? ` · R$ ${price} com o cupom` : ''}\nAplique no carrinho (pode esgotar).`
+    : `🔗 ${affiliateUrl}\n🎟️ Não achei cupom pra este produto agora. Digite *3* pra ver os cupons de hoje.`;
 }
 
 /** Código que identifica o produto no endereço (para achar a mesma oferta nos grupos). */
