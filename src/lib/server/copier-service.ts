@@ -433,6 +433,13 @@ export function isPromotionalHookLine(line: string): boolean {
   if (!clean || clean.length < 4) return true;
   const lower = clean.toLowerCase();
 
+  // Chamada curta em caixa alta, com ou sem emoji na frente ("💁‍♀️ *PRA ELAS*", "PRA ELES"): não é nome de produto.
+  const words = clean.replace(/^[^\p{L}\p{N}]+/u, '').replace(/[*_~`]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const letters = words.join('').replace(/[^\p{L}]/gu, '');
+  if (words.length > 0 && words.length <= 3 && letters.length > 0 && letters === letters.toUpperCase() && !/\d/.test(words.join(''))) {
+    return true;
+  }
+
   // Termina com exclamação, interrogação (mesmo seguidos de emojis) ou com qualquer emoji Unicode
   if (/(?:[!?]\s*(?:\p{Extended_Pictographic}|\uFE0F|\u200D|\s)*|(?:\p{Extended_Pictographic}|\uFE0F))$/u.test(clean)) {
     return true;

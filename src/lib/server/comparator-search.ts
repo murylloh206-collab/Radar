@@ -406,11 +406,11 @@ async function searchMercadoLivreOfficialApi(
 /**
  * Busca na API Oficial de Afiliados da Shopee (`productOfferV2` GraphQL)
  */
-/** A API da Shopee devolve "System Error" (10000) de vez em quando: tenta até 3 vezes. */
+/** A API da Shopee devolve "System Error" (10000) ou cai por tempo de vez em quando: tenta até 4 vezes. */
 async function searchShopeeOfficialAffiliateApi(query: string, userId: string, limit = 6) {
   let result = await searchShopeeOnce(query, userId, limit);
-  for (let attempt = 1; attempt < 3 && result.diagnostic.status === 'error' && /\[10000\]|System Error/i.test(result.diagnostic.message); attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 700 * attempt));
+  for (let attempt = 1; attempt < 4 && result.diagnostic.status === 'error' && /\[10000\]|System Error|abort|timeout|fetch failed|HTTP 5\d\d|HTTP 429/i.test(result.diagnostic.message); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     result = await searchShopeeOnce(query, userId, limit);
   }
   return result;

@@ -158,7 +158,9 @@ async function defaultSearchStores(userId: string, query: string): Promise<Store
   // O catálogo do painel fica de fora: preços antigos e link sem verificação na hora.
   const live = (result?.offers || []).filter(o => o.isAffiliateLinkVerified && o.dataSourceLabel !== CATALOG_SOURCE_LABEL)
     .map(o => ({ title: o.title, price: o.price, rating: o.rating, sold: o.soldCount, link: o.affiliateUrl, store: o.storeDisplayName }));
-  const unavailable = !result || result.storeDiagnostics.some(d => d.store === 'shopee' && d.status === 'error');
+  const shopee = result?.storeDiagnostics.find(d => d.store === 'shopee');
+  const unavailable = !result || shopee?.status === 'error';
+  if (unavailable) console.error('[Assistente] busca na Shopee falhou:', shopee?.message || 'sem resposta');
   return { hits: [...groupHits(rows), ...live], unavailable };
 }
 
@@ -201,17 +203,28 @@ async function defaultConvert(userId: string, url: string): Promise<ConvertOutco
   }
 }
 
+/** Envia pelo gateway; se ele estiver acordando (502/503/504) ou ocupado (429), tenta de novo algumas vezes. */
+async function gatewayPost(userId: string, connectionId: string, path: string, body: object, timeoutMs: number, what: string): Promise<void> {
+  const connection = await gateway(userId, connectionId);
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/${path}/${encodeURIComponent(connection.instanceName)}`, {
+      method: 'POST',
+      headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    }).catch(error => { if (attempt >= 3) throw error; return null; });
+    if (res?.ok) return;
+    const detail = res ? (await res.text().catch(() => '')).replace(/\d{8,}/g, '…').slice(0, 160) : 'sem resposta';
+    if (attempt >= 3 || (res && ![429, 500, 502, 503, 504].includes(res.status))) {
+      console.error(`[Assistente] gateway recusou ${what} (HTTP ${res?.status ?? '-'}):`, detail);
+      throw new Error(`O WhatsApp recusou ${what} (HTTP ${res?.status ?? 'sem resposta'}).`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+  }
+}
+
 async function defaultSend(userId: string, connectionId: string, remoteJid: string, text: string): Promise<void> {
-  const { copierConnection } = await import('@/lib/server/copier-group-catalog');
-  const session = { userId, role: 'user' as const, email: '', createdAt: 0, expiresAt: 0 };
-  const { connection } = await copierConnection(session, connectionId);
-  const res = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/sendText/${encodeURIComponent(connection.instanceName)}`, {
-    method: 'POST',
-    headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ number: remoteJid, text }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) throw new Error(`O WhatsApp recusou a resposta (HTTP ${res.status}).`);
+  await gatewayPost(userId, connectionId, 'sendText', { number: remoteJid, text }, 20_000, 'a resposta');
 }
 
 async function gateway(userId: string, connectionId: string) {
@@ -221,14 +234,7 @@ async function gateway(userId: string, connectionId: string) {
 }
 
 async function defaultSendImage(userId: string, connectionId: string, remoteJid: string, imageUrl: string, caption: string): Promise<void> {
-  const connection = await gateway(userId, connectionId);
-  const res = await fetch(`${connection.baseUrl.replace(/\/+$/, '')}/message/sendMedia/${encodeURIComponent(connection.instanceName)}`, {
-    method: 'POST',
-    headers: { apikey: connection.apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ number: remoteJid, mediatype: 'image', media: imageUrl, caption }),
-    signal: AbortSignal.timeout(45_000),
-  });
-  if (!res.ok) throw new Error(`O WhatsApp recusou a foto (HTTP ${res.status}).`);
+  await gatewayPost(userId, connectionId, 'sendMedia', { number: remoteJid, mediatype: 'image', media: imageUrl, caption }, 45_000, 'a foto');
 }
 
 async function defaultSourcePhoto(userId: string, connectionId: string, message: any, id: string): Promise<string | null> {
@@ -361,7 +367,13 @@ export async function handleAssistantEntry(entry: Row, deps: AssistantDeps = def
         const query = String(entry.message_text || '').replace(/\s+/g, ' ').trim().slice(0, 80);
         await say(`Procurando *${query}* nas lojas… 🔎`);
         const search = deps.searchStores;
-        const outcome = await searchProducts(query, q => search(entry.user_id, q).catch(() => ({ hits: [], unavailable: true })));
+        const find = (q: string) => search(entry.user_id, q).catch(() => ({ hits: [], unavailable: true }));
+        let outcome = await searchProducts(query, find);
+        // A Shopee às vezes falha por alguns segundos: uma segunda rodada antes de dizer que está instável.
+        if (!outcome.items.length && outcome.unavailable) {
+          await new Promise(resolve => setTimeout(resolve, 4000));
+          outcome = await searchProducts(query, find);
+        }
         await say(formatSearch(query, outcome));
         return finish({ status: 'done', kind: 'busca', links_total: outcome.items.length, links_ok: outcome.items.length });
       }

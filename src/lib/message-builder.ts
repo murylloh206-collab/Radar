@@ -2,7 +2,7 @@
  * Montador puro de mensagens de oferta (100% seguro para navegador / Client Components e Servidor).
  * NUNCA deve importar módulos de `src/lib/server/*`, `fs`, banco de dados ou `plan-guard`.
  */
-import { generateSmartHook, detectProductCategory } from './hook-generator';
+import { generateSmartHook, detectProductCategory, NEUTRAL_HOOKS } from './hook-generator';
 import { appendChannelSrcParam, stripChannelSrcParam, type ClickOrigin } from './offer-format';
 
 export interface FormatMessageOptions {
@@ -144,8 +144,7 @@ export function buildWhatsAppMessage(options: FormatMessageOptions): string {
   const normalizedHook = hook.replace(/[🔥⚡🚨💥👏💪👟📱⌚💎✨🎉🛒!]/gu, '').trim().toUpperCase();
   const normalizedTitle = cleanTitle.replace(/[🔥⚡🚨💥👏💪👟📱⌚💎✨🎉🛒!]/gu, '').trim().toUpperCase();
   if (normalizedHook.length > 5 && (normalizedTitle === normalizedHook || normalizedTitle.includes(normalizedHook))) {
-    const category = detectProductCategory(cleanTitle);
-    hook = `OFERTA ESPECIAL EM ${category.toUpperCase().replace(/_/g, ' ')}! 🎯`;
+    hook = NEUTRAL_HOOKS[0];
   }
 
   message = message.replace('{gancho}', hook);

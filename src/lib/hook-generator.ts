@@ -149,14 +149,14 @@ const CATEGORY_MAP: CategoryKeywords[] = [
       /furadeira/i,
       /parafusadeira/i,
       /esmerilhadeira/i,
-      /serra/i,
+      /\bserra (?:circular|tico|m[aá]rmore|el[eé]trica)/i,
+      /\bmotosserra/i,
       /jogo de ferramentas/i,
       /maleta de ferramentas/i,
       /trena/i,
       /alicate/i,
       /martele/i,
       /lavadora de alta press[aã]o/i,
-      /wap/i,
       /black tools/i,
     ],
   },
@@ -371,7 +371,6 @@ const MODEL_B_CREATIVE_HOOKS: Record<ProductHookCategory, string[]> = {
   ],
 };
 
-let lastUsedCategory: ProductHookCategory = 'geral';
 let lastUsedIndex = -1;
 
 export function detectProductCategory(title: string): ProductHookCategory {
@@ -389,44 +388,31 @@ export function detectProductCategory(title: string): ProductHookCategory {
   return 'geral';
 }
 
+/**
+ * Chamadas neutras (pedido do dono em 26/11): servem para qualquer produto, então nunca erram a categoria.
+ * O que o produto é fica no título, logo abaixo.
+ */
+export const NEUTRAL_HOOKS = [
+  'OFERTA DO DIA! 🔥',
+  'OFERTA ESPECIAL! 🎯',
+  'PREÇO BAIXO AGORA! ⚡',
+  'OPORTUNIDADE DE HOJE! 💥',
+  'DESCONTO QUE VALE A PENA! 🔥',
+  'OFERTA SELECIONADA PRA VOCÊ! 🎯',
+];
+
 export function generateSmartHook(
   title: string,
-  options?: { discountPct?: number; forceModel?: 'A' | 'B' }
+  _options?: { discountPct?: number; forceModel?: 'A' | 'B' }
 ): string {
-  const category = detectProductCategory(title);
-
   let hash = 0;
   for (let i = 0; i < (title || '').length; i++) {
     hash = (hash << 5) - hash + title.charCodeAt(i);
     hash |= 0;
   }
-  const positiveHash = Math.abs(hash);
-
-  const hasSubstantialDiscount = typeof options?.discountPct === 'number' && options.discountPct >= 30;
-  const isEligibleForModelB = (positiveHash % 100) < 25 || (hasSubstantialDiscount && (positiveHash % 100) < 40);
-
-  const useModelB = options?.forceModel === 'B' || (options?.forceModel !== 'A' && isEligibleForModelB);
-
-  const bank = useModelB
-    ? (MODEL_B_CREATIVE_HOOKS[category] || MODEL_B_CREATIVE_HOOKS.geral)
-    : (MODEL_A_DIRECT_HEADLINES[category] || MODEL_A_DIRECT_HEADLINES.geral);
-
-  let nextIdx = positiveHash % bank.length;
-  if (category === lastUsedCategory && bank.length > 1 && nextIdx === lastUsedIndex) {
-    nextIdx = (nextIdx + 1) % bank.length;
-  }
-
-  lastUsedCategory = category;
+  let nextIdx = Math.abs(hash) % NEUTRAL_HOOKS.length;
+  // Ofertas seguidas não repetem a mesma chamada.
+  if (nextIdx === lastUsedIndex) nextIdx = (nextIdx + 1) % NEUTRAL_HOOKS.length;
   lastUsedIndex = nextIdx;
-
-  let chosen = bank[nextIdx];
-
-  chosen = chosen
-    .replace(/\b(achadinhos?|achados?)\b/gi, 'ofertas')
-    .replace(/\bapenas\b/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-
-  return chosen;
+  return NEUTRAL_HOOKS[nextIdx];
 }
-
